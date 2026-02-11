@@ -209,6 +209,8 @@ __marimo__/
 # Local notebook chat history
 chats/
 processed/
+.idea/
+.DS_Store
 
 # Local API keys (never commit secrets)
 local_api_keys.py

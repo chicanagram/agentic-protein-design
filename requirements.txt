@@ -1,0 +1,27 @@
+# Notebook-first workflow
+jupyter
+notebook
+ipywidgets
+
+# Core data/scientific stack
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+
+# Bioinformatics modules (keep)
+biopython
+pyhmmer
+aaindex
+esm
+openprotein-python
+
+# Retrieval and lightweight app plumbing
+requests
+httpx
+pydantic
+python-dotenv
+
+# LLM interpretation client (can be swapped later)
+openai

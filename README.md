@@ -2,7 +2,7 @@
 
 ![Agentic Protein Design Landing Graphic](assets/landing-page.png)
 
-A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **wildtype candidate selection** (not iterative mutagenesis).
+A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **enzyme candidate analysis** initial selection of engineering targets.
 
 ## Project Scope
 

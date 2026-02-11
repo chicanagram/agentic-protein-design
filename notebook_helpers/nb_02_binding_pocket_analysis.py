@@ -18,6 +18,7 @@ BASE_REQUIRED_COLS = [
 DEFAULT_CORE_METRICS = [
     "num_pocket_res_ali",
     "num_pocket_res<6",
+    "mean_dist_to_centroid",
     "reactive_center_distance",
     "median_dist_res_to_ligand_reactive_center",
     "median_min_dist_res_to_ligand",
@@ -25,7 +26,7 @@ DEFAULT_CORE_METRICS = [
 
 prompt = """
 Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
-Consider how both the proximal (<6 from docked ligand) and distal (up to 11 angstrom from binding pocket centroid) geometries and electrostatics binding pocket environment. 
+Consider how both the proximal (<6 from docked ligand) and distal (up to 11 angstrom from binding pocket centroid) residues affect the binding pocket environment. 
 
 INPUTS
 - binding_pocket_table: table of extracted binding-pocket properties (per protein). Properties are calculated over both "distal" and "proximal" ligands, which represent the residues in the broader pocket region, and closer to the reaction coordinate, respectively.   
@@ -33,11 +34,12 @@ INPUTS
 - reaction_data (optional): table or dict summarising enzyme activity on different substrates
 
 TASKS
-1. For each protein, generate a concise **3–4 bullet summary** of its binding-pocket geometry and chemistry, considering both distal and proximal effects.
+1. For each protein, generate an punchy tagline, as well as a concise **4-5 bullet summary** of its overall binding-pocket geometry and chemistry, addressing the interplay of i) proximal electrostatics, ii) proximal sterics, iii) distal electrostatics, iv) distal sterics and outer pocket size.
 2. Interpret how these properties are likely to influence **catalytic activity and selectivity**, especially productive (e.g. peroxygenative) vs non-productive or competing (e.g. peroxidative) pathways.
 3. If variants of the same protein are present, **explicitly contrast them** and explain how observed pocket differences could rationalise functional changes.
 4. Briefly distil **cross-protein trends or clusters** (“pocket phenotypes”) that explain systematic behaviour differences across the panel.
 5. Optionally integrate reaction_data to connect structural features to observed substrate-specific behaviour.
+6. Examine the alignment context, together with the inferred binding pocket descriptions for each protein. Suggest mechanisms and effects of specific mutations observed. 
 
 POCKET FEATURES TO CONSIDER
 
@@ -79,6 +81,7 @@ OUTPUT STYLE
 - Use clear, human-interpretable language.
 - Emphasise geometric and chemical intuition over raw numbers.
 - Keep summaries compact, comparative, and mechanistically grounded.
+- Label residues using the numbering from that sequence, not the overall alignment index. 
 """
 
 

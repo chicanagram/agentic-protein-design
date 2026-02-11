@@ -12,24 +12,28 @@ from variables import address_dict, subfolders
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
-METRIC_COLS = [
+BASE_REQUIRED_COLS = [
+    "struct_name",
+]
+DEFAULT_CORE_METRICS = [
+    "num_pocket_res_ali",
+    "num_pocket_res<6",
     "reactive_center_distance",
-    "mean_volume",
-    "kd_weighted",
-    "polar_fraction",
-    "charged_fraction",
+    "median_dist_res_to_ligand_reactive_center",
+    "median_min_dist_res_to_ligand",
 ]
 
 prompt = """
-Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity.
+Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
+Consider how both the proximal (<6 from docked ligand) and distal (up to 11 angstrom from binding pocket centroid) geometries and electrostatics binding pocket environment. 
 
 INPUTS
-- binding_pocket_table: table of extracted binding-pocket properties (per protein)
+- binding_pocket_table: table of extracted binding-pocket properties (per protein). Properties are calculated over both "distal" and "proximal" ligands, which represent the residues in the broader pocket region, and closer to the reaction coordinate, respectively.   
 - pocket_alignment_table: filtered residue alignment of pocket-proximal positions
 - reaction_data (optional): table or dict summarising enzyme activity on different substrates
 
 TASKS
-1. For each protein, generate a concise **3–4 bullet summary** of its binding-pocket geometry and chemistry.
+1. For each protein, generate a concise **3–4 bullet summary** of its binding-pocket geometry and chemistry, considering both distal and proximal effects.
 2. Interpret how these properties are likely to influence **catalytic activity and selectivity**, especially productive (e.g. peroxygenative) vs non-productive or competing (e.g. peroxidative) pathways.
 3. If variants of the same protein are present, **explicitly contrast them** and explain how observed pocket differences could rationalise functional changes.
 4. Briefly distil **cross-protein trends or clusters** (“pocket phenotypes”) that explain systematic behaviour differences across the panel.
@@ -249,52 +253,93 @@ def _residue_signature(ali_sel: pd.DataFrame, enzyme_name: str) -> str:
     return "; ".join(pairs)
 
 
+def _detect_metric_cols(pocket: pd.DataFrame) -> List[str]:
+    """
+    Use all numeric pocket-property columns and exclude metadata/index columns.
+    This supports both suffixed distal/proximal columns and unsuffixed core metrics.
+    """
+    excluded = {
+        "struct_name",
+        "struct_name.1",
+        "struct_name.2",
+        "enzyme",
+    }
+    metric_cols: List[str] = []
+    for c in pocket.columns:
+        lc = c.lower().strip()
+        if lc.startswith("unnamed:"):
+            continue
+        if c in excluded:
+            continue
+        series_num = pd.to_numeric(pocket[c], errors="coerce")
+        if series_num.notna().any():
+            metric_cols.append(c)
+    # Keep stable ordering with core metrics first when present.
+    core_first = [c for c in DEFAULT_CORE_METRICS if c in metric_cols]
+    remaining = [c for c in metric_cols if c not in core_first]
+    metric_cols = core_first + remaining
+    return metric_cols
+
+
 def analyze_pocket_profiles(
     pocket: pd.DataFrame,
     ali: pd.DataFrame,
     selected_positions: List[int],
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    missing_base = [c for c in BASE_REQUIRED_COLS if c not in pocket.columns]
+    if missing_base:
+        raise KeyError(f"Pocket table missing required columns: {missing_base}")
+
     if "index" not in ali.columns:
         raise KeyError("Alignment table missing 'index' column for selected positions")
 
-    missing_metrics = [c for c in METRIC_COLS if c not in pocket.columns]
-    if missing_metrics:
-        raise KeyError(f"Missing expected pocket metrics: {missing_metrics}")
+    metric_cols = _detect_metric_cols(pocket)
+    if not metric_cols:
+        raise KeyError(
+            "No numeric pocket metrics detected. Expected columns with '(distal)'/'(proximal)' "
+            "suffixes and/or core metric columns."
+        )
 
-    ali_sel = ali[ali["index"].isin(selected_positions)].copy()
-    q = pocket[METRIC_COLS].quantile([0.33, 0.67])
+    if selected_positions is not None:
+        ali_sel = ali[ali["index"].isin(selected_positions)].copy()
+    else:
+        ali_sel = ali.copy()
+    pocket_num = pocket.copy()
+    for c in metric_cols:
+        pocket_num[c] = pd.to_numeric(pocket_num[c], errors="coerce")
+    q = pocket_num[metric_cols].quantile([0.33, 0.67])
+
+    def quantile_tag(value: float, metric: str) -> str:
+        if pd.isna(value):
+            return "na"
+        q33 = q.loc[0.33, metric]
+        q67 = q.loc[0.67, metric]
+        if pd.isna(q33) or pd.isna(q67):
+            return "na"
+        if value <= q33:
+            return "low"
+        if value >= q67:
+            return "high"
+        return "mid"
 
     rows = []
-    for _, r in pocket.iterrows():
+    for _, r in pocket_num.iterrows():
         struct_name = str(r.get("struct_name", "unknown"))
         enzyme = struct_name.split("_")[0]
 
-        d = float(r["reactive_center_distance"])
-        v = float(r["mean_volume"])
-        kd = float(r["kd_weighted"])
-        polar = float(r["polar_fraction"])
-        charged = float(r["charged_fraction"])
-
-        distance_tag = "closer" if d <= q.loc[0.33, "reactive_center_distance"] else (
-            "farther" if d >= q.loc[0.67, "reactive_center_distance"] else "intermediate"
-        )
-        volume_tag = "larger" if v >= q.loc[0.67, "mean_volume"] else (
-            "smaller" if v <= q.loc[0.33, "mean_volume"] else "medium"
-        )
-        kd_tag = "more hydrophobic" if kd >= q.loc[0.67, "kd_weighted"] else (
-            "less hydrophobic" if kd <= q.loc[0.33, "kd_weighted"] else "balanced hydrophobicity"
-        )
-        polar_tag = "polar-enriched" if polar >= q.loc[0.67, "polar_fraction"] else (
-            "less polar" if polar <= q.loc[0.33, "polar_fraction"] else "moderate polarity"
-        )
-        charge_tag = "charge-enriched" if charged >= q.loc[0.67, "charged_fraction"] else (
-            "charge-depleted" if charged <= q.loc[0.33, "charged_fraction"] else "moderate charge"
-        )
-
         signature = _residue_signature(ali_sel, enzyme)
+        metric_values = {m: (None if pd.isna(r[m]) else float(r[m])) for m in metric_cols}
+        metric_tags = {m: quantile_tag(r[m], m) for m in metric_cols}
+
+        high_metrics = [m for m in metric_cols if metric_tags[m] == "high"]
+        low_metrics = [m for m in metric_cols if metric_tags[m] == "low"]
+        # Keep interpretation compact while still using all metrics in stored fields.
+        high_preview = ", ".join(high_metrics[:5]) if high_metrics else "none"
+        low_preview = ", ".join(low_metrics[:5]) if low_metrics else "none"
         interpretation = (
-            f"{enzyme}: {distance_tag} reactive-center geometry with a {volume_tag} pocket; "
-            f"{kd_tag}, {polar_tag}, and {charge_tag}. "
+            f"{enzyme}: metric profile computed from {len(metric_cols)} pocket descriptors "
+            f"(distal/proximal + core geometry). High-quantile examples: {high_preview}. "
+            f"Low-quantile examples: {low_preview}. "
             f"Selected-position signature [{signature}] can be compared across homologs for activity/property hypotheses."
         )
 
@@ -302,33 +347,39 @@ def analyze_pocket_profiles(
             {
                 "struct_name": struct_name,
                 "enzyme": enzyme,
-                "reactive_center_distance": d,
-                "mean_volume": v,
-                "kd_weighted": kd,
-                "polar_fraction": polar,
-                "charged_fraction": charged,
+                "n_metrics_used": len(metric_cols),
+                "metric_values": json.dumps(metric_values, ensure_ascii=True),
+                "metric_quantile_tags": json.dumps(metric_tags, ensure_ascii=True),
                 "selected_position_signature": signature,
                 "interpretation": interpretation,
             }
         )
 
     interp_df = pd.DataFrame(rows)
-    pattern_summary = pd.DataFrame(
-        [
+    pattern_rows: List[Dict[str, Any]] = []
+    for m in metric_cols:
+        s = pocket_num[["struct_name", m]].dropna()
+        if s.empty:
+            continue
+        min_row = s.sort_values(m, ascending=True).iloc[0]
+        max_row = s.sort_values(m, ascending=False).iloc[0]
+        pattern_rows.append(
             {
-                "pattern": "closest_reactive_center",
-                "struct_name": pocket.sort_values("reactive_center_distance").iloc[0]["struct_name"],
-            },
+                "pattern": f"min::{m}",
+                "struct_name": min_row["struct_name"],
+                "metric": m,
+                "value": float(min_row[m]),
+            }
+        )
+        pattern_rows.append(
             {
-                "pattern": "largest_pocket",
-                "struct_name": pocket.sort_values("mean_volume", ascending=False).iloc[0]["struct_name"],
-            },
-            {
-                "pattern": "most_hydrophobic_pocket",
-                "struct_name": pocket.sort_values("kd_weighted", ascending=False).iloc[0]["struct_name"],
-            },
-        ]
-    )
+                "pattern": f"max::{m}",
+                "struct_name": max_row["struct_name"],
+                "metric": m,
+                "value": float(max_row[m]),
+            }
+        )
+    pattern_summary = pd.DataFrame(pattern_rows)
     return interp_df, pattern_summary
 
 

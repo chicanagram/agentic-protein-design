@@ -2,7 +2,7 @@
 
 ![Agentic Protein Design Landing Graphic](assets/landing-page.png)
 
-A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **enzyme candidate analysis** initial selection of engineering targets.
+A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **enzyme candidate analysis** and **initial selection of engineering targets**.
 
 ## Project Scope
 

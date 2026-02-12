@@ -4,6 +4,8 @@
 
 A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **enzyme candidate analysis** and **initial selection of engineering targets**.
 
+Latest LLM-generated outputs are mirrored as Markdown files in [`assets/`](assets) for quick repo/GitHub viewing (updated on each run).
+
 ## Project Scope
 
 This project is designed to support the discovery and analysis phase of protein engineering by combining:

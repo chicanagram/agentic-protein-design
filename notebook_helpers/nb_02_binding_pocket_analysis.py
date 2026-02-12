@@ -19,69 +19,131 @@ DEFAULT_CORE_METRICS = [
     "num_pocket_res_ali",
     "num_pocket_res<6",
     "mean_dist_to_centroid",
-    "reactive_center_distance",
+    "reactive_center distance",
     "median_dist_res_to_ligand_reactive_center",
-    "median_min_dist_res_to_ligand",
+    "median_min dist_res_to_ligand",
 ]
 
-prompt = """
+prompt_1 = """
 Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
-Consider how both the proximal (<6 from docked ligand) and distal (up to 11 angstrom from binding pocket centroid) residues affect the binding pocket environment. 
+Consider how both the proximal (<6 Å from docked ligand) and distal (up to ~11 Å from binding pocket centroid) residues affect the binding pocket environment.
 
 INPUTS
-- binding_pocket_table: table of extracted binding-pocket properties (per protein). Properties are calculated over both "distal" and "proximal" ligands, which represent the residues in the broader pocket region, and closer to the reaction coordinate, respectively.   
-- pocket_alignment_table: filtered residue alignment of pocket-proximal positions
-- reaction_data (optional): table or dict summarising enzyme activity on different substrates
+- binding_pocket_table: extracted binding-pocket properties (per protein), calculated separately over proximal and distal residue sets where available.
+- pocket_alignment_table: filtered residue alignment of pocket-proximal positions.
+- reaction_data (optional): enzyme activity data on substrates.
+
+OBJECTIVE
+For each protein, integrate structural descriptors with (optional) reaction data to infer mechanistic behavior and classify pocket phenotypes.
 
 TASKS
-1. For each protein, generate an punchy tagline, as well as a concise **4-5 bullet summary** of its overall binding-pocket geometry and chemistry, addressing the interplay of i) proximal electrostatics, ii) proximal sterics, iii) distal electrostatics, iv) distal sterics and outer pocket size.
-2. Interpret how these properties are likely to influence **catalytic activity and selectivity**, especially productive (e.g. peroxygenative) vs non-productive or competing (e.g. peroxidative) pathways.
-3. If variants of the same protein are present, **explicitly contrast them** and explain how observed pocket differences could rationalise functional changes.
-4. Briefly distil **cross-protein trends or clusters** (“pocket phenotypes”) that explain systematic behaviour differences across the panel.
-5. Optionally integrate reaction_data to connect structural features to observed substrate-specific behaviour.
-6. Examine the alignment context, together with the inferred binding pocket descriptions for each protein. Suggest mechanisms and effects of specific mutations observed. 
 
-POCKET FEATURES TO CONSIDER
+1) For each protein:
+   - Generate a punchy tagline.
+   - Provide a concise 5-6 bullet summary addressing:
+        (i) proximal electrostatics  
+        (ii) proximal sterics  
+        (iii) distal electrostatics  
+        (iv) distal sterics / outer pocket size  
+        (v) overall synthesis of pocket phenotype, integrating structural properties with catalytic implications:
+            - Interpret how geometry and chemistry influence productive (peroxygenative) vs competing (peroxidative) pathways.
+            - If reaction_data is provided, use it to support structure–function relationships.
 
-Pocket size / alignment coverage
-- num_pocket_res_ali: number of aligned positions within a distance cutoff of any docked ligand
-- num_pocket_res_lt6: number of residues close to the ligand in each structure
+   Use the following column groups:
 
-Ligand-dependent geometry
-- reactive_center_distance: distance between ligand reactive atom and catalytic center
-- median_dist_res_to_ligand_reactive_center: median distance between pocket residue centroids and ligand reactive atom
-- median_min_dist_res_to_ligand: median minimum distance between each pocket residue and any ligand heavy atom
+   PROXIMAL ELECTROSTATICS
+   - charged_fraction (proximal), polar_fraction (proximal)
+   - kd_weighted (proximal), hw_weighted (proximal)
+   - median_dist_res_to_ligand_reactive_center
 
-Ligand-independent pocket geometry
-- mean_dist_backbone_to_centroid
-- mean_dist_to_centroid
-- mean_min_dist_to_centroid
+   PROXIMAL STERICS
+   - mean_volume (proximal), weighted_mean_volume (proximal)
+   - volume_variance (proximal)
+   - small_residue_frac (proximal), bulky_residue_frac (proximal)
+   - median_min_dist_res_to_ligand
+   - reactive_center_distance
+   - num_pocket_res_lt6
 
-Side-chain sterics (aligned pocket residues)
-- mean_volume, weighted_mean_volume, volume_variance
-- small_residue_frac, small_residue_frac_weighted
-- bulky_residue_frac, bulky_residue_frac_weighted
+   DISTAL ELECTROSTATICS
+   - charged_fraction (distal), polar_fraction (distal)
+   - kd_weighted (distal), hw_weighted (distal)
 
-Pocket polarity / electrostatics
-- kd_mean, kd_weighted (hydrophobicity; higher = more hydrophobic)
-- hw_mean, hw_weighted (polarity/exposure; more negative = less polar / less exposed)
-- charged_fraction, polar_fraction
+   DISTAL STERICS / OUTER POCKET SIZE
+   - mean_dist_to_centroid
+   - mean_min_dist_to_centroid
+   - mean_dist_backbone_to_centroid
+   - mean_volume (distal)
+   - volume_variance (distal)
+   - small_residue_frac (distal), bulky_residue_frac (distal)
+   - num_pocket_res_ali
 
-ALIGNMENT CONTEXT
-The residue alignment has been filtered to include only positions that:
-- show sequence variability (≥1 amino-acid type or gap), and
-- are within the distance cutoff to the ligand in at least one structure.
-Use this information to reason about which **variable positions directly shape the binding pocket** versus those that are peripheral.
+   If proximal/distal suffixes are not explicitly present, infer proximal/distal groupings from context and state your assumption briefly.
 
-REACTION CONTEXT (OPTIONAL)
-If reaction_data is provided, use it to support structure–function reasoning.
-{reaction_context_text}
+2) Comparative analysis requirements (do BOTH):
+   A) Intra-protein variant analysis (MANDATORY when variants are present):
+   - Detect proteins that share the same base protein identity but differ by variant/mutation labels.
+   - For each such protein family, explicitly compare each variant against its WT/reference form (if WT/reference is present).
+   - If WT is not explicitly labeled, infer the closest reference sequence in that family and state the assumption.
+   - For each variant-vs-reference comparison, report which structural dimensions changed:
+        (i) proximal electrostatics
+        (ii) proximal sterics
+        (iii) distal electrostatics
+        (iv) distal sterics / outer pocket size
+   - Provide a mechanistic rationale linking those differences to functional shifts.
+
+   B) User-requested pairwise comparisons:
+   - Pairwise comparisons requested: {pairwise_comparisons}
+   - Perform each requested pairwise comparison in addition to section A.
+   - Explicitly contrast which structural dimensions changed (prox electrostatics, prox sterics, distal electrostatics, distal sterics).
+   - Provide a mechanistic rationale for functional shifts.
+
+3) Distill cross-protein trends or clusters (“pocket phenotypes”):
+   - Identify recurring structural archetypes (e.g., tight/polar pose-locking vs open/hydrophobic permissive).
+   - Link clusters to turnover vs selectivity trade-offs.
 
 OUTPUT STYLE
-- Use clear, human-interpretable language.
-- Emphasise geometric and chemical intuition over raw numbers.
-- Keep summaries compact, comparative, and mechanistically grounded.
-- Label residues using the numbering from that sequence, not the overall alignment index. 
+- Clear, human-interpretable, mechanistically grounded.
+- Emphasize intuition over raw numbers.
+- Keep summaries compact and comparative.
+"""
+
+
+prompt_2 = f"""
+You are given:
+1) pocket_alignment_table: filtered alignment of variable residues located within <6 Å of the ligand in at least one structure.
+2) structural_summary_text: prior analysis summarizing proximal/distal sterics, electrostatics, and pocket phenotypes for each protein.
+
+TASK
+
+Use the alignment table together with the structural_summary_text to:
+
+1) Identify specific residue positions that likely drive differences in:
+   - Proximal electrostatics
+   - Proximal sterics
+   - Distal steering effects
+   - Outer pocket sterics and permissiveness
+
+2) For each key variable position:
+   - Describe residue identities across proteins.
+   - Classify substitutions as steric (small↔bulky), electrostatic (neutral↔charged), or polarity shifts.
+   - Predict mechanistic consequences (e.g., tighter cage, increased radical escape, altered substrate orientation).
+
+3) For variants (e.g., point mutations):
+   - Explain how specific substitutions modify the previously identified pocket phenotype.
+   - Link residue-level changes to changes in reactive_center (distal)ance, local clearance, or solvent exposure.
+
+4) Provide a short ranked list of:
+   - High-confidence mechanistic driver residues
+   - Secondary modulators
+   - Likely neutral/background mutations
+
+GUIDELINES
+- Use sequence numbering from each protein (not alignment index).
+- Explicitly tie residue-level effects back to the structural phenotypes described earlier.
+- Emphasize causal mechanistic reasoning over descriptive comparison.
+- Keep the output structured and concise.
+
+The goal is to move from global pocket phenotype to residue-level mechanistic hypotheses.
 """
 
 
@@ -126,6 +188,7 @@ def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tupl
 def default_user_inputs() -> Dict[str, Any]:
     return {
         "selected_positions": [100, 103, 104, 107, 141, 222],
+        "pairwise_comparisons": None,  # e.g. [("CviUPO", "AaeUPO"), ("MroUPO", "rCviUPO")]
         "focus_question": (
             "Identify per-protein structural interpretations and cross-homolog patterns "
             "that could explain activity/property differences."
@@ -183,8 +246,27 @@ def build_prompt_with_context(reaction_df: Optional[pd.DataFrame], user_inputs: 
     reaction_desc = str(user_inputs.get("reaction_data_description", "")).strip()
     if not reaction_desc:
         reaction_desc = "If reaction_data is provided, use it to support structure–function reasoning."
-    prompt_text = prompt.format(reaction_context_text=reaction_desc)
-    return f"{prompt_text}\n\n{reaction_context}"
+    pairwise = user_inputs.get("pairwise_comparisons")
+    if pairwise is None:
+        pairwise_text = "None"
+    elif isinstance(pairwise, (list, tuple)) and pairwise:
+        pair_items: List[str] = []
+        for p in pairwise:
+            if isinstance(p, (list, tuple)) and len(p) == 2:
+                pair_items.append(f"{p[0]} vs {p[1]}")
+            else:
+                pair_items.append(str(p))
+        pairwise_text = "; ".join(pair_items)
+    else:
+        pairwise_text = str(pairwise)
+
+    prompt1_text = prompt_1.format(pairwise_comparisons=pairwise_text)
+    return (
+        f"{prompt1_text}\n\n"
+        "REACTION CONTEXT (OPTIONAL)\n"
+        f"{reaction_desc}\n\n"
+        f"{reaction_context}"
+    )
 
 
 def _table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
@@ -213,7 +295,7 @@ def generate_llm_pocket_analysis(
     temperature = float(user_inputs.get("llm_temperature", 0.2))
     max_rows = int(user_inputs.get("llm_max_rows_per_table", 300))
 
-    prompt_text = build_prompt_with_context(reaction_df, user_inputs)
+    prompt1_text = build_prompt_with_context(reaction_df, user_inputs)
     payload = {
         "binding_pocket_table": _table_records(pocket, max_rows),
         "pocket_alignment_table": _table_records(ali, max_rows),
@@ -222,7 +304,9 @@ def generate_llm_pocket_analysis(
     }
 
     client = OpenAI()
-    response = client.chat.completions.create(
+    print("=== Prompt 1 Sent To LLM ===")
+    print(prompt1_text)
+    response_1 = client.chat.completions.create(
         model=model,
         temperature=temperature,
         messages=[
@@ -232,14 +316,53 @@ def generate_llm_pocket_analysis(
             },
             {
                 "role": "user",
-                "content": f"{prompt_text}\n\nINPUT_DATA_JSON:\n{json.dumps(payload, ensure_ascii=True)}",
+                "content": f"{prompt1_text}\n\nINPUT_DATA_JSON:\n{json.dumps(payload, ensure_ascii=True)}",
             },
         ],
     )
-    text = (response.choices[0].message.content or "").strip()
-    if not text:
-        raise RuntimeError("LLM returned an empty analysis response.")
-    return text
+    response_1_text = (response_1.choices[0].message.content or "").strip()
+    if not response_1_text:
+        raise RuntimeError("LLM returned an empty analysis response for prompt 1.")
+    print("\n=== LLM Output 1 ===")
+    print(response_1_text)
+
+    prompt2_text = prompt_2
+    payload_2 = {
+        "pocket_alignment_table": _table_records(ali, max_rows),
+        "structural_summary_text": response_1_text,
+        "focus_question": user_inputs.get("focus_question", ""),
+    }
+    print("\n=== Prompt 2 Sent To LLM ===")
+    print(prompt2_text)
+    response_2 = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert computational enzymologist and protein engineer.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{prompt2_text}\n\n"
+                    f"INPUT_DATA_JSON:\n{json.dumps(payload_2, ensure_ascii=True)}"
+                ),
+            },
+        ],
+    )
+    response_2_text = (response_2.choices[0].message.content or "").strip()
+    if not response_2_text:
+        raise RuntimeError("LLM returned an empty analysis response for prompt 2.")
+    print("\n=== LLM Output 2 ===")
+    print(response_2_text)
+
+    return (
+        "## Stage 1: Global Pocket Phenotypes\n\n"
+        f"{response_1_text}\n\n"
+        "## Stage 2: Residue-Level Mechanistic Drivers\n\n"
+        f"{response_2_text}"
+    )
 
 
 def _residue_signature(ali_sel: pd.DataFrame, enzyme_name: str) -> str:

@@ -12,7 +12,15 @@ import pandas as pd
 import requests
 
 from agentic_protein_design.core import apply_optional_text_inputs
-from agentic_protein_design.core.chat_store import append_message, create_thread, list_threads, load_thread
+from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
+from agentic_protein_design.core.pipeline_utils import (
+    get_openai_client,
+    persist_thread_message,
+    save_text_output,
+    save_text_output_with_assets_copy,
+    summarize_compact_text,
+    table_records,
+)
 from project_config.variables import address_dict, subfolders
 
 
@@ -166,7 +174,7 @@ def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tupl
         thread = create_thread(
             root_key=root_key,
             title="UPO literature review",
-            metadata={"notebook": "01_literature_review"},
+            metadata={"notebook": "00_literature_review"},
             llm_process_tag=LLM_PROCESS_TAG,
         )
     preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
@@ -883,23 +891,7 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
     }
 
 
-def _table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
-    if df.empty:
-        return []
-    subset = df.head(max_rows).copy()
-    subset = subset.where(pd.notnull(subset), None)
-    return subset.to_dict(orient="records")
-
-
 def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dict[str, Any]) -> str:
-    try:
-        from openai import OpenAI
-    except ImportError as exc:
-        raise RuntimeError("The `openai` package is required for LLM review generation.") from exc
-
-    if not os.getenv("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is not set. Export it or set it via local_api_keys.py before LLM review.")
-
     model = str(inputs.get("llm_model", "gpt-5.2"))
     temperature = float(inputs.get("llm_temperature", 0.2))
     max_rows = int(inputs.get("llm_max_rows_per_table", 250))
@@ -911,13 +903,16 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
         lit_for_llm = lit_for_llm[lit_for_llm["quality_score"] >= min_quality].copy()
 
     payload = {
-        "protein_database_hits": _table_records(outputs.get("protein_hits", pd.DataFrame()), max_rows),
-        "literature_hits": _table_records(lit_for_llm, max_rows),
-        "literature_summary": _table_records(outputs.get("literature_summary", pd.DataFrame()), max_rows),
-        "source_report": _table_records(outputs.get("source_report", pd.DataFrame()), max_rows),
+        "protein_database_hits": table_records(outputs.get("protein_hits", pd.DataFrame()), max_rows),
+        "literature_hits": table_records(lit_for_llm, max_rows),
+        "literature_summary": table_records(outputs.get("literature_summary", pd.DataFrame()), max_rows),
+        "source_report": table_records(outputs.get("source_report", pd.DataFrame()), max_rows),
     }
 
-    client = OpenAI()
+    client = get_openai_client(
+        missing_package_message="The `openai` package is required for LLM review generation.",
+        missing_key_message="OPENAI_API_KEY is not set. Export it or set it via local_api_keys.py before LLM review.",
+    )
     response = client.chat.completions.create(
         model=model,
         temperature=temperature,
@@ -933,16 +928,16 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
 
 
 def save_literature_llm_review(review_text: str, processed_dir: Path) -> Path:
-    out_path = processed_dir / "literature_review_llm_summary.md"
-    out_path.write_text(review_text, encoding="utf-8")
-    return out_path
+    return save_text_output_with_assets_copy(
+        review_text,
+        processed_dir,
+        "literature_review_llm_summary.md",
+        assets_filename="literature_review_llm_summary.md",
+    )
 
 
 def summarize_text(text: str, max_chars: int = 1000) -> str:
-    compact = " ".join((text or "").split())
-    if len(compact) <= max_chars:
-        return compact
-    return compact[: max_chars - 3] + "..."
+    return summarize_compact_text(text, max_chars=max_chars)
 
 
 def save_literature_outputs(outputs: Dict[str, pd.DataFrame], processed_dir: Path) -> Dict[str, Path]:
@@ -975,15 +970,12 @@ def persist_thread_update(
     llm_review_path: Optional[Path] = None,
     llm_review_text: Optional[str] = None,
 ) -> str:
-    append_message(
+    return persist_thread_message(
         root_key=root_key,
         thread_id=thread_id,
-        role="user",
-        content=(
-            build_literature_agent_prompt(inputs)
-        ),
-        source_notebook="01_literature_review",
         llm_process_tag=LLM_PROCESS_TAG,
+        source_notebook="00_literature_review",
+        content=build_literature_agent_prompt(inputs),
         metadata={
             "inputs": inputs,
             "outputs": {k: str(v) for k, v in out_paths.items()},
@@ -992,7 +984,6 @@ def persist_thread_update(
             "llm_model": str(inputs.get("llm_model", "")),
         },
     )
-    return load_thread(root_key, thread_id, llm_process_tag=LLM_PROCESS_TAG)["updated_at"]
 
 
 def run_literature_review_step(

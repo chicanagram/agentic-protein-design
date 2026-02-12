@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import re
 
 import pandas as pd
 
 from agentic_protein_design.core import resolve_input_path
-from agentic_protein_design.core.chat_store import append_message, create_thread, list_threads, load_thread
+from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
+from agentic_protein_design.core.pipeline_utils import (
+    get_openai_client,
+    persist_thread_message,
+    save_text_output,
+    save_text_output_with_assets_copy,
+    summarize_compact_text,
+    table_records,
+)
 from project_config.variables import address_dict, subfolders
 
 
@@ -16,14 +24,6 @@ REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "binding_pocket_llm_analysis"
 BASE_REQUIRED_COLS = [
     "struct_name",
-]
-DEFAULT_CORE_METRICS = [
-    "num_pocket_res_ali",
-    "num_pocket_res<6",
-    "mean_dist_to_centroid",
-    "reactive_center distance",
-    "median_dist_res_to_ligand_reactive_center",
-    "median_min dist_res_to_ligand",
 ]
 
 prompt_1 = """
@@ -140,6 +140,51 @@ GUIDELINES
 The goal is to move from global pocket phenotype to residue-level mechanistic hypotheses.
 """
 
+prompt_3 = """
+You are designing enzyme variants for rational engineering.
+
+You are given:
+1) prompt_2_output: residue-level mechanistic analysis of binding-pocket drivers.
+2) literature_context (optional): prior external context (for example literature-review thread outputs).
+3) design_requirements: user-provided requirements including:
+   - target backbone protein to engineer
+   - engineering aims (activity/selectivity/stability/pathway bias)
+   - constraints (allowed positions, mutation budget, excluded residues/motifs, expression or assay limits)
+
+TASK
+Generate a concrete mutation design proposal grounded primarily in prompt_2_output and supported by literature_context when relevant.
+
+OUTPUT FORMAT
+1) Design Intent
+   - State backbone protein and explicit engineering objective.
+
+2) Proposed Mutations (ranked)
+   - Provide 5-10 proposals total.
+   - Include both:
+     - specific substitutions (e.g., F88L), and
+     - optional position-level exploration suggestions (e.g., site-saturation at position 158 with a small focused set).
+   - For each proposal provide:
+     - rank
+     - proposal (mutation or position-set)
+     - rationale linked to prompt_2 mechanistic driver(s)
+     - expected directional effect on function
+     - risk/tradeoff
+     - confidence (high/medium/low)
+
+3) Minimal Experimental Plan
+   - Suggest a compact first-round panel (6-12 variants max), prioritizing high-information designs.
+   - Include a short assay/readout plan aligned with the objective.
+
+4) Rejected Alternatives
+   - Briefly list 3-5 plausible but lower-priority options and why they were deprioritized.
+
+RULES
+- Do not invent residue numbering outside the provided context.
+- Keep causal links explicit from residue-level mechanism -> mutation -> expected phenotype.
+- If literature_context conflicts with prompt_2_output, state the conflict and choose a conservative design.
+- Prefer practical, testable proposals over speculative broad recommendations.
+"""
+
 
 def resolve_project_root() -> Path:
     root = Path.cwd().resolve()
@@ -167,8 +212,14 @@ def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple
 
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    if existing_thread_id:
-        thread = load_thread(root_key, existing_thread_id, llm_process_tag=LLM_PROCESS_TAG)
+    thread_ref = str(existing_thread_id or "").strip()
+    if thread_ref:
+        # Allow passing '{tag}_{thread_id}' key from chats filename stem.
+        if thread_ref.endswith(".json"):
+            thread_ref = thread_ref[:-5]
+        m = re.match(r"^(?P<tag>[A-Za-z0-9_]+)_(?P<tid>[0-9a-fA-F]{32})$", thread_ref)
+        resolved_thread_id = m.group("tid").lower() if m else thread_ref
+        thread = load_thread(root_key, resolved_thread_id, llm_process_tag=LLM_PROCESS_TAG)
     else:
         thread = create_thread(
             root_key=root_key,
@@ -264,41 +315,31 @@ def build_prompt_with_context(reaction_df: Optional[pd.DataFrame], user_inputs: 
     )
 
 
-def _table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
-    if df.empty:
-        return []
-    subset = df.head(max_rows).copy()
-    subset = subset.where(pd.notnull(subset), None)
-    return subset.to_dict(orient="records")
-
-
-def generate_llm_pocket_analysis(
+def run_llm_pocket_analysis_stages(
     pocket: pd.DataFrame,
     ali: pd.DataFrame,
     reaction_df: Optional[pd.DataFrame],
     user_inputs: Dict[str, Any],
-) -> str:
-    try:
-        from openai import OpenAI
-    except ImportError as exc:
-        raise RuntimeError("The `openai` package is required for LLM analysis.") from exc
-
-    if not os.getenv("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is not set. Export it before running LLM analysis.")
-
+) -> Dict[str, str]:
+    """
+    Run prompt_1 and prompt_2 sequentially and return both stage outputs.
+    """
     model = str(user_inputs.get("llm_model", "gpt-5.2"))
     temperature = float(user_inputs.get("llm_temperature", 0.2))
     max_rows = int(user_inputs.get("llm_max_rows_per_table", 300))
 
     prompt1_text = build_prompt_with_context(reaction_df, user_inputs)
     payload = {
-        "binding_pocket_table": _table_records(pocket, max_rows),
-        "pocket_alignment_table": _table_records(ali, max_rows),
-        "reaction_data": None if reaction_df is None else _table_records(reaction_df, max_rows),
+        "binding_pocket_table": table_records(pocket, max_rows),
+        "pocket_alignment_table": table_records(ali, max_rows),
+        "reaction_data": None if reaction_df is None else table_records(reaction_df, max_rows),
         "focus_question": user_inputs.get("focus_question", ""),
     }
 
-    client = OpenAI()
+    client = get_openai_client(
+        missing_package_message="The `openai` package is required for LLM analysis.",
+        missing_key_message="OPENAI_API_KEY is not set. Export it before running LLM analysis.",
+    )
     print("=== Prompt 1 Sent To LLM ===")
     print(prompt1_text)
     response_1 = client.chat.completions.create(
@@ -323,7 +364,7 @@ def generate_llm_pocket_analysis(
 
     prompt2_text = prompt_2
     payload_2 = {
-        "pocket_alignment_table": _table_records(ali, max_rows),
+        "pocket_alignment_table": table_records(ali, max_rows),
         "structural_summary_text": response_1_text,
         "focus_question": user_inputs.get("focus_question", ""),
     }
@@ -352,12 +393,79 @@ def generate_llm_pocket_analysis(
     print("\n=== LLM Output 2 ===")
     print(response_2_text)
 
-    return (
+    combined = (
         "## Stage 1: Global Pocket Phenotypes\n\n"
         f"{response_1_text}\n\n"
         "## Stage 2: Residue-Level Mechanistic Drivers\n\n"
         f"{response_2_text}"
     )
+    return {
+        "prompt_1_text": prompt1_text,
+        "prompt_1_output": response_1_text,
+        "prompt_2_text": prompt2_text,
+        "prompt_2_output": response_2_text,
+        "combined_analysis": combined,
+    }
+
+
+def generate_llm_pocket_analysis(
+    pocket: pd.DataFrame,
+    ali: pd.DataFrame,
+    reaction_df: Optional[pd.DataFrame],
+    user_inputs: Dict[str, Any],
+) -> str:
+    stage_outputs = run_llm_pocket_analysis_stages(pocket, ali, reaction_df, user_inputs)
+    return stage_outputs["combined_analysis"]
+
+
+def generate_llm_mutation_design_proposal(
+    prompt_2_output: str,
+    design_requirements: str,
+    *,
+    user_inputs: Optional[Dict[str, Any]] = None,
+    literature_context: str = "",
+) -> str:
+    """
+    Run prompt_3 using stage-2 residue analysis and optional external literature context.
+    """
+    settings = user_inputs or {}
+    model = str(settings.get("llm_model", "gpt-5.2"))
+    temperature = float(settings.get("llm_temperature", 0.2))
+
+    literature_context_text = literature_context.strip() or "Not provided."
+    design_requirements_text = design_requirements.strip() or "No explicit design requirements provided."
+
+    payload = {
+        "prompt_2_output": prompt_2_output.strip(),
+        "literature_context": literature_context_text,
+        "design_requirements": design_requirements_text,
+    }
+    client = get_openai_client(
+        missing_package_message="The `openai` package is required for LLM analysis.",
+        missing_key_message="OPENAI_API_KEY is not set. Export it before running LLM analysis.",
+    )
+    print("\n=== Prompt 3 Sent To LLM ===")
+    print(prompt_3)
+    response = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert computational enzymologist and rational protein engineer.",
+            },
+            {
+                "role": "user",
+                "content": f"{prompt_3}\n\nINPUT_DATA_JSON:\n{json.dumps(payload, ensure_ascii=True)}",
+            },
+        ],
+    )
+    text = (response.choices[0].message.content or "").strip()
+    if not text:
+        raise RuntimeError("LLM returned an empty mutation design proposal for prompt 3.")
+    print("\n=== LLM Output 3 ===")
+    print(text)
+    return text
 
 
 def _residue_signature(ali_sel: pd.DataFrame, enzyme_name: str) -> str:
@@ -395,10 +503,6 @@ def _detect_metric_cols(pocket: pd.DataFrame) -> List[str]:
         series_num = pd.to_numeric(pocket[c], errors="coerce")
         if series_num.notna().any():
             metric_cols.append(c)
-    # Keep stable ordering with core metrics first when present.
-    core_first = [c for c in DEFAULT_CORE_METRICS if c in metric_cols]
-    remaining = [c for c in metric_cols if c not in core_first]
-    metric_cols = core_first + remaining
     return metric_cols
 
 
@@ -513,16 +617,25 @@ def save_binding_outputs(interp_df: pd.DataFrame, pattern_summary: pd.DataFrame,
 
 
 def save_llm_analysis(analysis_text: str, processed_dir: Path) -> Path:
-    out_path = processed_dir / "binding_pocket_llm_analysis.md"
-    out_path.write_text(analysis_text, encoding="utf-8")
-    return out_path
+    return save_text_output_with_assets_copy(
+        analysis_text,
+        processed_dir,
+        "binding_pocket_llm_analysis.md",
+        assets_filename="binding_pocket_llm_analysis.md",
+    )
+
+
+def save_mutation_design_proposal(proposal_text: str, processed_dir: Path) -> Path:
+    return save_text_output_with_assets_copy(
+        proposal_text,
+        processed_dir,
+        "binding_pocket_mutation_design.md",
+        assets_filename="binding_pocket_mutation_design.md",
+    )
 
 
 def summarize_llm_analysis(analysis_text: str, max_chars: int = 1000) -> str:
-    text = " ".join((analysis_text or "").split())
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 3] + "..."
+    return summarize_compact_text(analysis_text, max_chars=max_chars)
 
 
 def persist_thread_update(
@@ -536,17 +649,20 @@ def persist_thread_update(
     out_patterns: Path,
     llm_analysis_path: Optional[Path] = None,
     llm_analysis_text: Optional[str] = None,
+    mutation_design_path: Optional[Path] = None,
+    mutation_design_text: Optional[str] = None,
+    literature_context_thread_key: Optional[str] = None,
     llm_model: Optional[str] = None,
 ) -> str:
     prompt_text = build_prompt_with_context(reaction_df, user_inputs)
     llm_summary = "" if not llm_analysis_text else summarize_llm_analysis(llm_analysis_text)
-    append_message(
+    mutation_design_summary = "" if not mutation_design_text else summarize_llm_analysis(mutation_design_text)
+    return persist_thread_message(
         root_key=root_key,
         thread_id=thread_id,
-        role="user",
-        content=prompt_text,
-        source_notebook="02_binding_pocket_analysis",
         llm_process_tag=LLM_PROCESS_TAG,
+        source_notebook="02_binding_pocket_analysis",
+        content=prompt_text,
         metadata={
             "user_inputs": user_inputs,
             "input_paths": input_paths,
@@ -557,10 +673,12 @@ def persist_thread_update(
             "out_patterns": str(out_patterns),
             "llm_analysis_path": "" if llm_analysis_path is None else str(llm_analysis_path),
             "llm_analysis_summary": llm_summary,
+            "mutation_design_path": "" if mutation_design_path is None else str(mutation_design_path),
+            "mutation_design_summary": mutation_design_summary,
+            "literature_context_thread_key": "" if not literature_context_thread_key else str(literature_context_thread_key),
             "llm_model": "" if llm_model is None else llm_model,
         },
     )
-    return load_thread(root_key, thread_id, llm_process_tag=LLM_PROCESS_TAG)["updated_at"]
 
 
 def run_binding_pocket_step(

@@ -25,9 +25,12 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 
 ## Available Notebooks (more to come)
 
-- [`notebooks/01_literature_review.ipynb`](notebooks/01_literature_review.ipynb)  
+- [`notebooks/00_literature_review.ipynb`](notebooks/00_literature_review.ipynb)  
   Retrieval-backed literature survey and protein database scan, followed by LLM-generated, engineering-focused synthesis.  
   Includes source diagnostics, quality scoring/downweighting, and compact thread-memory persistence.
+
+- [`notebooks/01_design_strategy_planning.ipynb`](notebooks/01_design_strategy_planning.ipynb)  
+  Strategy-planning notebook that uses project requirements plus optional prior literature-review thread context to produce a multi-round design workflow with tool choices, decision gates, and implementation details.
 
 - [`notebooks/02_binding_pocket_analysis.ipynb`](notebooks/02_binding_pocket_analysis.ipynb)  
   Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
@@ -36,6 +39,7 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 
 In addition to notebook cells, you can now import step/workflow functions from:
 - [`src/agentic_protein_design/steps/literature_review.py`](src/agentic_protein_design/steps/literature_review.py)
+- [`src/agentic_protein_design/steps/design_strategy_planning.py`](src/agentic_protein_design/steps/design_strategy_planning.py)
 - [`src/agentic_protein_design/steps/binding_pocket.py`](src/agentic_protein_design/steps/binding_pocket.py)
 - [`src/agentic_protein_design/workflows/multistep.py`](src/agentic_protein_design/workflows/multistep.py)
 

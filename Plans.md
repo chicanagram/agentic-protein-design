@@ -152,7 +152,7 @@ Recommendation: start with Streamlit for speed, then graduate to FastAPI + React
 ### Phase 1: Jupyter Notebook UI
 - Notebook sections mirror workflow modules A-F.
 - Start with two prototype notebooks:
-  - `notebooks/01_literature_review.ipynb`
+  - `notebooks/00_literature_review.ipynb`
   - `notebooks/02_binding_pocket_analysis.ipynb`
 - Each section emits clearly named CSV outputs and preview tables.
 - Include “decision checkpoints” for user review before next stage.

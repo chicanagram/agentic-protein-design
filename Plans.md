@@ -144,7 +144,7 @@ Recommendation: start with Streamlit for speed, then graduate to FastAPI + React
 
 ### Chat Context Persistence
 - Store notebook chat context under the repository-local `chats/` folder.
-- Use one file per thread: `chats/<thread_id>.json`.
+- Use one file per thread + process tag: `chats/<llm_process_tag>_<thread_id>.json`.
 - Thread selection should be explicit in each notebook run so users can continue prior context across notebooks.
 
 ## 7. UI Plan

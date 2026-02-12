@@ -7,11 +7,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from chat_store import append_message, create_thread, list_threads, load_thread
-from variables import address_dict, subfolders
+from agentic_protein_design.core import resolve_input_path
+from agentic_protein_design.core.chat_store import append_message, create_thread, list_threads, load_thread
+from project_config.variables import address_dict, subfolders
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
+LLM_PROCESS_TAG = "binding_pocket_llm_analysis"
 BASE_REQUIRED_COLS = [
     "struct_name",
 ]
@@ -117,22 +119,14 @@ TASK
 
 Use the alignment table together with the structural_summary_text to:
 
-1) Identify specific residue positions that likely drive differences in:
-   - Proximal electrostatics
-   - Proximal sterics
-   - Distal steering effects
-   - Outer pocket sterics and permissiveness
-
-2) For each key variable position:
+1) Identify specific residue positions that likely drive differences in electrostatics and /or sterics. For each key variable position:
    - Describe residue identities across proteins.
    - Classify substitutions as steric (small↔bulky), electrostatic (neutral↔charged), or polarity shifts.
    - Predict mechanistic consequences (e.g., tighter cage, increased radical escape, altered substrate orientation).
+   - Specifically contrast the effect of point mutations in variants of the same base sequence. 
+     Explain how the mutations modify the previously identified pocket environment and its chemistry. 
 
-3) For variants (e.g., point mutations):
-   - Explain how specific substitutions modify the previously identified pocket phenotype.
-   - Link residue-level changes to changes in reactive_center (distal)ance, local clearance, or solvent exposure.
-
-4) Provide a short ranked list of:
+2) Provide a short ranked list of:
    - High-confidence mechanistic driver residues
    - Secondary modulators
    - Likely neutral/background mutations
@@ -174,14 +168,15 @@ def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
     if existing_thread_id:
-        thread = load_thread(root_key, existing_thread_id)
+        thread = load_thread(root_key, existing_thread_id, llm_process_tag=LLM_PROCESS_TAG)
     else:
         thread = create_thread(
             root_key=root_key,
             title="UPO binding pocket analysis",
             metadata={"notebook": "02_binding_pocket_analysis"},
+            llm_process_tag=LLM_PROCESS_TAG,
         )
-    preview = pd.DataFrame(list_threads(root_key)[:5])
+    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
     return thread, preview
 
 
@@ -551,6 +546,7 @@ def persist_thread_update(
         role="user",
         content=prompt_text,
         source_notebook="02_binding_pocket_analysis",
+        llm_process_tag=LLM_PROCESS_TAG,
         metadata={
             "user_inputs": user_inputs,
             "input_paths": input_paths,
@@ -564,4 +560,74 @@ def persist_thread_update(
             "llm_model": "" if llm_model is None else llm_model,
         },
     )
-    return load_thread(root_key, thread_id)["updated_at"]
+    return load_thread(root_key, thread_id, llm_process_tag=LLM_PROCESS_TAG)["updated_at"]
+
+
+def run_binding_pocket_step(
+    root_key: str,
+    user_inputs: Dict[str, Any],
+    input_paths: Dict[str, str],
+    *,
+    existing_thread_id: Optional[str] = None,
+    run_llm: bool = True,
+    persist: bool = True,
+) -> Dict[str, Any]:
+    """
+    Run the full binding-pocket step and return outputs for downstream composition.
+    """
+    data_root, resolved_dirs = setup_data_root(root_key)
+    thread, _ = init_thread(root_key, existing_thread_id)
+    thread_id = str(thread["thread_id"])
+
+    binding_csv = resolve_input_path(data_root, input_paths["binding_csv"])
+    alignment_csv = resolve_input_path(data_root, input_paths["alignment_csv"])
+
+    reaction_rel = str(input_paths.get("reaction_data_csv", "")).strip()
+    reaction_csv: Optional[Path] = resolve_input_path(data_root, reaction_rel) if reaction_rel else None
+
+    pocket, ali, reaction_df = load_input_tables(binding_csv, alignment_csv, reaction_csv)
+
+    selected_positions = user_inputs.get("selected_positions")
+    interp_df, pattern_summary = analyze_pocket_profiles(pocket, ali, selected_positions=selected_positions)
+    out_interp, out_patterns = save_binding_outputs(interp_df, pattern_summary, resolved_dirs["processed"])
+
+    llm_analysis_text: Optional[str] = None
+    llm_analysis_path: Optional[Path] = None
+    if run_llm:
+        llm_analysis_text = generate_llm_pocket_analysis(pocket, ali, reaction_df, user_inputs)
+        llm_analysis_path = save_llm_analysis(llm_analysis_text, resolved_dirs["processed"])
+
+    updated_at: Optional[str] = None
+    if persist:
+        updated_at = persist_thread_update(
+            root_key=root_key,
+            thread_id=thread_id,
+            user_inputs=user_inputs,
+            input_paths=input_paths,
+            selected_positions=[] if selected_positions is None else list(selected_positions),
+            reaction_df=reaction_df,
+            out_interp=out_interp,
+            out_patterns=out_patterns,
+            llm_analysis_path=llm_analysis_path,
+            llm_analysis_text=llm_analysis_text,
+            llm_model=str(user_inputs.get("llm_model", "")),
+        )
+
+    return {
+        "root_key": root_key,
+        "thread_id": thread_id,
+        "thread_updated_at": updated_at,
+        "data_root": data_root,
+        "resolved_dirs": resolved_dirs,
+        "user_inputs": user_inputs,
+        "input_paths": input_paths,
+        "pocket": pocket,
+        "alignment": ali,
+        "reaction_df": reaction_df,
+        "interp_df": interp_df,
+        "pattern_summary": pattern_summary,
+        "out_interp": out_interp,
+        "out_patterns": out_patterns,
+        "llm_analysis_text": llm_analysis_text,
+        "llm_analysis_path": llm_analysis_path,
+    }

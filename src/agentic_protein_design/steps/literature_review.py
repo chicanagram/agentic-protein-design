@@ -11,11 +11,13 @@ from urllib.parse import urlparse
 import pandas as pd
 import requests
 
-from chat_store import append_message, create_thread, list_threads, load_thread
-from variables import address_dict, subfolders
+from agentic_protein_design.core import apply_optional_text_inputs
+from agentic_protein_design.core.chat_store import append_message, create_thread, list_threads, load_thread
+from project_config.variables import address_dict, subfolders
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
+LLM_PROCESS_TAG = "literature_review"
 REQUEST_TIMEOUT = 30
 
 literature_review_agent_prompt = """
@@ -159,14 +161,15 @@ def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
     if existing_thread_id:
-        thread = load_thread(root_key, existing_thread_id)
+        thread = load_thread(root_key, existing_thread_id, llm_process_tag=LLM_PROCESS_TAG)
     else:
         thread = create_thread(
             root_key=root_key,
             title="UPO literature review",
             metadata={"notebook": "01_literature_review"},
+            llm_process_tag=LLM_PROCESS_TAG,
         )
-    preview = pd.DataFrame(list_threads(root_key)[:5])
+    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
     return thread, preview
 
 
@@ -980,6 +983,7 @@ def persist_thread_update(
             build_literature_agent_prompt(inputs)
         ),
         source_notebook="01_literature_review",
+        llm_process_tag=LLM_PROCESS_TAG,
         metadata={
             "inputs": inputs,
             "outputs": {k: str(v) for k, v in out_paths.items()},
@@ -988,4 +992,57 @@ def persist_thread_update(
             "llm_model": str(inputs.get("llm_model", "")),
         },
     )
-    return load_thread(root_key, thread_id)["updated_at"]
+    return load_thread(root_key, thread_id, llm_process_tag=LLM_PROCESS_TAG)["updated_at"]
+
+
+def run_literature_review_step(
+    root_key: str,
+    inputs: Dict[str, Any],
+    *,
+    input_paths: Optional[Dict[str, str]] = None,
+    existing_thread_id: Optional[str] = None,
+    run_llm: bool = True,
+    persist: bool = True,
+) -> Dict[str, Any]:
+    """
+    Run the full literature-review step and return outputs for downstream composition.
+    """
+    data_root, resolved_dirs = setup_data_root(root_key)
+    thread, _ = init_thread(root_key, existing_thread_id)
+    thread_id = str(thread["thread_id"])
+
+    step_inputs = dict(inputs)
+    apply_optional_text_inputs(step_inputs, input_paths or {}, data_root)
+
+    outputs = run_literature_pipeline(step_inputs)
+    out_paths = save_literature_outputs(outputs, resolved_dirs["processed"])
+
+    llm_review_text: Optional[str] = None
+    llm_review_path: Optional[Path] = None
+    if run_llm:
+        llm_review_text = generate_literature_llm_review(outputs, step_inputs)
+        llm_review_path = save_literature_llm_review(llm_review_text, resolved_dirs["processed"])
+
+    updated_at: Optional[str] = None
+    if persist:
+        updated_at = persist_thread_update(
+            root_key=root_key,
+            thread_id=thread_id,
+            inputs=step_inputs,
+            out_paths=out_paths,
+            llm_review_path=llm_review_path,
+            llm_review_text=llm_review_text,
+        )
+
+    return {
+        "root_key": root_key,
+        "thread_id": thread_id,
+        "thread_updated_at": updated_at,
+        "data_root": data_root,
+        "resolved_dirs": resolved_dirs,
+        "inputs": step_inputs,
+        "outputs": outputs,
+        "out_paths": out_paths,
+        "llm_review_text": llm_review_text,
+        "llm_review_path": llm_review_path,
+    }

@@ -34,9 +34,6 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/01_design_strategy_planning.ipynb`](notebooks/01_design_strategy_planning.ipynb)  
   Strategy-planning notebook that uses project requirements plus optional prior literature-review thread context to produce a multi-round design workflow with tool choices, decision gates, and implementation details.
 
-- [`notebooks/06_binding_pocket_analysis.ipynb`](notebooks/06_binding_pocket_analysis.ipynb)  
-  Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
-
 - [`notebooks/02_run_zero_shot_design.ipynb`](notebooks/02_run_zero_shot_design.ipynb)  
   Placeholder notebook (empty scaffold; implementation pending).
 
@@ -48,6 +45,9 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 
 - [`notebooks/05_get_structures_apo_holo.ipynb`](notebooks/05_get_structures_apo_holo.ipynb)  
   Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/06_binding_pocket_analysis.ipynb`](notebooks/06_binding_pocket_analysis.ipynb)  
+  Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
 
 - [`notebooks/07_run_MD_calculate_ddGbind.ipynb`](notebooks/07_run_MD_calculate_ddGbind.ipynb)  
   Placeholder notebook (empty scaffold; implementation pending).

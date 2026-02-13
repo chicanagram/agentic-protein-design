@@ -153,7 +153,7 @@ Recommendation: start with Streamlit for speed, then graduate to FastAPI + React
 - Notebook sections mirror workflow modules A-F.
 - Start with two prototype notebooks:
   - `notebooks/00_literature_review.ipynb`
-  - `notebooks/02_binding_pocket_analysis.ipynb`
+  - `notebooks/06_binding_pocket_analysis.ipynb`
 - Each section emits clearly named CSV outputs and preview tables.
 - Include “decision checkpoints” for user review before next stage.
 

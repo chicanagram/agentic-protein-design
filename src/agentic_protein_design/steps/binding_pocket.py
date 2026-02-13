@@ -224,7 +224,7 @@ def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tupl
         thread = create_thread(
             root_key=root_key,
             title="UPO binding pocket analysis",
-            metadata={"notebook": "02_binding_pocket_analysis"},
+            metadata={"notebook": "06_binding_pocket_analysis"},
             llm_process_tag=LLM_PROCESS_TAG,
         )
     preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
@@ -661,7 +661,7 @@ def persist_thread_update(
         root_key=root_key,
         thread_id=thread_id,
         llm_process_tag=LLM_PROCESS_TAG,
-        source_notebook="02_binding_pocket_analysis",
+        source_notebook="06_binding_pocket_analysis",
         content=prompt_text,
         metadata={
             "user_inputs": user_inputs,

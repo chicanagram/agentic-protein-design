@@ -25,7 +25,7 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - **Local chat memory**: per-thread JSON files under `chats/` (git-ignored)
 - **Outputs**: written to each selected data root's standard subfolders (especially `processed/`)
 
-## Available Notebooks (more to come)
+## Available Notebooks
 
 - [`notebooks/00_literature_review.ipynb`](notebooks/00_literature_review.ipynb)  
   Retrieval-backed literature survey and protein database scan, followed by LLM-generated, engineering-focused synthesis.  
@@ -34,8 +34,29 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/01_design_strategy_planning.ipynb`](notebooks/01_design_strategy_planning.ipynb)  
   Strategy-planning notebook that uses project requirements plus optional prior literature-review thread context to produce a multi-round design workflow with tool choices, decision gates, and implementation details.
 
-- [`notebooks/02_binding_pocket_analysis.ipynb`](notebooks/02_binding_pocket_analysis.ipynb)  
+- [`notebooks/06_binding_pocket_analysis.ipynb`](notebooks/06_binding_pocket_analysis.ipynb)  
   Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
+
+- [`notebooks/02_run_zero_shot_design.ipynb`](notebooks/02_run_zero_shot_design.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/03_run_next_round_design.ipynb`](notebooks/03_run_next_round_design.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/04_get_sequences_align_and_analyse_conservation.ipynb`](notebooks/04_get_sequences_align_and_analyse_conservation.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/05_get_structures_apo_holo.ipynb`](notebooks/05_get_structures_apo_holo.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/07_run_MD_calculate_ddGbind.ipynb`](notebooks/07_run_MD_calculate_ddGbind.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/08_train_evaluate_supervised_ML_models.ipynb`](notebooks/08_train_evaluate_supervised_ML_models.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
+
+- [`notebooks/10_run_sequence_patent_search.ipynb`](notebooks/10_run_sequence_patent_search.ipynb)  
+  Placeholder notebook (empty scaffold; implementation pending).
 
 ## Programmatic Reuse (for larger workflows)
 

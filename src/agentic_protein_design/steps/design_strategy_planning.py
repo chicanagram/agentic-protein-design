@@ -15,6 +15,7 @@ from agentic_protein_design.core.pipeline_utils import (
     save_text_output_with_assets_copy,
     summarize_compact_text,
 )
+from agentic_protein_design.core.reflection import critique_and_regenerate_text
 from agentic_protein_design.core.thread_context import build_thread_context_text
 from project_config.variables import address_dict, subfolders
 
@@ -71,6 +72,22 @@ Output format:
 Style:
 - concise, technically grounded, and action-oriented
 - avoid generic advice; tie recommendations to provided requirements and context
+"""
+
+
+design_strategy_reflection_prompt = """
+You are reviewing a previously generated enzyme design strategy plan.
+
+Task:
+1) Critique the original plan for gaps, weak assumptions, missing decision gates, feasibility risks, and insufficient ties to user goals.
+2) Incorporate explicit user feedback if provided.
+3) Regenerate an improved plan.
+
+Important output constraint:
+- Return ONLY the rewritten final plan.
+- Do NOT include a separate critique section.
+- Do NOT include "old plan vs new plan" comparison.
+- Keep the same overall output structure used for design strategy planning.
 """
 
 
@@ -154,6 +171,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "llm_model": "gpt-5.2",
         "llm_temperature": 0.2,
         "literature_context_thread_key": "",
+        "plan_reflection_user_feedback": "",
+        "plan_reflection_prompt_override": "",
     }
 
 
@@ -217,6 +236,32 @@ def generate_design_strategy_plan(
     if not text:
         raise RuntimeError("LLM returned an empty design strategy plan.")
     return text
+
+
+def reflect_and_regenerate_design_strategy_plan(
+    user_inputs: Dict[str, Any],
+    original_plan: str,
+    *,
+    literature_context: str = "",
+    user_feedback: str = "",
+    critique_prompt: Optional[str] = None,
+) -> str:
+    model = str(user_inputs.get("llm_model", "gpt-5.2"))
+    temperature = float(user_inputs.get("llm_temperature", 0.2))
+    prompt_text = critique_prompt or design_strategy_reflection_prompt
+
+    return critique_and_regenerate_text(
+        original_text=original_plan,
+        critique_prompt=prompt_text,
+        user_feedback=user_feedback,
+        model=model,
+        temperature=temperature,
+        system_message="You are an expert computational protein engineer and workflow strategist.",
+        additional_context={
+            "user_inputs_json": user_inputs,
+            "literature_context": literature_context.strip() or "Not provided.",
+        },
+    )
 
 
 def save_design_strategy_plan(plan_text: str, processed_dir: Path) -> Path:

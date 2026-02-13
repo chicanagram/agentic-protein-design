@@ -1,0 +1,23 @@
+{
+  "local_tools": {
+    "mafft": {
+      "kind": "alignment",
+      "wrapper": "tools.local.bio_wrappers.run_mafft_alignment"
+    },
+    "mmseqs": {
+      "kind": "homolog_search",
+      "wrapper": "tools.local.bio_wrappers.run_mmseqs_easy_search"
+    }
+  },
+  "api_tools": {
+    "uniprot": {
+      "kind": "protein_annotation",
+      "wrapper": "tools.api.uniprot.search_uniprot"
+    },
+    "rcsb": {
+      "kind": "structure_lookup",
+      "wrapper": "tools.api.rcsb.search_rcsb_text"
+    }
+  }
+}
+

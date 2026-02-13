@@ -10,6 +10,7 @@ from agentic_protein_design.core.pipeline_utils import (
     summarize_compact_text,
     table_records,
 )
+from agentic_protein_design.core.reflection import critique_and_regenerate_text
 from agentic_protein_design.core.thread_context import (
     build_thread_context_bundle,
     build_thread_context_text,
@@ -30,6 +31,7 @@ __all__ = [
     "save_text_output",
     "save_text_output_with_assets_copy",
     "persist_thread_message",
+    "critique_and_regenerate_text",
     "find_thread_file",
     "load_thread_by_id",
     "extract_referenced_file_paths",

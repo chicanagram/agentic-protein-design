@@ -35,28 +35,34 @@ See full architecture and roadmap in [Plans.md](Plans.md).
   Strategy-planning notebook that uses project requirements plus optional prior literature-review thread context to produce a multi-round design workflow with tool choices, decision gates, and implementation details.
 
 - [`notebooks/02_run_zero_shot_design.ipynb`](notebooks/02_run_zero_shot_design.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+  (Placeholder - implementation pending). Workflow to design zero-shot sequences in Round 1.
 
-- [`notebooks/03_run_next_round_design.ipynb`](notebooks/03_run_next_round_design.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+- [`notebooks/03_run_next_round_design.ipynb`](notebooks/03_run_next_round_design.ipynb)
+  (Placeholder - implementation pending). Workflow to design sequences in Round 2 onwards, after some screening data is available.
 
 - [`notebooks/04_get_sequences_align_and_analyse_conservation.ipynb`](notebooks/04_get_sequences_align_and_analyse_conservation.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+  (Placeholder - implementation pending). Retrieve homologs, obtain multiple sequence alignment, perform conservation analysis for seed sequence positions. 
 
 - [`notebooks/05_get_structures_apo_holo.ipynb`](notebooks/05_get_structures_apo_holo.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+  (Placeholder - implementation pending). Fetch available crystal structures or predict structures and obtain docked complexes using AI models. 
 
 - [`notebooks/06_binding_pocket_analysis.ipynb`](notebooks/06_binding_pocket_analysis.ipynb)  
   Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
 
-- [`notebooks/07_run_MD_calculate_ddGbind.ipynb`](notebooks/07_run_MD_calculate_ddGbind.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+- [`notebooks/07_run_MD_calculate_dGbind.ipynb`](notebooks/07_run_MD_calculate_dGbind.ipynb)  
+  (Placeholder - implementation pending). Run molecular dynamics simulation to calculate dG_bind for protein ligand complex.
 
-- [`notebooks/08_train_evaluate_supervised_ML_models.ipynb`](notebooks/08_train_evaluate_supervised_ML_models.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+- [`notebooks/08_run_minimization_calculate_ddGbind_mutants.ipynb`](notebooks/07_run_MD_calculate_dGbind.ipynb)  
+  (Placeholder - implementation pending). Run energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
 
-- [`notebooks/10_run_sequence_patent_search.ipynb`](notebooks/10_run_sequence_patent_search.ipynb)  
-  Placeholder notebook (empty scaffold; implementation pending).
+- [`notebooks/09_obtain_ML_features_compose_datasets.ipynb`](notebooks/10_train_evaluate_supervised_ML_models.ipynb)  
+  (Placeholder - implementation pending). Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
+
+- [`notebooks/10_train_evaluate_supervised_ML_models.ipynb`](notebooks/10_train_evaluate_supervised_ML_models.ipynb)  
+  (Placeholder - implementation pending). Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
+
+- [`notebooks/xx_run_sequence_patent_search.ipynb`](notebooks/xx_run_sequence_patent_search.ipynb)  
+  (Placeholder - implementation pending). Run patent search and analysis for sequences of interest. 
 
 ## Programmatic Reuse (for larger workflows)
 

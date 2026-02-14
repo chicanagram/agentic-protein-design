@@ -16,6 +16,8 @@ pyhmmer
 aaindex
 esm
 openprotein-python
+pymol-open-source
+nglview
 
 # Retrieval and lightweight app plumbing
 requests

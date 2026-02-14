@@ -214,3 +214,4 @@ processed/
 
 # Local API keys (never commit secrets)
 local_api_keys.py
+tools/config/openprotein_credentials.local.py

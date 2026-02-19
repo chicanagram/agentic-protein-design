@@ -65,13 +65,16 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb`](notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb)  
   (Placeholder - implementation pending). Run energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
 
-- [`notebooks/12_obtain_ML_features_compose_datasets.ipynb`](notebooks/12_obtain_ML_features_compose_datasets.ipynb)  
+- [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)  
+  Stability-ddG prediction notebook using **Pythia** via an isolated Python environment.
+
+- [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_obtain_ML_features_compose_datasets.ipynb)  
   (Placeholder - implementation pending). Compose feature matrices and training/evaluation datasets for supervised ML.
 
-- [`notebooks/13_train_evaluate_supervised_ML_models.ipynb`](notebooks/13_train_evaluate_supervised_ML_models.ipynb)  
+- [`notebooks/14_train_evaluate_supervised_ML_models.ipynb`](notebooks/14_train_evaluate_supervised_ML_models.ipynb)  
   (Placeholder - implementation pending). Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
 
-- [`notebooks/14_run_sequence_patent_search.ipynb`](notebooks/14_run_sequence_patent_search.ipynb)  
+- [`notebooks/15_run_sequence_patent_search.ipynb`](notebooks/15_run_sequence_patent_search.ipynb)  
   (Placeholder - implementation pending). Run patent search and analysis for sequences of interest. 
 
 ## Programmatic Reuse (for larger workflows)
@@ -96,6 +99,28 @@ You can run with either conda or pip:
   - `python -m venv .venv`
   - `source .venv/bin/activate`
   - `pip install -r requirements.txt`
+
+## Running Stability Notebook (Pythia)
+
+Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)
+
+1. Set up a dedicated Pythia environment first (recommended to avoid OpenMP conflicts):
+   - `conda create -n pythia python=3.10 -y`
+   - `conda run -n pythia python -m pip install -r tools/pythia/requirements.txt`
+
+2. In notebook 12 user inputs, point Pythia to that isolated interpreter:
+   - `user_inputs["pythia_python_executable"] = "/Users/charmainechia/miniconda3/envs/pythia/bin/python"`
+   - `user_inputs["isolate_pythia_process_env"] = True`
+   - keep `user_inputs["n_jobs"] = 1` for runtime portability
+
+3. Provide input paths via:
+   - `base_directory_key` (preferred, from `project_config/variables.py` `address_dict`)
+   - `data_subfolder` (optional, can be `""`/`None`)
+   - `sequence_subdirectory`, `structure_subdirectory`
+   - `sequence_fasta_filenames`, `structure_pdb_filenames`
+
+4. Run notebook cells. If `output_csv` is blank, output defaults to:
+   - `processed/12_calculate_ddGstability_mutants/{data_subfolder}/pythia_ddg_stability_predictions.csv`
 
 ## API Keys
 

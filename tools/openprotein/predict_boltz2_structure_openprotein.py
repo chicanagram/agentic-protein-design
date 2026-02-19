@@ -30,9 +30,11 @@ def predict_boltz2(
     *,
     session: Optional[Any] = None,
     use_single_sequence_mode: bool = False,
+    templates: Optional[Sequence[Any]] = None,
     predict_affinity: bool = False,
     binder_chain: Optional[str] = None,
     wait: bool = True,
+    return_arrays: bool = False,
     out_cif: Optional[Path] = None,
     out_summary_json: Optional[Path] = None,
 ) -> Dict[str, Any]:
@@ -50,6 +52,7 @@ def predict_boltz2(
     if not sequences:
         raise ValueError("At least one protein sequence is required.")
 
+    # Section: normalize inputs ------------------------------------------------
     smiles_list = list(smiles or [])
     ccd_list = list(ccds or [])
     if predict_affinity and not (smiles_list or ccd_list):
@@ -58,6 +61,7 @@ def predict_boltz2(
     sess = session or connect_openprotein_session()
     print('Session:', sess)
 
+    # Section: build molecular complex ----------------------------------------
     proteins = [Protein(sequence=s) for s in sequences]
     protein_chains = _chain_ids(len(proteins), start_index=0)
 
@@ -72,6 +76,7 @@ def predict_boltz2(
 
     molecular_complex = Complex(chain_map)
 
+    # Section: MSA setup -------------------------------------------------------
     if use_single_sequence_mode:
         for p in proteins:
             p.msa = Protein.single_sequence_mode
@@ -85,7 +90,10 @@ def predict_boltz2(
         for p in molecular_complex.get_proteins().values():
             p.msa = msa
 
+    # Section: submit Boltz-2 job ---------------------------------------------
     fold_kwargs: Dict[str, Any] = {"sequences": [molecular_complex]}
+    if templates:
+        fold_kwargs["templates"] = list(templates)
     chosen_binder = binder_chain or (ligand_chains[0] if ligand_chains else None)
     if predict_affinity and chosen_binder:
         fold_kwargs["properties"] = [{"affinity": {"binder": chosen_binder}}]
@@ -100,12 +108,14 @@ def predict_boltz2(
         "binder_chain": chosen_binder,
     }
 
+    # Section: async return (optional) ----------------------------------------
     if not wait:
         if out_summary_json:
             out_summary_json.parent.mkdir(parents=True, exist_ok=True)
             out_summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
         return summary
 
+    # Section: collect outputs -------------------------------------------------
     fold_job.wait_until_done(verbose=True)
 
     result = fold_job.get()
@@ -117,18 +127,21 @@ def predict_boltz2(
         out_cif.write_text(structure.to_string(format="cif"), encoding="utf-8")
         summary["cif_path"] = str(out_cif.resolve())
 
+    plddt = None
     try:
         plddt = fold_job.get_plddt()[0]
         summary["plddt_shape"] = list(getattr(plddt, "shape", []))
     except Exception as exc:
         summary["plddt_error"] = f"{type(exc).__name__}: {exc}"
 
+    pae = None
     try:
         pae = fold_job.get_pae()[0]
         summary["pae_shape"] = list(getattr(pae, "shape", []))
     except Exception as exc:
         summary["pae_error"] = f"{type(exc).__name__}: {exc}"
 
+    pde = None
     try:
         pde = fold_job.get_pde()[0]
         summary["pde_shape"] = list(getattr(pde, "shape", []))
@@ -152,6 +165,12 @@ def predict_boltz2(
     if out_summary_json:
         out_summary_json.parent.mkdir(parents=True, exist_ok=True)
         out_summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    # Runtime-only rich outputs (not serialized to JSON).
+    if return_arrays:
+        summary["runtime_plddt"] = plddt
+        summary["runtime_pae"] = pae
+        summary["runtime_pde"] = pde
 
     return summary
 

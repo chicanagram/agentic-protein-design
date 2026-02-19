@@ -18,6 +18,11 @@
       "kind": "structure_lookup",
       "wrapper": "tools.api.rcsb.search_rcsb_text"
     }
+  },
+  "stability_tools": {
+    "pythia": {
+      "kind": "ddg_stability_prediction",
+      "wrapper": "tools.pythia.pythia_runner.run_pythia_ddg_scan"
+    }
   }
 }
-

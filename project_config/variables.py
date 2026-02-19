@@ -1,5 +1,5 @@
 address_dict = {
-    'examples': '../PIPS/PIPS-tools/examples/',
+    'examples': './examples/',
     'PIPS': '../PIPS/PIPS-GalOx-data/',
     'PIPS2': '../PIPS/PIPS2-UPOs-data/',
     'influenza-resistance': '../PIPS/influenza-resistance/',
@@ -8,7 +8,7 @@ address_dict = {
     'PON-Sol2': '../solubility-data/PON-Sol2/',
     'ECOHARVEST': '../ECOHARVEST/',
     'pips-insilico': '../pips-insilico/data/',
-    'databases': '../seq-db/'
+    'databases': '../seq-db/',
 }
 
 subfolders = {

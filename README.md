@@ -65,10 +65,10 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb`](notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb)  
   (Placeholder - implementation pending). Run energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
 
-- [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)  
+- [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)  
   Stability-ddG prediction notebook using **Pythia** via an isolated Python environment.
 
-- [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_obtain_ML_features_compose_datasets.ipynb)  
+- [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_obtain_sequence_encodings.ipynb)  
   (Placeholder - implementation pending). Compose feature matrices and training/evaluation datasets for supervised ML.
 
 - [`notebooks/14_train_evaluate_supervised_ML_models.ipynb`](notebooks/14_train_evaluate_supervised_ML_models.ipynb)  
@@ -102,7 +102,7 @@ You can run with either conda or pip:
 
 ## Running Stability Notebook (Pythia)
 
-Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)
+Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)
 
 1. Set up a dedicated Pythia environment first (recommended to avoid OpenMP conflicts):
    - `conda create -n pythia python=3.10 -y`
@@ -127,7 +127,15 @@ Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_cal
 For notebook LLM calls, set your key in [`project_config/local_api_keys.py`](project_config/local_api_keys.py).  
 This file is git-ignored.
 
-## Notes
+## To-Do
 
-- Place the provided landing image at `assets/landing-page.png` so it renders on GitHub.
-- Generated outputs in `processed/` and chat history in `chats/` are excluded from version control.
+- Populate tools registry after adding more tools
+- Improve prompt for workflow planning; return python code to be executed + json workflow description
+- Add constraints to BoltzGen specifications
+
+Notebooks to flesh out:
+- Sequence retrieval + align
+- Simulation-based Energy calculations
+- Sequence encodings retrieval
+- ML model training and evaluation
+- Zero shot and next round workflows

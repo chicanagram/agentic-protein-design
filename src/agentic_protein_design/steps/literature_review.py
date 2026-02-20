@@ -77,6 +77,7 @@ OUTPUT FORMAT
    - Active site organization
    - Access channels / substrate tunnels
    - Cofactor binding
+   - Known motifs or epitopes
 
 3. Reaction Mechanism
    - Catalytic cycle steps
@@ -215,6 +216,13 @@ def default_user_inputs() -> Dict[str, Any]:
         "llm_max_rows_per_table": 250,
         "enable_relaxed_fallback": True,
         "min_quality_score_for_llm_context": 0.35,
+        "data_fbase_key": "examples",  # key in project_config.variables.address_dict
+        "data_fbase": "",  # optional explicit fallback path (used when data_fbase_key is blank)
+        "data_subfolder": "",  # optional; can be ""
+        "enable_pdf_rag": True,
+        "pdf_rag_max_files": 20,
+        "pdf_rag_max_chars_per_file": 8000,
+        "pdf_rag_max_total_chars": 50000,
     }
 
 
@@ -252,6 +260,147 @@ def build_literature_agent_prompt(inputs: Dict[str, Any]) -> str:
         application_context=str(inputs.get("application_context", "")) or "None provided",
         constraints=_safe_join(inputs.get("constraints", [])) or "None provided",
     )
+
+
+def resolve_data_fbase(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Path:
+    base = project_root or resolve_project_root()
+    key = str(inputs.get("data_fbase_key", "")).strip()
+    if key:
+        if key not in address_dict:
+            raise KeyError(
+                f"Unknown data_fbase_key: {key}. Available keys: {sorted(address_dict.keys())}"
+            )
+        return (base / address_dict[key]).resolve()
+
+    explicit = str(inputs.get("data_fbase", "")).strip()
+    if explicit:
+        p = Path(explicit).expanduser()
+        if not p.is_absolute():
+            p = (base / p).resolve()
+        return p
+
+    return (base / address_dict.get("examples", "./examples/")).resolve()
+
+
+def resolve_literature_docs_dir(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Path:
+    data_fbase = resolve_data_fbase(inputs, project_root=project_root)
+    data_subfolder_raw = inputs.get("data_subfolder", "")
+    data_subfolder = "" if data_subfolder_raw is None else str(data_subfolder_raw).strip().strip("/")
+    if data_subfolder:
+        return (data_fbase / "literature" / data_subfolder).resolve()
+    return (data_fbase / "literature").resolve()
+
+
+def _extract_pdf_text(pdf_path: Path) -> str:
+    try:
+        from pypdf import PdfReader
+    except Exception as exc:
+        raise RuntimeError("PDF extraction requires `pypdf` package.") from exc
+
+    reader = PdfReader(str(pdf_path))
+    parts: List[str] = []
+    for page in reader.pages:
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        if text:
+            parts.append(text)
+    return _clean_text("\n\n".join(parts), max_chars=10_000_000)
+
+
+def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Dict[str, Any]:
+    docs_dir = resolve_literature_docs_dir(inputs, project_root=project_root)
+    max_files = int(inputs.get("pdf_rag_max_files", 20))
+    max_chars_per_file = int(inputs.get("pdf_rag_max_chars_per_file", 8000))
+    max_total_chars = int(inputs.get("pdf_rag_max_total_chars", 50000))
+    enable_pdf_rag = bool(inputs.get("enable_pdf_rag", True))
+
+    if not enable_pdf_rag:
+        print(f"[LocalPDF] disabled; docs_dir={docs_dir}")
+        return {
+            "docs_dir": str(docs_dir),
+            "local_document_hits": pd.DataFrame(),
+            "local_document_context": "",
+            "doc_errors": [],
+            "n_docs_discovered": 0,
+            "n_docs_used": 0,
+        }
+
+    pdf_files = sorted(docs_dir.glob("*.pdf")) if docs_dir.exists() else []
+    pdf_files = pdf_files[:max_files]
+    print(
+        f"[LocalPDF] docs_dir={docs_dir} discovered={len(pdf_files)} "
+        f"max_files={max_files} max_chars_per_file={max_chars_per_file} max_total_chars={max_total_chars}"
+    )
+
+    rows: List[Dict[str, Any]] = []
+    context_chunks: List[str] = []
+    errors: List[str] = []
+    used_chars = 0
+    n_used = 0
+
+    for p in pdf_files:
+        try:
+            text = _extract_pdf_text(p)
+        except Exception as exc:
+            err = f"{p.name}: {type(exc).__name__}: {exc}"
+            errors.append(err)
+            print(f"[LocalPDF] ERROR file={p.name} reason={type(exc).__name__}: {exc}")
+            continue
+
+        if not text.strip():
+            err = f"{p.name}: empty extracted text"
+            errors.append(err)
+            print(f"[LocalPDF] ERROR file={p.name} reason=empty extracted text")
+            continue
+
+        extracted_chars = len(text)
+        file_text = text[:max_chars_per_file]
+        remaining = max_total_chars - used_chars
+        if remaining <= 0:
+            print(f"[LocalPDF] STOP file={p.name} reason=global character budget exhausted")
+            break
+        file_text = file_text[:remaining]
+        if not file_text:
+            print(f"[LocalPDF] STOP file={p.name} reason=no remaining chars after budgeting")
+            break
+
+        excerpt = _clean_text(file_text, max_chars=max_chars_per_file)
+        used_this_file = len(excerpt)
+        truncated = used_this_file < extracted_chars
+        rows.append(
+            {
+                "source": "LocalPDF",
+                "id": p.name,
+                "title": p.stem,
+                "journal": "",
+                "year": "",
+                "abstract": excerpt[:1200],
+                "is_open_access": True,
+                "fulltext_url": str(p),
+                "url": str(p),
+                "pmcid": "",
+                "host_venue": "Local literature folder",
+                "fulltext_excerpt": excerpt,
+            }
+        )
+        context_chunks.append(f"[LocalPDF: {p.name}]\n{excerpt}")
+        used_chars += used_this_file
+        n_used += 1
+        print(
+            f"[LocalPDF] OK file={p.name} extracted_chars={extracted_chars} "
+            f"used_chars={used_this_file} truncated={truncated} total_used_chars={used_chars}"
+        )
+
+    return {
+        "docs_dir": str(docs_dir),
+        "local_document_hits": pd.DataFrame(rows),
+        "local_document_context": "\n\n".join(context_chunks),
+        "doc_errors": errors,
+        "n_docs_discovered": int(len(pdf_files)),
+        "n_docs_used": int(n_used),
+    }
 
 
 def _request_json(url: str, *, method: str = "GET", payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -650,6 +799,7 @@ def build_source_report(literature_df: pd.DataFrame) -> pd.DataFrame:
                 {"metric": "nature_hits", "value": 0},
                 {"metric": "sciencedirect_hits", "value": 0},
                 {"metric": "open_access_hits", "value": 0},
+                {"metric": "local_pdf_hits", "value": 0},
                 {"metric": "high_quality_hits", "value": 0},
                 {"metric": "medium_quality_hits", "value": 0},
                 {"metric": "low_quality_hits", "value": 0},
@@ -663,6 +813,7 @@ def build_source_report(literature_df: pd.DataFrame) -> pd.DataFrame:
             {"metric": "nature_hits", "value": int(literature_df["is_nature"].sum())},
             {"metric": "sciencedirect_hits", "value": int(literature_df["is_sciencedirect"].sum())},
             {"metric": "open_access_hits", "value": int(literature_df.get("is_open_access", pd.Series(dtype=bool)).sum())},
+            {"metric": "local_pdf_hits", "value": int((literature_df.get("source", pd.Series(dtype=str)) == "LocalPDF").sum())},
             {"metric": "high_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "high").sum())},
             {"metric": "medium_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "medium").sum())},
             {"metric": "low_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "low").sum())},
@@ -682,6 +833,7 @@ def annotate_quality_scores(literature_df: pd.DataFrame) -> pd.DataFrame:
         "EuropePMC": 0.90,
         "OpenAlex": 0.80,
         "WebSearch": 0.45,
+        "LocalPDF": 0.90,
     }
     trusted_domains = [
         "nature.com",
@@ -756,6 +908,17 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
     enable_relaxed = bool(inputs.get("enable_relaxed_fallback", True))
 
     source_debug_rows: List[Dict[str, Any]] = []
+    local_docs_bundle = ingest_local_literature_docs(inputs)
+    local_document_hits = local_docs_bundle.get("local_document_hits", pd.DataFrame())
+    source_debug_rows.append(
+        {
+            "source": "LocalPDF",
+            "query_mode": "local_folder",
+            "query": str(local_docs_bundle.get("docs_dir", "")),
+            "rows": int(len(local_document_hits)),
+            "error": "; ".join(local_docs_bundle.get("doc_errors", [])),
+        }
+    )
 
     protein_tables: List[pd.DataFrame] = []
     if "UniProt" in sources:
@@ -845,6 +1008,9 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
             literature_hits,
             max_chars=int(inputs.get("fulltext_max_chars", 6000)),
         )
+    if not local_document_hits.empty:
+        # Keep local PDFs in the same literature dataframe used for downstream scoring/LLM context.
+        literature_hits = pd.concat([literature_hits, local_document_hits], ignore_index=True, sort=False)
     literature_hits = annotate_literature_targets(literature_hits)
     literature_hits = annotate_quality_scores(literature_hits)
     source_report = build_source_report(literature_hits)
@@ -885,6 +1051,10 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
     return {
         "protein_hits": protein_hits,
         "literature_hits": literature_hits,
+        "local_document_hits": local_document_hits,
+        "local_document_context": pd.DataFrame(
+            [{"context_text": str(local_docs_bundle.get("local_document_context", ""))}]
+        ),
         "literature_summary": literature_summary,
         "source_report": source_report,
         "source_debug": source_debug,
@@ -902,9 +1072,16 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
     if not lit_for_llm.empty and "quality_score" in lit_for_llm.columns:
         lit_for_llm = lit_for_llm[lit_for_llm["quality_score"] >= min_quality].copy()
 
+    local_ctx_df = outputs.get("local_document_context", pd.DataFrame())
+    local_context_text = ""
+    if not local_ctx_df.empty and "context_text" in local_ctx_df.columns:
+        local_context_text = str(local_ctx_df.iloc[0].get("context_text", "") or "")
+
     payload = {
         "protein_database_hits": table_records(outputs.get("protein_hits", pd.DataFrame()), max_rows),
         "literature_hits": table_records(lit_for_llm, max_rows),
+        "local_document_hits": table_records(outputs.get("local_document_hits", pd.DataFrame()), max_rows),
+        "local_document_context": local_context_text,
         "literature_summary": table_records(outputs.get("literature_summary", pd.DataFrame()), max_rows),
         "source_report": table_records(outputs.get("source_report", pd.DataFrame()), max_rows),
     }
@@ -958,7 +1135,27 @@ def save_literature_outputs(outputs: Dict[str, pd.DataFrame], processed_dir: Pat
     web_hits = outputs.get("literature_hits", pd.DataFrame())
     if not web_hits.empty and "source" in web_hits.columns:
         web_hits = web_hits[web_hits["source"] == "WebSearch"].copy()
-    web_hits.to_csv(out_paths["web_search_hits.csv"], index=False)
+
+    # Optional local document retrieval hits (for example PDF RAG) are merged into
+    # the same output file to avoid proliferating separate artifacts.
+    local_doc_hits = outputs.get("local_document_hits", pd.DataFrame()).copy()
+    if not local_doc_hits.empty:
+        if "source" not in local_doc_hits.columns:
+            local_doc_hits["source"] = "LocalDocument"
+        if "source" in local_doc_hits.columns:
+            local_doc_hits["source"] = local_doc_hits["source"].replace("", "LocalDocument")
+
+    combined_external_hits = (
+        pd.concat([web_hits, local_doc_hits], ignore_index=True, sort=False)
+        if (not web_hits.empty or not local_doc_hits.empty)
+        else pd.DataFrame()
+    )
+    if not combined_external_hits.empty:
+        dedupe_cols = [c for c in ["source", "id", "title", "url", "fulltext_url"] if c in combined_external_hits.columns]
+        if dedupe_cols:
+            combined_external_hits = combined_external_hits.drop_duplicates(subset=dedupe_cols).reset_index(drop=True)
+
+    combined_external_hits.to_csv(out_paths["web_search_hits.csv"], index=False)
     return out_paths
 
 

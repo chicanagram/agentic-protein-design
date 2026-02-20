@@ -2,6 +2,12 @@
 
 from agentic_protein_design.core import chat_store
 from agentic_protein_design.core.paths import apply_optional_text_inputs, resolve_input_path
+from agentic_protein_design.core.llm_display import (
+    apply_notebook_markdown_style,
+    display_llm_output_bundle,
+    show_llm_exchange,
+    show_markdown_compact,
+)
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -24,6 +30,10 @@ from agentic_protein_design.core.thread_context import (
 __all__ = [
     "apply_optional_text_inputs",
     "resolve_input_path",
+    "apply_notebook_markdown_style",
+    "display_llm_output_bundle",
+    "show_llm_exchange",
+    "show_markdown_compact",
     "chat_store",
     "get_openai_client",
     "table_records",

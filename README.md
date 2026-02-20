@@ -2,17 +2,22 @@
 
 ![Agentic Protein Design Landing Graphic](assets/landing-page.png)
 
-A notebook-first, local-first workflow for **early-stage enzyme engineering** focused on **enzyme candidate analysis** and **initial selection of engineering targets**.
+A notebook-first, local-first workflow for **end-to-end protein engineering** via flexible agent-orchestrated workflows. These can perform multimodal bioinformatic analyses and integrate insights from: literature review and sequence discovery, structure analysis, de novo design, zero-shot sequence refinement with AI models, conservation analysis and other property predictors, supervised ML for directed evolution, binding-energy calculations, and stability-change prediction.
 
 Latest LLM-generated outputs are mirrored as Markdown files in [`assets/`](assets) for quick repo/GitHub viewing (updated on each run).
 
 ## Project Scope
 
-This project is designed to support the discovery and analysis phase of protein engineering by combining:
-- literature and database retrieval
-- homolog and structure context
-- pocket/alignment feature analysis
-- LLM-based interpretation for human-readable, engineering-relevant insights
+This project supports flexible protein-design workflows by combining retrieved scientific knowledge with bioinformatics and modeling tools, so pipelines can be tailored to different design problems and constraints.
+
+Steps executable in the workflow include: 
+- Literature review
+- Sequence retrieval, alignment, conservation analysis
+- Prediction of structural complex and binding pocket analysis 
+- De novo structure / sequence design and zero-shot mutant design
+- Iterative mutant design via Machine Learning-driven Directed Evolution
+- Calculation of binding energies via MD simulations
+- Prediction of stability changes
 
 See full architecture and roadmap in [Plans.md](Plans.md).
 
@@ -77,15 +82,8 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/15_run_sequence_patent_search.ipynb`](notebooks/15_run_sequence_patent_search.ipynb)  
   (Placeholder - implementation pending). Run patent search and analysis for sequences of interest. 
 
-## Programmatic Reuse (for larger workflows)
-
-In addition to notebook cells, you can now import step/workflow functions from:
-- [`src/agentic_protein_design/steps/literature_review.py`](src/agentic_protein_design/steps/literature_review.py)
-- [`src/agentic_protein_design/steps/design_strategy_planning.py`](src/agentic_protein_design/steps/design_strategy_planning.py)
-- [`src/agentic_protein_design/steps/binding_pocket.py`](src/agentic_protein_design/steps/binding_pocket.py)
-- [`src/agentic_protein_design/workflows/multistep.py`](src/agentic_protein_design/workflows/multistep.py)
-
-This enables a "master notebook" to run individual steps or a composed multi-step workflow with shared inputs.
+In addition to notebook cells, workflow steps can also be run from python scripts found
+[`src/agentic_protein_design/steps/`](src/agentic_protein_design/steps/)
 
 ## Environment Setup
 
@@ -100,6 +98,12 @@ You can run with either conda or pip:
   - `source .venv/bin/activate`
   - `pip install -r requirements.txt`
 
+## API Keys
+
+For notebook LLM calls, set your key in [`project_config/local_api_keys.py`](project_config/local_api_keys.py).  
+This file is git-ignored.
+
+# Other Dependencies
 ## Running Stability Notebook (Pythia)
 
 Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)
@@ -122,12 +126,8 @@ Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_cal
 4. Run notebook cells. If `output_csv` is blank, output defaults to:
    - `processed/12_calculate_ddGstability_mutants/{data_subfolder}/pythia_ddg_stability_predictions.csv`
 
-## API Keys
 
-For notebook LLM calls, set your key in [`project_config/local_api_keys.py`](project_config/local_api_keys.py).  
-This file is git-ignored.
-
-## To-Do
+# To-Do
 
 - Populate tools registry after adding more tools
 - Improve prompt for workflow planning; return python code to be executed + json workflow description

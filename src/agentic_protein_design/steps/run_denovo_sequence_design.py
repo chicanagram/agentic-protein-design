@@ -36,6 +36,16 @@ def resolve_optional_path(data_root: Path, path_like: Any) -> Optional[Path]:
 
 def build_denovo_design_kwargs(user_inputs: Dict[str, Any], *, data_root: Path) -> Dict[str, Any]:
     """
+    Transform notebook-style inputs into `design_with_boltzgen` kwargs.
+
+    Args:
+        user_inputs: Denovo workflow input dictionary.
+        data_root: Resolved data root for relative path resolution.
+
+    Returns:
+        Keyword-argument dictionary passed to BoltzGen design runner.
+    """
+    """
     Build kwargs for design_with_boltzgen from notebook user inputs.
     Handles either YAML-driven mode or explicit field mode.
     """
@@ -86,6 +96,17 @@ def run_denovo_sequence_design(
     out_dir: Path,
     out_summary_json: Path,
 ) -> Dict[str, Any]:
+    """
+    Execute de novo sequence design workflow (BoltzGen + optional postdesign).
+
+    Args:
+        root_key: Logical data root key.
+        user_inputs: Denovo workflow input dictionary.
+        run_postdesign: Whether to run postdesign scoring/refolding pipeline.
+
+    Returns:
+        Dict containing design outputs, paths, and optional postdesign artifacts.
+    """
     tool = str(user_inputs.get("design_tool", "boltzgen_openprotein")).strip().lower()
     if tool != "boltzgen_openprotein":
         return {
@@ -138,6 +159,16 @@ def run_denovo_sequence_design(
 
 
 def postdesign_artifact_paths(postdesign_out_dir: Path, output_tag: str = "") -> Dict[str, Path]:
+    """
+    Build expected artifact paths for postdesign pipeline outputs.
+
+    Args:
+        postdesign_out_dir: Output directory for postdesign artifacts.
+        output_tag: Optional filename tag prefix.
+
+    Returns:
+        Mapping of artifact labels to paths.
+    """
     tag = str(output_tag or "").strip()
     return {
         "mpnn_csv_path": postdesign_out_dir / (f"{tag}_proteinmpnn_sequences.csv" if tag else "proteinmpnn_sequences.csv"),
@@ -155,6 +186,21 @@ def run_or_load_postdesign_pipeline(
     out_dir: Path,
     design_kwargs: Dict[str, Any],
 ) -> Dict[str, Any]:
+    """
+    Run postdesign pipeline or load existing artifacts if available.
+
+    Args:
+        sequences: Designed sequence list.
+        pdb_paths: Optional template structure paths.
+        user_inputs: Denovo workflow input dictionary.
+        data_root: Resolved data root.
+        output_tag: Optional tag prefix for artifact names.
+        force_run: If true, rerun pipeline even when outputs exist.
+        run_refold: Whether to run Boltz2 refolding stage.
+
+    Returns:
+        Dict with status, artifact paths, and parsed summary metrics.
+    """
     import pandas as pd
 
     postdesign_out_dir = (out_dir / "postdesign").resolve()

@@ -13,6 +13,7 @@ import requests
 
 from agentic_protein_design.core import apply_optional_text_inputs
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
+from agentic_protein_design.core.llm_display import display_llm_output_bundle
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -27,6 +28,7 @@ from project_config.variables import address_dict, subfolders
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "literature_review"
 REQUEST_TIMEOUT = 30
+STEP_OUTPUT_SUBDIR = "00_literature_review"
 
 literature_review_agent_prompt = """
 You are an AI research agent supporting an enzyme engineering project.
@@ -168,6 +170,15 @@ def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple
     return data_root, resolved_dirs
 
 
+def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
+    """
+    Return/create processed output directory for this notebook step.
+    """
+    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
+    step_dir.mkdir(parents=True, exist_ok=True)
+    return step_dir
+
+
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
     if existing_thread_id:
         thread = load_thread(root_key, existing_thread_id, llm_process_tag=LLM_PROCESS_TAG)
@@ -183,6 +194,12 @@ def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tupl
 
 
 def default_user_inputs() -> Dict[str, Any]:
+    """
+    Return editable defaults for literature-review workflow.
+
+    Returns:
+        Dict containing search settings, LLM settings, and local-PDF RAG options.
+    """
     return {
         "enzyme_family": "unspecific peroxygenases (UPOs)",
         "seed_sequences": ["CviUPO"],
@@ -214,6 +231,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "llm_model": "gpt-5.2",
         "llm_temperature": 0.2,
         "llm_max_rows_per_table": 250,
+        "display_llm_output": True,
+        "display_max_height": "640px",
         "enable_relaxed_fallback": True,
         "min_quality_score_for_llm_context": 0.35,
         "data_fbase_key": "examples",  # key in project_config.variables.address_dict
@@ -252,6 +271,15 @@ def _build_relaxed_query(inputs: Dict[str, Any]) -> str:
 
 
 def build_literature_agent_prompt(inputs: Dict[str, Any]) -> str:
+    """
+    Build literature-review system prompt from structured inputs.
+
+    Args:
+        inputs: Literature workflow inputs dictionary.
+
+    Returns:
+        Rendered prompt string for LLM synthesis.
+    """
     return literature_review_agent_prompt.format(
         enzyme_family=str(inputs.get("enzyme_family", "")),
         seed_sequences=_safe_join(inputs.get("seed_sequences", [])) or "None provided",
@@ -263,6 +291,16 @@ def build_literature_agent_prompt(inputs: Dict[str, Any]) -> str:
 
 
 def resolve_data_fbase(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Path:
+    """
+    Resolve base data directory for local document retrieval.
+
+    Args:
+        inputs: Inputs containing `data_fbase_key` and/or `data_fbase`.
+        project_root: Optional project root override.
+
+    Returns:
+        Absolute data-base path.
+    """
     base = project_root or resolve_project_root()
     key = str(inputs.get("data_fbase_key", "")).strip()
     if key:
@@ -283,6 +321,16 @@ def resolve_data_fbase(inputs: Dict[str, Any], project_root: Optional[Path] = No
 
 
 def resolve_literature_docs_dir(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Path:
+    """
+    Resolve local literature documents directory for PDF ingestion.
+
+    Args:
+        inputs: Inputs containing `data_subfolder` and data-base selectors.
+        project_root: Optional project root override.
+
+    Returns:
+        Absolute path to `{data_fbase}/literature/{data_subfolder}`.
+    """
     data_fbase = resolve_data_fbase(inputs, project_root=project_root)
     data_subfolder_raw = inputs.get("data_subfolder", "")
     data_subfolder = "" if data_subfolder_raw is None else str(data_subfolder_raw).strip().strip("/")
@@ -310,6 +358,16 @@ def _extract_pdf_text(pdf_path: Path) -> str:
 
 
 def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Ingest local PDF literature files and prepare RAG-ready context.
+
+    Args:
+        inputs: Inputs including local PDF RAG controls and path selectors.
+        project_root: Optional project root override.
+
+    Returns:
+        Dict with local-document hit table, combined context text, and diagnostics.
+    """
     docs_dir = resolve_literature_docs_dir(inputs, project_root=project_root)
     max_files = int(inputs.get("pdf_rag_max_files", 20))
     max_chars_per_file = int(inputs.get("pdf_rag_max_chars_per_file", 8000))
@@ -656,8 +714,8 @@ def search_general_web(query: str, max_results: int = 20) -> pd.DataFrame:
                     }
                 )
             return pd.DataFrame(rows)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise RuntimeError("`tavily` package not available") from exc
 
     # Fallback: DuckDuckGo Instant Answer API (no key).
     url = (
@@ -902,6 +960,15 @@ def _call_with_debug(func, query: str, max_results: int) -> Tuple[pd.DataFrame, 
 
 
 def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
+    """
+    Execute retrieval pipeline across protein DBs, literature APIs, web search, and local PDFs.
+
+    Args:
+        inputs: Literature workflow inputs dictionary.
+
+    Returns:
+        Dict of output tables (protein hits, literature hits, summaries, debug, local-doc context).
+    """
     query = _build_query(inputs)
     sources = set(inputs.get("search_sources", []))
     max_results = int(inputs.get("max_results_per_source", 20))
@@ -1062,6 +1129,16 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
 
 
 def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dict[str, Any]) -> str:
+    """
+    Generate LLM literature synthesis from retrieved evidence tables/context.
+
+    Args:
+        outputs: Retrieval outputs produced by `run_literature_pipeline`.
+        inputs: Literature workflow inputs with LLM settings.
+
+    Returns:
+        LLM-generated literature review text.
+    """
     model = str(inputs.get("llm_model", "gpt-5.2"))
     temperature = float(inputs.get("llm_temperature", 0.2))
     max_rows = int(inputs.get("llm_max_rows_per_table", 250))
@@ -1101,6 +1178,23 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
     text = (response.choices[0].message.content or "").strip()
     if not text:
         raise RuntimeError("LLM returned an empty literature review.")
+    if bool(inputs.get("display_llm_output", True)):
+        display_llm_output_bundle(
+            exchanges=[
+                {
+                    "title": "Literature Review LLM Call",
+                    "prompt_text": prompt_text,
+                    "response_text": "(Full literature review shown below in compact view.)",
+                }
+            ],
+            compact_markdown_blocks=[
+                {
+                    "heading": "Literature Review Summary",
+                    "text": text,
+                    "max_height": str(inputs.get("display_max_height", "640px")),
+                }
+            ],
+        )
     return text
 
 
@@ -1118,6 +1212,16 @@ def summarize_text(text: str, max_chars: int = 1000) -> str:
 
 
 def save_literature_outputs(outputs: Dict[str, pd.DataFrame], processed_dir: Path) -> Dict[str, Path]:
+    """
+    Persist literature pipeline tabular outputs to processed directory.
+
+    Args:
+        outputs: Retrieval output tables dictionary.
+        processed_dir: Destination processed folder.
+
+    Returns:
+        Mapping of artifact names to output CSV paths.
+    """
     out_paths = {
         "literature_summary": processed_dir / "literature_summary.csv",
         "literature_hits": processed_dir / "literature_hits.csv",
@@ -1193,9 +1297,24 @@ def run_literature_review_step(
     persist: bool = True,
 ) -> Dict[str, Any]:
     """
+    Execute full literature-review step including retrieval, LLM synthesis, and persistence.
+
+    Args:
+        root_key: Logical data root key.
+        inputs: Literature workflow inputs dictionary.
+        input_paths: Optional external text-input files to merge into inputs.
+        existing_thread_id: Optional existing thread id.
+        run_llm: Whether to generate LLM review text.
+        persist: Whether to persist thread metadata/messages.
+
+    Returns:
+        Dict containing outputs, saved paths, and thread metadata.
+    """
+    """
     Run the full literature-review step and return outputs for downstream composition.
     """
     data_root, resolved_dirs = setup_data_root(root_key)
+    step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_id)
     thread_id = str(thread["thread_id"])
 
@@ -1203,13 +1322,13 @@ def run_literature_review_step(
     apply_optional_text_inputs(step_inputs, input_paths or {}, data_root)
 
     outputs = run_literature_pipeline(step_inputs)
-    out_paths = save_literature_outputs(outputs, resolved_dirs["processed"])
+    out_paths = save_literature_outputs(outputs, step_processed_dir)
 
     llm_review_text: Optional[str] = None
     llm_review_path: Optional[Path] = None
     if run_llm:
         llm_review_text = generate_literature_llm_review(outputs, step_inputs)
-        llm_review_path = save_literature_llm_review(llm_review_text, resolved_dirs["processed"])
+        llm_review_path = save_literature_llm_review(llm_review_text, step_processed_dir)
 
     updated_at: Optional[str] = None
     if persist:
@@ -1228,6 +1347,7 @@ def run_literature_review_step(
         "thread_updated_at": updated_at,
         "data_root": data_root,
         "resolved_dirs": resolved_dirs,
+        "step_processed_dir": step_processed_dir,
         "inputs": step_inputs,
         "outputs": outputs,
         "out_paths": out_paths,

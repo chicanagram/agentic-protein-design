@@ -551,6 +551,27 @@ def run_boltzgen_design(
     output_prefix: str = "boltzgen_design",
     session: Optional[Any] = None,
 ) -> Dict[str, Any]:
+    """
+    Submit and collect BoltzGen de novo design jobs.
+
+    Args:
+        query: Optional OpenProtein query object (if already constructed).
+        design_spec: Optional in-memory design-spec dictionary.
+        design_spec_path: Optional YAML design-spec path.
+        n_structures: Number of structures to generate.
+        diffusion_batch_size: Optional BoltzGen batch size override.
+        step_scale: Optional diffusion step-scale override.
+        noise_scale: Optional diffusion noise-scale override.
+        wait: Whether to block until job completion.
+        verbose: Verbose wait logging.
+        out_dir: Optional directory to save generated CIF/PDB structures.
+        out_summary_json: Optional summary JSON output path.
+        output_prefix: Output filename prefix.
+        session: Optional existing OpenProtein session.
+
+    Returns:
+        Dict with job handle, summary metadata, and generated structures (if waited).
+    """
     sess = session or connect_openprotein_session()
     resolved_design_spec = _load_design_spec(design_spec, design_spec_path)
     print('resolved_design_spec:', resolved_design_spec)
@@ -620,6 +641,25 @@ def run_proteinmpnn_from_structures(
     out_csv: str | Path | None = None,
     session: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
+    """
+    Run ProteinMPNN sequence design on generated structures.
+
+    Args:
+        generated_structures: Structure objects to design against.
+        target_chain_id: Optional target chain used as context.
+        design_chain_id: Chain to redesign.
+        scaffold_sequence: Optional fixed scaffold sequence for design chain.
+        num_samples: Number of sampled sequences per structure.
+        temperature: ProteinMPNN sampling temperature.
+        seed: Optional random seed.
+        linker: Linker used when concatenating target/design chains.
+        wait: Whether to wait for all jobs to finish.
+        out_csv: Optional output CSV path for designed sequences.
+        session: Optional existing OpenProtein session.
+
+    Returns:
+        List of sequence-record dicts (structure index, sequence index, score, sequence).
+    """
     sess = session or connect_openprotein_session()
 
     jobs: List[Any] = []
@@ -1082,6 +1122,16 @@ def design_with_boltzgen(
     output_prefix: str = "boltzgen_design",
     session: Optional[Any] = None,
 ) -> Dict[str, Any]:
+    """
+    High-level end-to-end de novo design orchestration around BoltzGen.
+
+    Input format:
+        Keyword arguments defining protein/ligand inputs, design constraints,
+        OpenProtein runtime controls, and output paths.
+
+    Returns:
+        Dict containing generated structures, metadata, and optional downstream artifacts.
+    """
     has_explicit_query_inputs = any(
         [
             bool(target_structure_path),

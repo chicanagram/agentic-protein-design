@@ -25,6 +25,7 @@ httpx
 pydantic
 python-dotenv
 pypdf
+tavily-python
 
 # LLM interpretation client (can be swapped later)
 openai

@@ -7,6 +7,15 @@ from pathlib import Path
 from typing import Any
 
 def connect_openprotein_session() -> Any:
+    """
+    Create and return an authenticated OpenProtein session.
+
+    Input format:
+        Credentials are loaded from `project_config.local_api_keys.openprotein_credentials`.
+
+    Returns:
+        Connected OpenProtein client/session object.
+    """
     from project_config.local_api_keys import openprotein_credentials
     try:
         import openprotein

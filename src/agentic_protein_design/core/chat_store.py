@@ -13,6 +13,16 @@ def _project_root() -> Path:
 
 
 def chats_dir(root_key: str, project_root: Optional[Path] = None) -> Path:
+    """
+    Resolve and create the repository-local chats directory.
+
+    Args:
+        root_key: Logical data root key (kept for API compatibility).
+        project_root: Optional project root override.
+
+    Returns:
+        Path to `<project_root>/chats` (created if missing).
+    """
     # root_key is kept for API compatibility with notebooks; storage is repo-local.
     _ = root_key
     base = project_root or _project_root()
@@ -66,6 +76,18 @@ def thread_path(
     project_root: Optional[Path] = None,
     llm_process_tag: Optional[str] = None,
 ) -> Path:
+    """
+    Build the canonical JSON path for a thread file.
+
+    Args:
+        root_key: Logical data root key.
+        thread_id: Thread identifier.
+        project_root: Optional project root override.
+        llm_process_tag: Optional process tag prefix for filename namespacing.
+
+    Returns:
+        Absolute path to the thread JSON file.
+    """
     return chats_dir(root_key, project_root) / _thread_filename(thread_id, llm_process_tag)
 
 
@@ -81,6 +103,20 @@ def create_thread(
     llm_process_tag: Optional[str] = None,
     project_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
+    """
+    Create and persist a new empty chat thread.
+
+    Args:
+        root_key: Logical data root key.
+        title: Human-readable thread title.
+        metadata: Optional thread-level metadata payload.
+        thread_id: Optional explicit thread identifier.
+        llm_process_tag: Optional process tag used in filename and payload.
+        project_root: Optional project root override.
+
+    Returns:
+        Serialized thread payload dict written to disk.
+    """
     tid = thread_id or uuid.uuid4().hex
     normalized_tag = _sanitize_llm_process_tag(llm_process_tag)
     path = thread_path(
@@ -115,6 +151,18 @@ def load_thread(
     project_root: Optional[Path] = None,
     llm_process_tag: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    Load a thread JSON payload from disk (with legacy filename fallback).
+
+    Args:
+        root_key: Logical data root key.
+        thread_id: Thread identifier.
+        project_root: Optional project root override.
+        llm_process_tag: Optional preferred process tag for lookup.
+
+    Returns:
+        Parsed thread payload dictionary.
+    """
     candidates = _candidate_thread_paths(
         root_key=root_key,
         thread_id=thread_id,
@@ -136,6 +184,15 @@ def save_thread(
     project_root: Optional[Path] = None,
     llm_process_tag: Optional[str] = None,
 ) -> None:
+    """
+    Persist a full thread payload back to disk and refresh `updated_at`.
+
+    Args:
+        root_key: Logical data root key.
+        thread: Full thread payload dictionary.
+        project_root: Optional project root override.
+        llm_process_tag: Optional process tag override for filename selection.
+    """
     tid = thread["thread_id"]
     effective_tag = _sanitize_llm_process_tag(llm_process_tag or thread.get("llm_process_tag"))
     path = thread_path(
@@ -159,6 +216,22 @@ def append_message(
     project_root: Optional[Path] = None,
     llm_process_tag: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    Append a single message to a thread and persist the updated thread.
+
+    Args:
+        root_key: Logical data root key.
+        thread_id: Thread identifier.
+        role: Message role, typically `user` or `assistant`.
+        content: Message body text.
+        source_notebook: Notebook/source label for traceability.
+        metadata: Optional message metadata.
+        project_root: Optional project root override.
+        llm_process_tag: Optional process tag for thread routing.
+
+    Returns:
+        The message dictionary that was appended.
+    """
     thread = load_thread(root_key, thread_id, project_root, llm_process_tag=llm_process_tag)
 
     message = {
@@ -179,6 +252,17 @@ def list_threads(
     project_root: Optional[Path] = None,
     llm_process_tag: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
+    """
+    List thread summaries in reverse chronological order.
+
+    Args:
+        root_key: Logical data root key.
+        project_root: Optional project root override.
+        llm_process_tag: Optional tag filter (only matching threads returned).
+
+    Returns:
+        List of summary dictionaries with id/title/timestamps/message counts.
+    """
     out: List[Dict[str, Any]] = []
     tag_filter = _sanitize_llm_process_tag(llm_process_tag)
     for p in sorted(chats_dir(root_key, project_root).glob("*.json")):

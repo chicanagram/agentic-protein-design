@@ -1,0 +1,1076 @@
+{
+  "version": "first-pass",
+  "generated_from": [
+    "src/agentic_protein_design/core",
+    "src/agentic_protein_design/steps",
+    "tools"
+  ],
+  "notes": "Public top-level functions intended for workflow composition and tooling.",
+  "n_functions": 133,
+  "functions": [
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "append_message",
+      "summary": "Append a single message to a thread and persist the updated thread.",
+      "has_docstring": true,
+      "lineno": 209
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "chats_dir",
+      "summary": "Resolve and create the repository-local chats directory.",
+      "has_docstring": true,
+      "lineno": 15
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "create_thread",
+      "summary": "Create and persist a new empty chat thread.",
+      "has_docstring": true,
+      "lineno": 98
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "list_threads",
+      "summary": "List thread summaries in reverse chronological order.",
+      "has_docstring": true,
+      "lineno": 250
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "load_thread",
+      "summary": "Load a thread JSON payload from disk (with legacy filename fallback).",
+      "has_docstring": true,
+      "lineno": 148
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "save_thread",
+      "summary": "Persist a full thread payload back to disk and refresh `updated_at`.",
+      "has_docstring": true,
+      "lineno": 181
+    },
+    {
+      "module": "src.agentic_protein_design.core.chat_store",
+      "file": "src/agentic_protein_design/core/chat_store.py",
+      "function": "thread_path",
+      "summary": "Build the canonical JSON path for a thread file.",
+      "has_docstring": true,
+      "lineno": 73
+    },
+    {
+      "module": "src.agentic_protein_design.core.paths",
+      "file": "src/agentic_protein_design/core/paths.py",
+      "function": "apply_optional_text_inputs",
+      "summary": "Populate user_inputs from optional text files when provided.",
+      "has_docstring": true,
+      "lineno": 19
+    },
+    {
+      "module": "src.agentic_protein_design.core.paths",
+      "file": "src/agentic_protein_design/core/paths.py",
+      "function": "resolve_input_path",
+      "summary": "Resolve an input path relative to a selected data root.",
+      "has_docstring": true,
+      "lineno": 7
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "get_openai_client",
+      "summary": "Create an OpenAI client with consistent dependency and key checks.",
+      "has_docstring": true,
+      "lineno": 12
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "persist_thread_message",
+      "summary": "Append a message to thread history and return new thread timestamp.",
+      "has_docstring": true,
+      "lineno": 115
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "save_text_output",
+      "summary": "Save a text artifact to disk.",
+      "has_docstring": true,
+      "lineno": 74
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "save_text_output_with_assets_copy",
+      "summary": "Save a text artifact to output_dir and mirror a copy to <repo>/assets for easy repo viewing.",
+      "has_docstring": true,
+      "lineno": 95
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "summarize_compact_text",
+      "summary": "Collapse whitespace and truncate text for compact logging/metadata.",
+      "has_docstring": true,
+      "lineno": 57
+    },
+    {
+      "module": "src.agentic_protein_design.core.pipeline_utils",
+      "file": "src/agentic_protein_design/core/pipeline_utils.py",
+      "function": "table_records",
+      "summary": "Convert a DataFrame into JSON-serializable row records with row cap.",
+      "has_docstring": true,
+      "lineno": 39
+    },
+    {
+      "module": "src.agentic_protein_design.core.reflection",
+      "file": "src/agentic_protein_design/core/reflection.py",
+      "function": "critique_and_regenerate_text",
+      "summary": "Ask an LLM to critique an existing output and regenerate an improved rewrite.",
+      "has_docstring": true,
+      "lineno": 9
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "build_thread_context_bundle",
+      "summary": "Build a structured context bundle from a prior chat thread.",
+      "has_docstring": true,
+      "lineno": 204
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "build_thread_context_text",
+      "summary": "Build concatenated plain-text context for prompt injection.",
+      "has_docstring": true,
+      "lineno": 261
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "extract_referenced_file_paths",
+      "summary": "Extract file-path references from thread messages and metadata.",
+      "has_docstring": true,
+      "lineno": 143
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "find_thread_file",
+      "summary": "Locate the on-disk chat thread JSON file from thread reference.",
+      "has_docstring": true,
+      "lineno": 55
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "load_thread_by_id",
+      "summary": "Load a thread payload by thread reference.",
+      "has_docstring": true,
+      "lineno": 90
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "read_files_as_context",
+      "summary": "Read referenced files into bounded text snippets for LLM context.",
+      "has_docstring": true,
+      "lineno": 182
+    },
+    {
+      "module": "src.agentic_protein_design.core.thread_context",
+      "file": "src/agentic_protein_design/core/thread_context.py",
+      "function": "resolve_thread_identifier",
+      "summary": "Normalize a user-provided thread reference to raw thread id.",
+      "has_docstring": true,
+      "lineno": 25
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "analyze_pocket_profiles",
+      "summary": "Compute per-structure metric interpretation and cross-structure extrema.",
+      "has_docstring": true,
+      "lineno": 557
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "build_prompt_with_context",
+      "summary": "Compose stage-1 LLM prompt with user-configured reaction context.",
+      "has_docstring": true,
+      "lineno": 310
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "default_input_paths",
+      "summary": "Build default binding/alignment CSV locations under selected data root.",
+      "has_docstring": true,
+      "lineno": 263
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "default_user_inputs",
+      "summary": "Return editable defaults for binding-pocket analysis workflow.",
+      "has_docstring": true,
+      "lineno": 234
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "generate_llm_mutation_design_proposal",
+      "summary": "Run prompt_3 using stage-2 residue analysis and optional external literature context.",
+      "has_docstring": true,
+      "lineno": 469
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "generate_llm_pocket_analysis",
+      "summary": "Generate two-stage LLM pocket analysis and return combined markdown.",
+      "has_docstring": true,
+      "lineno": 447
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "init_thread",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 214
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "load_input_tables",
+      "summary": "Load binding-pocket, alignment, and optional reaction-data tables.",
+      "has_docstring": true,
+      "lineno": 279
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "persist_thread_update",
+      "summary": "Persist binding-pocket run metadata and compact LLM summary to thread.",
+      "has_docstring": true,
+      "lineno": 700
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "resolve_project_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 189
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "run_binding_pocket_step",
+      "summary": "Execute end-to-end binding-pocket analysis step.",
+      "has_docstring": true,
+      "lineno": 762
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "run_llm_pocket_analysis_stages",
+      "summary": "Run prompt_1 and prompt_2 sequentially and return both stage outputs.",
+      "has_docstring": true,
+      "lineno": 354
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "save_binding_outputs",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 670
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "save_llm_analysis",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 678
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "save_mutation_design_proposal",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 687
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "setup_data_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 196
+    },
+    {
+      "module": "src.agentic_protein_design.steps.binding_pocket",
+      "file": "src/agentic_protein_design/steps/binding_pocket.py",
+      "function": "summarize_llm_analysis",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 696
+    },
+    {
+      "module": "src.agentic_protein_design.steps.calculate_ddgstability_mutants",
+      "file": "src/agentic_protein_design/steps/calculate_ddgstability_mutants.py",
+      "function": "default_user_inputs",
+      "summary": "Return default configuration for stability-ddG prediction workflow.",
+      "has_docstring": true,
+      "lineno": 38
+    },
+    {
+      "module": "src.agentic_protein_design.steps.calculate_ddgstability_mutants",
+      "file": "src/agentic_protein_design/steps/calculate_ddgstability_mutants.py",
+      "function": "run_ddg_stability_predictions",
+      "summary": "Wrapper used by notebook 12 to compute mutation stability ddG predictions.",
+      "has_docstring": true,
+      "lineno": 71
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "build_design_strategy_prompt",
+      "summary": "Build the full planning prompt from structured user inputs.",
+      "has_docstring": true,
+      "lineno": 190
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "default_user_inputs",
+      "summary": "Return editable defaults for design-strategy planning notebook/step.",
+      "has_docstring": true,
+      "lineno": 138
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "generate_design_strategy_plan",
+      "summary": "Generate a design strategy plan from requirements and optional context.",
+      "has_docstring": true,
+      "lineno": 235
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "init_thread",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 119
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "load_literature_context",
+      "summary": "Load optional prior literature-thread context for plan conditioning.",
+      "has_docstring": true,
+      "lineno": 216
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "persist_thread_update",
+      "summary": "Persist planning prompt/metadata into thread history.",
+      "has_docstring": true,
+      "lineno": 338
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "reflect_and_regenerate_design_strategy_plan",
+      "summary": "Critique and rewrite an existing plan using optional user feedback.",
+      "has_docstring": true,
+      "lineno": 276
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "resolve_project_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 94
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "run_design_strategy_planning_step",
+      "summary": "Execute end-to-end design strategy planning step.",
+      "has_docstring": true,
+      "lineno": 377
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "save_design_strategy_plan",
+      "summary": "Save strategy plan to processed outputs and mirrored assets path.",
+      "has_docstring": true,
+      "lineno": 315
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "setup_data_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 101
+    },
+    {
+      "module": "src.agentic_protein_design.steps.design_strategy_planning",
+      "file": "src/agentic_protein_design/steps/design_strategy_planning.py",
+      "function": "summarize_plan_text",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 334
+    },
+    {
+      "module": "src.agentic_protein_design.steps.get_sequences_align_and_analyse_conservation",
+      "file": "src/agentic_protein_design/steps/get_sequences_align_and_analyse_conservation.py",
+      "function": "get_sequences_align_and_analyse_conservation",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.get_structures_apo_holo",
+      "file": "src/agentic_protein_design/steps/get_structures_apo_holo.py",
+      "function": "run_structure_prediction",
+      "summary": "Select and run structure-prediction backend for apo/holo workflow step.",
+      "has_docstring": true,
+      "lineno": 8
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "annotate_literature_targets",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 796
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "annotate_quality_scores",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 869
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "build_literature_agent_prompt",
+      "summary": "Build literature-review system prompt from structured inputs.",
+      "has_docstring": true,
+      "lineno": 260
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "build_source_report",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 838
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "default_user_inputs",
+      "summary": "Return editable defaults for literature-review workflow.",
+      "has_docstring": true,
+      "lineno": 185
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "enrich_open_access_fulltext",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 776
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "fetch_pmc_fulltext_xml",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 761
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "generate_literature_llm_review",
+      "summary": "Generate LLM literature synthesis from retrieved evidence tables/context.",
+      "has_docstring": true,
+      "lineno": 1118
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "ingest_local_literature_docs",
+      "summary": "Ingest local PDF literature files and prepare RAG-ready context.",
+      "has_docstring": true,
+      "lineno": 347
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "init_thread",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 171
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "persist_thread_update",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 1236
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "resolve_data_fbase",
+      "summary": "Resolve base data directory for local document retrieval.",
+      "has_docstring": true,
+      "lineno": 280
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "resolve_literature_docs_dir",
+      "summary": "Resolve local literature documents directory for PDF ingestion.",
+      "has_docstring": true,
+      "lineno": 310
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "resolve_project_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 146
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "run_literature_pipeline",
+      "summary": "Execute retrieval pipeline across protein DBs, literature APIs, web search, and local PDFs.",
+      "has_docstring": true,
+      "lineno": 949
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "run_literature_review_step",
+      "summary": "Execute full literature-review step including retrieval, LLM synthesis, and persistence.",
+      "has_docstring": true,
+      "lineno": 1260
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "save_literature_llm_review",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 1171
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "save_literature_outputs",
+      "summary": "Persist literature pipeline tabular outputs to processed directory.",
+      "has_docstring": true,
+      "lineno": 1184
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_alphafold",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 542
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_europe_pmc",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 611
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_general_web",
+      "summary": "General web search with Tavily (preferred) and DuckDuckGo fallback.",
+      "has_docstring": true,
+      "lineno": 673
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_interpro",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 492
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_openalex",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 643
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_pdb",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 514
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_pubmed",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 561
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "search_uniprot",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 460
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "setup_data_root",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 153
+    },
+    {
+      "module": "src.agentic_protein_design.steps.literature_review",
+      "file": "src/agentic_protein_design/steps/literature_review.py",
+      "function": "summarize_text",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 1180
+    },
+    {
+      "module": "src.agentic_protein_design.steps.obtain_sequence_encodings",
+      "file": "src/agentic_protein_design/steps/obtain_sequence_encodings.py",
+      "function": "obtain_sequence_encodings",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "build_denovo_design_kwargs",
+      "summary": "Transform notebook-style inputs into `design_with_boltzgen` kwargs.",
+      "has_docstring": true,
+      "lineno": 37
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "postdesign_artifact_paths",
+      "summary": "Build expected artifact paths for postdesign pipeline outputs.",
+      "has_docstring": true,
+      "lineno": 161
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "render_overlay_views",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 260
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "resolve_optional_path",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 30
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "run_denovo_sequence_design",
+      "summary": "Execute de novo sequence design workflow (BoltzGen + optional postdesign).",
+      "has_docstring": true,
+      "lineno": 92
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_denovo_sequence_design",
+      "file": "src/agentic_protein_design/steps/run_denovo_sequence_design.py",
+      "function": "run_or_load_postdesign_pipeline",
+      "summary": "Run postdesign pipeline or load existing artifacts if available.",
+      "has_docstring": true,
+      "lineno": 182
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_md_calculate_ddgbind",
+      "file": "src/agentic_protein_design/steps/run_md_calculate_ddgbind.py",
+      "function": "run_md_calculate_ddgbind",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_next_round_design",
+      "file": "src/agentic_protein_design/steps/run_next_round_design.py",
+      "function": "run_next_round_design",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_sequence_patent_search",
+      "file": "src/agentic_protein_design/steps/run_sequence_patent_search.py",
+      "function": "run_sequence_patent_search",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.run_zero_shot_design",
+      "file": "src/agentic_protein_design/steps/run_zero_shot_design.py",
+      "function": "run_zero_shot_design",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "src.agentic_protein_design.steps.train_evaluate_supervised_ml_models",
+      "file": "src/agentic_protein_design/steps/train_evaluate_supervised_ml_models.py",
+      "function": "train_evaluate_supervised_ml_models",
+      "summary": "Placeholder step implementation.",
+      "has_docstring": true,
+      "lineno": 6
+    },
+    {
+      "module": "tools.config.build_tools_registry",
+      "file": "tools/config/build_tools_registry.py",
+      "function": "build_tools_registry",
+      "summary": "Build a first-pass registry of public tool/workflow functions.",
+      "has_docstring": true,
+      "lineno": 9
+    },
+    {
+      "module": "tools.config.build_tools_registry",
+      "file": "tools/config/build_tools_registry.py",
+      "function": "main",
+      "summary": "CLI entrypoint for generating tools/config/tools_registry.first_pass.json.",
+      "has_docstring": true,
+      "lineno": 73
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "build_feature_matrix",
+      "summary": "Build flattened feature matrices for mutant-only and base+mutant encodings.",
+      "has_docstring": true,
+      "lineno": 99
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "default_paths",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 132
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "encode_sequences",
+      "summary": "Encode a list of amino-acid sequences with selected encoder backend.",
+      "has_docstring": true,
+      "lineno": 79
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "georgiev_encode_sequence",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 56
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "get_max_length",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 41
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "load_sequences_csv",
+      "summary": "Load mutant/base sequence columns from a CSV file.",
+      "has_docstring": true,
+      "lineno": 13
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "load_sequences_fasta",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 36
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "main",
+      "summary": "CLI entrypoint: read sequences, encode features, and save output arrays.",
+      "has_docstring": true,
+      "lineno": 160
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "one_hot_encode_sequence",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 47
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "parse_args",
+      "summary": "Parse CLI arguments for sequence encoding utility.",
+      "has_docstring": true,
+      "lineno": 139
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "protein_lm_encode_sequence",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 65
+    },
+    {
+      "module": "tools.encodings.get_sequence_encodings",
+      "file": "tools/encodings/get_sequence_encodings.py",
+      "function": "save_output",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 124
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "assert_valid_design_with_boltzgen_kwargs",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 414
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "boltzgen_yaml_to_design_kwargs",
+      "summary": "Convert a BoltzGen-style YAML file into kwargs for `design_with_boltzgen`.",
+      "has_docstring": true,
+      "lineno": 426
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "build_boltzgen_query",
+      "summary": "Build an OpenProtein Complex query for BoltzGen.",
+      "has_docstring": true,
+      "lineno": 175
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "design_with_boltzgen",
+      "summary": "High-level end-to-end de novo design orchestration around BoltzGen.",
+      "has_docstring": true,
+      "lineno": 1097
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "design_with_boltzgen_yaml",
+      "summary": "Run `design_with_boltzgen` using kwargs derived from a YAML design spec.",
+      "has_docstring": true,
+      "lineno": 525
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "evaluate_boltz2_refold_metrics",
+      "summary": "Compare original BoltzGen structures vs Boltz-2 refolds from ProteinMPNN sequences.",
+      "has_docstring": true,
+      "lineno": 960
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "filter_and_select_designs",
+      "summary": "Filter candidate designs by thresholds, then keep the best sequence per structure.",
+      "has_docstring": true,
+      "lineno": 1052
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "main",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 1231
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "read_fasta_sequences",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 33
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "read_single_token_lines",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 67
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "read_smiles_strings",
+      "summary": "",
+      "has_docstring": false,
+      "lineno": 54
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "run_boltzgen_design",
+      "summary": "Submit and collect BoltzGen de novo design jobs.",
+      "has_docstring": true,
+      "lineno": 538
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "run_proteinmpnn_from_structures",
+      "summary": "Run ProteinMPNN sequence design on generated structures.",
+      "has_docstring": true,
+      "lineno": 630
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "run_proteinmpnn_postdesign_pipeline",
+      "summary": "Post-BoltzGen pipeline:",
+      "has_docstring": true,
+      "lineno": 733
+    },
+    {
+      "module": "tools.openprotein.design_boltzgen_openprotein",
+      "file": "tools/openprotein/design_boltzgen_openprotein.py",
+      "function": "validate_design_with_boltzgen_kwargs",
+      "summary": "Validate kwargs intended for `design_with_boltzgen(**kwargs)`.",
+      "has_docstring": true,
+      "lineno": 335
+    },
+    {
+      "module": "tools.openprotein.openprotein_utils",
+      "file": "tools/openprotein/openprotein_utils.py",
+      "function": "connect_openprotein_session",
+      "summary": "Create and return an authenticated OpenProtein session.",
+      "has_docstring": true,
+      "lineno": 9
+    },
+    {
+      "module": "tools.openprotein.predict_boltz2_structure_openprotein",
+      "file": "tools/openprotein/predict_boltz2_structure_openprotein.py",
+      "function": "main",
+      "summary": "CLI entrypoint: run Boltz-2 prediction and print JSON summary.",
+      "has_docstring": true,
+      "lineno": 198
+    },
+    {
+      "module": "tools.openprotein.predict_boltz2_structure_openprotein",
+      "file": "tools/openprotein/predict_boltz2_structure_openprotein.py",
+      "function": "predict_boltz2",
+      "summary": "Predict structure(s) with Boltz-2.",
+      "has_docstring": true,
+      "lineno": 26
+    },
+    {
+      "module": "tools.struct.struct_utils",
+      "file": "tools/struct/struct_utils.py",
+      "function": "align_structures",
+      "summary": "Align target structure to reference using PyMOL `align`.",
+      "has_docstring": true,
+      "lineno": 60
+    },
+    {
+      "module": "tools.struct.struct_utils",
+      "file": "tools/struct/struct_utils.py",
+      "function": "convert_cif_to_pdb_pymol",
+      "summary": "Convert CIF fpath into PDB fpath.",
+      "has_docstring": true,
+      "lineno": 27
+    },
+    {
+      "module": "tools.struct.struct_utils",
+      "file": "tools/struct/struct_utils.py",
+      "function": "filter_residues",
+      "summary": "Filter a structure using a PyMOL selection and overwrite output PDB.",
+      "has_docstring": true,
+      "lineno": 37
+    },
+    {
+      "module": "tools.struct.struct_utils",
+      "file": "tools/struct/struct_utils.py",
+      "function": "visualize_overlay_structures",
+      "summary": "Visualize one or more PDBs with solid-color protein cartoons.",
+      "has_docstring": true,
+      "lineno": 115
+    },
+    {
+      "module": "tools.struct.struct_utils",
+      "file": "tools/struct/struct_utils.py",
+      "function": "visualize_structures",
+      "summary": "Visualize structures in pdb_list using NGLview",
+      "has_docstring": true,
+      "lineno": 79
+    }
+  ]
+}

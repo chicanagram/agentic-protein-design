@@ -24,6 +24,18 @@ def _iter_thread_files(project_root: Optional[Path] = None) -> Iterable[Path]:
 
 def resolve_thread_identifier(thread_ref: str) -> str:
     """
+    Normalize a user-provided thread reference to raw thread id.
+
+    Accepts values such as `<tag>_<thread_id>`, `<thread_id>`, or filenames
+    ending with `.json`.
+
+    Args:
+        thread_ref: Raw thread reference string.
+
+    Returns:
+        Normalized thread id.
+    """
+    """
     Accept either:
     - raw thread_id (hex uuid string), or
     - thread file key/stem: f\"{tag}_{thread_id}\" (optionally with .json)
@@ -41,6 +53,16 @@ def resolve_thread_identifier(thread_ref: str) -> str:
 
 
 def find_thread_file(thread_ref: str, project_root: Optional[Path] = None) -> Path:
+    """
+    Locate the on-disk chat thread JSON file from thread reference.
+
+    Args:
+        thread_ref: Thread id, tagged id, or JSON filename.
+        project_root: Optional project root override.
+
+    Returns:
+        Path to matching thread JSON file.
+    """
     """
     Find a thread JSON file by thread identifier or file key.
     """
@@ -66,6 +88,16 @@ def find_thread_file(thread_ref: str, project_root: Optional[Path] = None) -> Pa
 
 
 def load_thread_by_id(thread_ref: str, project_root: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Load a thread payload by thread reference.
+
+    Args:
+        thread_ref: Thread id, tagged id, or JSON filename.
+        project_root: Optional project root override.
+
+    Returns:
+        Parsed thread payload dictionary.
+    """
     path = find_thread_file(thread_ref, project_root)
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["_thread_file"] = str(path)
@@ -113,6 +145,16 @@ def extract_referenced_file_paths(
     project_root: Optional[Path] = None,
 ) -> List[Path]:
     """
+    Extract file-path references from thread messages and metadata.
+
+    Args:
+        thread: Parsed thread payload.
+        project_root: Optional project root override.
+
+    Returns:
+        Deduplicated list of existing file paths referenced by the thread.
+    """
+    """
     Extract existing file paths referenced in thread metadata across all messages.
     """
     root = project_root or _project_root()
@@ -138,6 +180,16 @@ def extract_referenced_file_paths(
 
 
 def read_files_as_context(paths: List[Path], max_chars_per_file: int = 20000) -> Dict[str, str]:
+    """
+    Read referenced files into bounded text snippets for LLM context.
+
+    Args:
+        paths: List of files to read.
+        max_chars_per_file: Per-file character limit.
+
+    Returns:
+        Mapping `{absolute_path: bounded_text}`.
+    """
     out: Dict[str, str] = {}
     for p in paths:
         try:
@@ -156,6 +208,19 @@ def build_thread_context_bundle(
     include_referenced_files: bool = True,
     max_chars_per_file: int = 20000,
 ) -> Dict[str, Any]:
+    """
+    Build a structured context bundle from a prior chat thread.
+
+    Args:
+        thread_ref: Thread reference (`None` to disable).
+        include_referenced_files: Whether to include referenced file contents.
+        max_chars_per_file: Per-file context character limit.
+        on_missing: Missing-thread behavior: `warn` or `raise`.
+        project_root: Optional project root override.
+
+    Returns:
+        Context bundle including thread payload, text snippets, and errors.
+    """
     """
     Generic accessor for historical thread context and referenced output traces.
     """
@@ -200,6 +265,19 @@ def build_thread_context_text(
     max_chars_per_file: int = 20000,
     on_missing: str = "warn",
 ) -> Dict[str, Any]:
+    """
+    Build concatenated plain-text context for prompt injection.
+
+    Args:
+        thread_ref: Thread reference (`None` to disable).
+        include_referenced_files: Whether to include referenced file contents.
+        max_chars_per_file: Per-file context character limit.
+        on_missing: Missing-thread behavior: `warn` or `raise`.
+        project_root: Optional project root override.
+
+    Returns:
+        Dict with `context_text` plus raw bundle/error metadata.
+    """
     """
     Build a compact text context block from a prior thread, plus the raw bundle.
 

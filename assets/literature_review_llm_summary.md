@@ -1,214 +1,225 @@
-## 1. Executive Summary (engineering-relevant; ≤10 bullets)
+## 1. Executive Summary (engineering-relevant takeaways; ≤10 bullets)
 
-- **UPOs are secreted heme‑thiolate enzymes (EC 1.11.2.1)** that use **H₂O₂ directly** to generate **Compound I (Fe(IV)=O porphyrin π‑cation radical)**, enabling P450‑like oxyfunctionalization **without NAD(P)H/reductase partners**.  
-- **Aromatic peroxygenation** typically proceeds via **arene epoxidation → NIH shift/rearomatization** to phenols; **overoxidation** (e.g., to quinones) often arises from **peroxidase-like 1e⁻ pathways** and radical chemistry (important for naphthalene/phenolics).  
-- **Chemoselectivity (peroxygenation vs peroxidation)** is strongly process-dependent: **radical scavengers** (e.g., **ascorbate**) can suppress oligomerization and bias toward hydroxylated products (shown for rutin with AaeUPO).  
-- **Active-site access channel geometry is a dominant selectivity lever**: alanine-scanning/channel opening in **rCviUPO** (e.g., **F88A/T158A**) boosts oxygenation selectivity for unsaturated substrates (epoxidation; also a generalizable strategy for aromatics).  
-- **Short-type UPOs (e.g., MthUPO, CviUPO)** are currently the most engineerable in heterologous systems; multiple campaigns show that **tunnel residues** are “hotspots” for tuning **regio-/chemo-/enantioselectivity**.  
-- **Expression is a primary bottleneck**; solutions now include (i) **signal peptide engineering/shuffling** in yeast, (ii) **stability design (PROSS) on AlphaFold2 models** to unlock secretion in *Pichia*, and (iii) emerging **E. coli secretion/engineering platforms** (sfGFP-mediated).  
-- **H₂O₂ tolerance and oxidative inactivation** remain key constraints; practical success often hinges more on **controlled peroxide delivery** and **anti-radical additives** than on catalytic mutations alone.  
-- For aromatic targets (veratryl alcohol, naphthalene, NBD-like probes, ABTS), expect **assay-dependent readouts**: ABTS reports **peroxidase activity** (1e⁻ oxidation), not necessarily productive peroxygenation—use orthogonal analytics (GC/LC).  
-- **Opportunity:** combine **channel reshaping** (to enforce productive binding poses) with **surface/stability designs** (to survive peroxide/solvent) and **process controls** (fed-batch H₂O₂, scavengers) to reduce peroxidative side chemistry.
+- **UPOs are secreted heme‑thiolate enzymes (EC 1.11.2.1)** that generate **P450-like Compound I** directly from **H₂O₂** (peroxide shunt), enabling high-rate **aromatic hydroxylation (formal), benzylic hydroxylation, epoxidation**, etc., without NAD(P)H/redox partners.  
+- **Chemoselectivity is a central bottleneck for aromatics**: desired **peroxygenation (2e⁻ O‑transfer)** competes with **peroxidative 1e⁻ oxidation** of phenolic products → **radicals/quinones/polymerization**; radical scavengers (e.g., **ascorbate**) can bias toward hydroxylated products (rutin case).  
+- **Active-site access channel geometry is the dominant selectivity lever** across UPOs: multiple studies show that **reshaping the heme channel/tunnel** shifts **regio-, chemo-, and enantioselectivity** (e.g., CviUPO F88A/T158A; MthUPO engineered variants; CmaUPO tunnel ISM).  
+- **Short- vs long-type UPOs** differ in size and pocket architecture; short-type enzymes (e.g., **MthUPO**) are particularly amenable to **yeast HT screening** and selectivity engineering for aromatic/benzylic oxidations.  
+- **Expression is often the rate-limiting step for engineering**, not catalysis: signal peptide engineering/shuffling and stability design (PROSS on AF2 models) can unlock production for otherwise “recalcitrant” UPOs.  
+- **H₂O₂ tolerance and oxidative inactivation** remain key constraints; reaction engineering (controlled dosing, in situ generation) and protein engineering (stability designs, surface/loop mutations) are both used.  
+- **Aromatic substrates of interest (ABTS, NBD, naphthalene)** map well onto established UPO screening paradigms: ABTS reports peroxidase activity; NBD and related probes report peroxygenation; naphthalene reports aromatic hydroxylation/overoxidation propensity.  
+- **pH can switch reaction manifolds** (oxygenation vs halogenation) in AaeUPO variants, highlighting that **process conditions can re-route Compound I usage** and should be co-optimized with mutations.  
+- **Best near-term engineering strategy for aromatic peroxygenation**: (i) pick a UPO with good heterologous expression (MthUPO-like) or enable expression via signal peptide/PROSS; (ii) **tunnel/channel libraries**; (iii) **screen for high peroxygenation/peroxidation ratio** under controlled H₂O₂ feed + radical quenchers.
 
 ---
 
 ## 2. Structural Overview
 
 ### Fold classification
-- **Heme-thiolate peroxidase (HTP) superfamily**, related to **chloroperoxidase (CPO)**.
-- Two broad size classes frequently discussed:
-  - **Long-type UPOs** (~45 kDa; e.g., AaeUPO)
-  - **Short-type UPOs** (~29 kDa; e.g., MthUPO, CviUPO)
+- **Heme-thiolate peroxidase (HTP) superfamily**; structurally related to **chloroperoxidase (CPO)** and functionally bridging **heme peroxidases** and **P450s** (peroxide shunt).
 
 ### Domain architecture
-- Typically **single catalytic domain** with **buried heme** and **solvent-exposed access channel**.
-- Secreted fungal enzymes: N‑terminal **signal peptide** (critical for secretion; often engineered).
+- Typically **single-domain globular heme enzyme**, secreted fungal proteins.
+- Two broad size classes (phylogeny-based):  
+  - **Long-type UPOs** (~45 kDa; e.g., AaeUPO)  
+  - **Short-type UPOs** (~29 kDa; e.g., MthUPO)  
+  (classification summarized in reviews; UPObase organizes subfamilies/motifs).
 
 ### Active site organization
-- **Protoporphyrin IX heme** with **axial cysteine thiolate ligand** (P450-like).
-- Conserved **acid–base catalytic residues** for peroxide activation (general HTP logic): a **distal Glu/Asp** and surrounding H-bond network that supports **heterolytic H₂O₂ cleavage** to Compound I.
-- Motif patterns distinguishing UPO vs CPO behavior are used in sequence classification (UPObase notes conserved motifs; UPO vs CPO motif variants are discussed there).
+- **Buried heme** with **axial cysteine thiolate ligand** (P450-like).
+- **Acid–base residues** in the distal pocket support H₂O₂ activation (general HTP logic; specific residue identities vary by UPO and are typically inferred from homology/structures—experimentally validated for only a few UPOs).
 
 ### Access channels / substrate tunnels
-- A **heme access channel** governs substrate approach and binding pose; repeatedly shown to control:
-  - **Regioselectivity** (which C–H/π-face is presented to Fe=O)
-  - **Chemoselectivity** (epoxidation vs hydroxylation vs 1e⁻ oxidation cascades)
-- Engineering evidence:
-  - **rCviUPO channel alanine substitutions** (including **F88A, T158A**) enlarge/reshape the channel and shift product distributions (demonstrated for fatty-acid epoxidation; conceptually transferable to aromatic binding/orientation).
+- **Hydrophobic heme access channel** is repeatedly identified as the **primary determinant** of:
+  - substrate scope (size/polarity)
+  - **regioselectivity** (which aromatic position/benzylic site approaches oxo)
+  - **chemoselectivity** (epoxidation vs hydroxylation; aromatic hydroxylation vs overoxidation)
+- Engineering examples directly target channel residues:
+  - **CviUPO**: alanine substitutions in the access channel; **F88A/T158A** notably improves epoxidation selectivity for polyunsaturated fatty acids (demonstrates channel control principle).  
+  - **CmaUPO**: ISM on tunnel residues (T125/A129 etc.) tunes enantioselectivity in benzylic hydroxylation.
 
 ### Cofactor binding
-- Only cofactor is **heme** (no flavins, no NAD(P)H binding).
-- Heme incorporation and correct folding/processing are major determinants of functional expression.
+- **Protoporphyrin IX heme b** (noncovalent) is the only cofactor; no reductase domain.
+
+### Known motifs / signatures
+- UPObase reports **signature motifs** distinguishing UPOs vs CPO-like sequences and subdividing UPOs into multiple subfamilies (useful for sequence selection and annotation).  
+  - Practical note: for new sequences, motif checks + secretion signal + predicted heme-thiolate cysteine region are fast triage before expression work.
 
 ---
 
 ## 3. Reaction Mechanism (focused on aromatic peroxygenation)
 
-### Catalytic cycle steps (peroxygenase mode)
-1. **Resting state:** Fe(III)–heme.
-2. **H₂O₂ binding** in distal pocket → **Compound 0 (Fe(III)–OOH)**.
-3. **Heterolytic O–O cleavage** (acid–base assisted) → **Compound I** (Fe(IV)=O + porphyrin radical cation).
-4. **Oxygen transfer / H‑abstraction chemistry**:
-   - **Aromatics:** often **arene epoxidation** by Cpd I → **arene oxide** → **NIH shift/rearomatization** → **phenol** (formal hydroxylation).
-   - **Benzylic C–H:** H‑abstraction → substrate radical → OH rebound (typical oxygen rebound logic).
+### Catalytic cycle (productive peroxygenation)
+1. **Resting state Fe(III)–heme** binds/activates **H₂O₂** in distal pocket.
+2. Formation of **Compound 0 (Fe(III)–OOH)** (often invoked).
+3. Heterolytic O–O cleavage → **Compound I** (**Fe(IV)=O + porphyrin radical cation**).
+4. **Aromatic oxidation**:
+   - Often described as **initial arene epoxidation** (arene oxide) followed by **NIH shift/rearomatization** → **phenol (formal hydroxylation)**.
 5. Return to Fe(III) resting state.
 
 ### Key intermediates
-- **Compound I** is the central oxidant (explicitly emphasized in UPO engineering literature).
-- **Compound II** (Fe(IV)=O without porphyrin radical) appears after 1e⁻ steps; can participate in rebound chemistry.
-- For some transformations (notably epoxidations), a **transient oxoferryl–substrate radical complex** has been proposed (Cpd II* in epoxidation-focused work on UPOs; mechanistic nuance mainly established for alkene epoxidation but relevant to understanding selectivity).
+- **Compound I** is the central oxidant (experimentally supported in UPO literature; emphasized in directed evolution paper context).
+- For some reactions (notably alkene epoxidation), a **Compound II*–substrate radical complex** has been proposed to facilitate cyclization (reported in fatty-acid epoxidation context; conceptually relevant to aromatic vs benzylic pathways).
 
 ### Rate-limiting steps (what’s known)
-- Often **not uniquely assigned across UPOs/substrates**; in practice, apparent rate limitation frequently shifts to:
-  - **H₂O₂ activation vs substrate binding** (channel-controlled)
-  - **Competition with unproductive peroxide consumption** (catalase-like pathways) and **enzyme inactivation**
+- Often **mass transfer / substrate access** and **H₂O₂ delivery** dominate observed rates in preparative settings; intrinsic chemical step can be fast once productive binding occurs. Quantitative RLS assignments are substrate/UPO-specific and not consistently established across the family.
 
-### Competing pathways: peroxygenation vs peroxidation
-- **Peroxidation (1e⁻ oxidation)** generates **substrate radicals** (phenoxy radicals, etc.) → **coupling/oligomerization**.
-- This is central for phenolic/aromatic substrates and explains:
-  - **ABTS oxidation** (useful activity assay but not peroxygenation-specific)
-  - **Rutin oligomerization** unless radical chemistry is suppressed.
+### Competing pathways (critical for aromatics)
+- **Peroxidative (1e⁻) oxidation**: UPOs also oxidize electron-rich aromatics/phenols via 1e⁻ steps → **phenoxyl radicals → quinones/oligomers**.
+  - This is especially problematic because **peroxygenation products (phenols)** become **peroxidase substrates**, reducing yield and causing polymerization/fouling.
+  - **Ascorbic acid** can suppress radical propagation and bias toward hydroxylated products (rutin study).
 
 ### Determinants of chemo-/regioselectivity
-- **Substrate positioning** in the heme channel (distance/angle to Fe=O).
-- **Electronic activation** of aromatic ring (electron-rich aromatics oxidize readily; can also overoxidize).
-- **Reaction conditions**:
-  - **pH** can bias halogenation vs oxygenation modes in some UPO contexts (shown for rAaeUPO-PaDa-I-H; mechanistically via halide oxidation vs direct oxygen transfer).
-  - **Radical scavengers** (ascorbate) can suppress peroxidative cascades and favor hydroxylated products (rutin study).
+- **Channel geometry + substrate positioning** relative to Fe(IV)=O is the dominant structural determinant (supported by multiple engineering campaigns).
+- **Reaction conditions** (pH, halides, radical scavengers, H₂O₂ feed) can re-route Compound I usage:
+  - pH-dependent switching between **halogenation vs oxygenation** has been demonstrated for an AaeUPO variant (process lever).
 
 ---
 
-## 4. Substrate Scope & Selectivity Trends (with your substrates in mind)
+## 4. Substrate Scope & Selectivity Trends (with emphasis on aromatics)
 
-### Broad accepted classes (experimentally established across UPO literature)
-- **Aromatics:** hydroxylation (formal), epoxidation of aromatic rings (via arene oxides), oxidative dearomatization/quinone formation (often secondary).
-- **Benzylic substrates:** enantioselective benzylic hydroxylation is achievable after engineering (MthUPO work).
-- **Alkenes:** epoxidation (often high activity).
-- **Heteroatoms:** sulfoxidation, N‑oxidation, dealkylations (common UPO repertoire).
+### Accepted substrate classes (validated broadly across UPO literature; specific examples in provided sources)
+- **Aromatics**: hydroxylation (formal), epoxidation/overoxidation to quinones (e.g., naphthalene → naphthol/naphthoquinone in MthUPO work).
+- **Benzylic C–H**: hydroxylation with tunable enantioselectivity (MthUPO engineering; CmaUPO engineering).
+- **Phenolic/redox dyes**: **ABTS** is widely used as a **peroxidase activity reporter** (and in CmaUPO screening).
+- **Peroxygenation probes**: **NBD** used as a peroxygenase activity reporter (CmaUPO paper).
+- **Bulky polyphenols**: rutin transformation shows both peroxygenation and peroxidation/oligomerization.
 
-### Selectivity trends relevant to aromatics
-- **Electron-rich aromatics** (anisoles, phenols) are prone to **peroxidative radical pathways** → dimers/oligomers unless controlled.
-- **Polycyclic aromatics (naphthalene)** can yield **naphthols** and can be further oxidized to **naphthoquinones** (reported as a sequential/side pathway in UPO engineering context).
-- **Veratryl alcohol** (electron-rich benzylic alcohol) is likely to undergo **benzylic oxidation/hydroxylation/overoxidation** depending on enzyme and peroxide regime; controlling overoxidation is typically a peroxide-delivery problem plus channel/orientation.
+### Trends relevant to aromatic peroxygenation
+- **Electron-rich aromatics/phenols** are prone to **peroxidative radical chemistry** → lower isolated yields unless radical pathways are suppressed.
+- **Polycyclic aromatics (e.g., naphthalene)** can show **sequential oxidation** (naphthol → naphthoquinone) depending on enzyme and conditions (MthUPO study context).
+- **Selectivity is highly enzyme-dependent**; short-type vs long-type UPOs can differ markedly in product ratios even for the same aromatic substrate.
 
-### Notes on your assay substrates
-- **ABTS**: primarily reports **peroxidase (1e⁻) activity**; high ABTS activity can correlate with *more* radical side chemistry on phenolics.
-- **NBD-type probes**: often used as convenient reporters; interpret carefully because fluorescence changes can reflect multiple oxidation modes.
-- **Naphthalene**: good LC/GC target to quantify **1‑naphthol vs 1,4‑naphthoquinone** ratios (a useful chemoselectivity readout).
-
----
-
-## 5. Engineering Landscape (what has worked, and where)
-
-### Mutations affecting activity/selectivity (channel/tunnel hotspots)
-- **rCviUPO (E. coli-produced) channel engineering**:
-  - **F88A/T158A** (double mutant) improved epoxidation selectivity for polyunsaturated fatty acids; demonstrates that **opening/reshaping the heme channel** can strongly bias oxygen transfer outcomes.  
-  - Broader strategy: **multi-residue alanine substitutions** in the access channel (1–6 residues) to tune access and pose.
-- **MthUPO (yeast engineering platform)**:
-  - Directed evolution yielded variants with **up to 16.5-fold improved kcat/KM** for an aromatic model substrate (5‑nitro‑1,3‑benzodioxole) and variants with **high chemo-/regioselectivity**; benzylic hydroxylation **up to 95% ee** (primary paper provides these quantitative improvements).
-- **CmaUPO (new UPO; E. coli secretion engineering)**:
-  - Iterative saturation mutagenesis on **tunnel-lining residues** produced variants switching/enhancing enantioselectivity for ethylbenzene hydroxylation (reported **99% ee (R)** and **84% ee (S)** for different variants).
-
-### Stability / expression improvements
-- **AaeUPO directed evolution in *S. cerevisiae***:
-  - Large overall improvement (**~3250-fold total activity**) combining secretion + catalytic efficiency; signal peptide mutations alone gave **~27-fold** secretion improvement; catalytic efficiency improved **~18-fold (kcat/KM for oxygen transfer)**; secretion reported up to **~8 mg/L** in that campaign.
-- **AlphaFold2 + PROSS + signal peptide shuffling (Pichia pastoris)**:
-  - Enabled functional production of **9/10 diverse UPOs**, including previously recalcitrant ones (e.g., CciUPO), indicating a scalable route to “expression-first” enabling technology before selectivity engineering.
-
-### ML-guided / computational design
-- **Computationally guided small libraries** (MthUPO β‑ionone work): two rounds yielded **up to 17-fold activity increase**, **regioselectivity up to 99.6%**, and **enantiodivergence** (e.r. up to **96.6:3.4** and **0.3:99.7**). While not aromatic peroxygenation, it validates **structure-guided tunnel shaping** as a high-leverage approach.
+### Known limitations
+- **Overoxidation** and **polymerization** for phenolic products.
+- **Solubility constraints** for hydrophobic aromatics; cosolvents help but can trade off with stability and H₂O₂ sensitivity.
 
 ---
 
-## 6. Practical Constraints (stability, solvents, H₂O₂, expression)
+## 5. Engineering Landscape
+
+### (A) Mutations affecting activity/selectivity (channel/tunnel-centric)
+- **CviUPO (E. coli recombinant)**: systematic alanine substitutions in access channel; **F88A/T158A** improved epoxidation selectivity (demonstrates that **opening/reshaping** the channel can increase productive binding/orientation).  
+  - Ref: Linde et al., 2022 (Antioxidants) DOI: 10.3390/antiox11050915.
+- **MthUPO (S. cerevisiae engineering)**: screening of >5300 transformants yielded variants with **up to 16.5-fold improved kcat/KM** for **5‑nitro‑1,3‑benzodioxole** and strong shifts in chemo-/regioselectivity for aromatic vs benzylic oxidations; benzylic hydroxylation up to **95% ee**.  
+  - Ref: Knorrscheidt et al., 2021 (ACS Catal.) DOI: 10.1021/acscatal.1c00847.
+- **CmaUPO (E. coli sfGFP secretion platform + ISM)**: tunnel residue targeting produced variants with **enantioselectivity reversal/enhancement** in ethylbenzene hydroxylation: WT ~21% ee (R) → **99% ee (R)** (T125A/A129G) or **84% ee (S)** (T125A/A129V/A247H/T244A/F243G).  
+  - Ref: Yan et al., 2024 (JACS Au) DOI: 10.1021/jacsau.4c00129.
+
+### (B) Peroxygenase vs peroxidase ratio engineering (aromatics-critical)
+- **AaeUPO structure-guided evolution** targeted flexible loops; mutations at **positions 120 and 320** strongly affected the **peroxygenative:peroxidative (P:p) ratio**, sometimes at stability cost; subsequent combinatorial saturation recovered stability.  
+  - Ref: Mate et al., 2017 (Protein Eng. Des. Sel.) DOI: 10.1093/protein/gzw073.
+
+### (C) Expression improvements (major enabler)
+- **Directed evolution in S. cerevisiae (AaeUPO)** achieved **~3250-fold total activity improvement**, decomposed into **~27-fold secretion gain** from signal peptide mutations and **~18-fold catalytic efficiency gain** for oxygen transfer; reported functional expression up to **~8 mg/L** in yeast in that campaign.  
+  - Ref: Molina-Espeja et al., 2014 (Appl. Environ. Microbiol.) DOI: 10.1128/AEM.00490-14.
+- **AF2 + PROSS + signal peptide shuffling (P. pastoris)**: enabled functional production of **9/10 diverse UPOs**, including previously recalcitrant enzymes (e.g., CciUPO) and even oomycete UPOs; establishes a scalable route to expand the enzyme panel before selectivity engineering.  
+  - Ref: Münch et al., 2024 (ACS Catal.) DOI: 10.1021/acscatal.4c00883.
+- **sfGFP-mediated secretion in E. coli** provides a faster engineering chassis for UPOs (demonstrated generality across multiple UPOs).  
+  - Ref: Yan et al., 2024 (JACS Au) DOI: 10.1021/jacsau.4c00129.
+
+### (D) Computational/ML-guided design
+- **Computational-aided smart libraries** for MthUPO enabled **enantiodivergent** β‑ionone hydroxylation with **e.r. up to 96.6:3.4 (R)** and **0.3:99.7 (S)**; activity up to **17-fold** and regioselectivity up to **99.6%** for a single hydroxylation site.  
+  - Ref: Münch et al., 2023 (ACS Catal.) DOI: 10.1021/acscatal.3c00702.
+- PROSS stability design (above) is a key computational lever for expression/stability rather than selectivity per se.
+
+---
+
+## 6. Practical Constraints (stability, expression, formulation)
 
 ### H₂O₂ sensitivity / inactivation
-- UPOs are **peroxide-driven** and therefore inherently exposed to **oxidative self-damage** (heme bleaching, oxidative modification of residues). Practically:
-  - Use **fed-batch/controlled H₂O₂ delivery** (or in situ generation) to reduce inactivation.
-  - Expect a tradeoff between **high instantaneous rates** and **TTN**.
+- H₂O₂ is both cosubstrate and inactivator; operational stability often depends on **controlled dosing** and minimizing local peroxide spikes.
+- In process contexts (e.g., membrane reactor reuse), **inactivation during handling/filtration** can be significant (rutin study).
 
 ### Uncoupling / side reactions
-- **Peroxidative radical chemistry** competes strongly for phenolic/aromatic substrates:
-  - Leads to **oligomerization** (rutin case).
-  - Can be mitigated by **radical scavengers** (ascorbate shown to redirect product formation toward hydroxylated derivatives).
+- For aromatics: **peroxidative radical chain chemistry** is a major yield killer; mitigation includes:
+  - radical scavengers (ascorbate shown)
+  - minimizing residence time of phenolic products with active enzyme
+  - tuning P:p ratio via mutations (AaeUPO loop engineering)
 
-### Expression hosts used (validated)
+### Expression hosts used (from provided sources)
 - **S. cerevisiae**: high-throughput directed evolution platform (AaeUPO, MthUPO).
-- **Pichia pastoris**: scalable secretion; now boosted by **signal peptide/promoter shuffling** and **PROSS designs**.
-- **E. coli**: feasible for some short-type UPOs (e.g., rCviUPO) and now improved by **sfGFP-mediated secretion** enabling engineering workflows.
+- **P. pastoris**: scalable secretion; compatible with signal peptide/promoter shuffling; used with AF2+PROSS workflow.
+- **E. coli**: possible for some UPOs (CviUPO, CmaUPO) but historically difficult; improved by **sfGFP secretion** strategy.
 
 ### Solvent tolerance
-- Evolved AaeUPO variants reported **high stability in organic cosolvents** (qualitatively emphasized; choose cosolvents carefully for aromatic substrates—acetone/MeCN often used in UPO literature).
+- Evolved AaeUPO variants reported **high stability in organic cosolvents** (Molina-Espeja 2014), relevant for aromatic substrate solubility.
 
 ---
 
-## 7. Comparative Analysis (seed sequence: CviUPO; plus context UPOs)
+## 7. Comparative Analysis (seed sequence: CviUPO; plus engineering workhorses)
 
-### CviUPO (short-type; recombinant in E. coli)
-- Strength: **engineerable access channel**, good for oxygenation of hydrophobic substrates; demonstrated that **channel opening** can increase oxygen transfer selectivity.
-- Likely useful starting scaffold for **aromatic peroxygenation** if expression and peroxide management are adequate.
+### CviUPO (Collariella virescens UPO)
+- Strength: **E. coli recombinant availability** and demonstrated **channel mutability** (F88A/T158A) with large selectivity effects (shown for fatty-acid epoxidation; principle transferable to aromatic access/orientation problems).
+- Likely short-type (ascomycete UPOs often are; confirm by sequence length/motifs).
 
-### AaeUPO (long-type; canonical)
-- Strength: broad substrate scope; extensive engineering history for secretion and robustness (PaDa lineage).
-- Risk: for phenolic/aromatic substrates, can show strong **peroxidative side chemistry** unless controlled (rutin oligomerization).
+### AaeUPO (Agrocybe/Cyclocybe aegerita UPO; long-type archetype)
+- Deep mechanistic/engineering history; strong secretion engineering precedent; but aromatic products often suffer from peroxidative follow-up unless controlled.
 
-### MthUPO (short-type; yeast-friendly)
-- Strength: demonstrated **chemo-/regioselectivity engineering** for aromatic/benzylic oxidations with quantitative gains; good platform for library screening.
+### MthUPO (Myceliophthora thermophila; short-type)
+- Demonstrated **high heterologous expression** and **amenability to selectivity engineering** for **aromatic vs benzylic** oxidation; good candidate chassis for aromatic peroxygenation campaigns.
 
-**Trade-off pattern:** short-type UPOs tend to be more tractable for heterologous expression/engineering and tunnel-focused selectivity tuning; long-type AaeUPO has deep mechanistic/engineering precedent and process know-how.
+### CmaUPO (Coprinopsis marcescibilis)
+- Newer enzyme with **E. coli engineering platform**; tunnel ISM yields strong enantioselectivity control (benzylic). For aromatic peroxygenation, would need substrate-specific validation.
 
 ---
 
 ## 8. Engineering Opportunities (actionable hypotheses for aromatic peroxygenation)
 
-### A. Channel/gating targets (highest leverage)
-- **Map and mutate tunnel-lining residues** (CAST/ISM style) to:
-  - Enforce a **single binding pose** for aromatics (reduce multiple hydroxylation sites).
-  - Increase **π-face control** for naphthalene (bias 1‑naphthol vs other isomers; suppress quinone formation by limiting residence time/secondary oxidation).
-- For **CviUPO**, start from known channel positions **F88 and T158** (and neighboring channel residues used in alanine-scanning) as a “first shell” library; expand to second-shell residues if activity drops.
+### A. Reduce peroxidative follow-up on phenolic products (increase “true peroxygenation yield”)
+- **Target P:p ratio hotspots** (AaeUPO positions analogous to **120/320**; map by alignment to your chosen UPO) and screen explicitly on **aromatic hydroxylation product stability** (phenol → quinone/polymer).
+- **Assay design**: couple product analytics (HPLC/GC) with a **polymerization/quinone readout** (UV-vis signatures) to penalize peroxidative pathways.
 
-### B. Chemoselectivity control: suppress peroxidation
-- **Assay with and without radical scavengers** (ascorbate; possibly TEMPO-like controls) to quantify how much product comes from radical pathways.
-- Engineer toward lower 1e⁻ oxidation propensity by:
-  - Reducing binding/ET competence for phenolic radicals (often hard), but practically by **process**: lower peroxide, shorter residence, scavengers.
+### B. Channel/tunnel reshaping for aromatic binding pose control
+- Build **focused libraries** on residues lining:
+  - **channel entrance “gate”** (often aromatic residues; CviUPO F88 is an example of a gate-like position)
+  - **mid-channel constrictions** (positions analogous to T158 in CviUPO)
+  - **near-heme positioning residues** (determine face/edge approach of aromatic ring)
+- Use **small smart libraries** (2–6 positions) guided by AF2 models + docking/MD (as in MthUPO β‑ionone work).
 
-### C. H₂O₂ tolerance / operational stability
-- If your constraint includes H₂O₂ tolerance, prioritize:
-  - **Stability design (PROSS)** on AF2 models for your chosen scaffold (especially if moving to *Pichia*).
-  - Screening under **peroxide stress** (e.g., stepwise H₂O₂ pulses) to select variants with higher residual activity.
+### C. Process co-optimization as a selectivity lever (especially for aromatics)
+- **Controlled H₂O₂ feed** (syringe pump or in situ generation) to reduce oxidative inactivation and radical chemistry.
+- **Radical scavengers** (ascorbate) as a tunable knob; screen with/without scavenger to identify variants intrinsically less peroxidative.
+- **pH profiling**: since pH can switch manifolds (oxygenation vs halogenation), also use pH to suppress unwanted side chemistry for your aromatic targets.
 
-### D. Expression strategy (choose early)
-- If you need **high-throughput engineering** for aromatics:
-  - **S. cerevisiae (microtiter secretion)** for directed evolution (proven for MthUPO/AaeUPO).
-- If you need **rapid enzyme supply** and can accept lower throughput:
-  - **E. coli** for CviUPO-like short UPOs; consider newer secretion/engineering systems (sfGFP-mediated) to accelerate ISM on tunnel residues.
-- If you need **scale and formulation**:
-  - **Pichia pastoris** + **signal peptide shuffling**; consider **AF2→PROSS** to unlock difficult sequences.
+### D. Expression/stability-first strategy to expand the UPO panel
+- If your constraint includes “expression host” and you need throughput:
+  - **P. pastoris + signal peptide shuffling** (and optionally **AF2+PROSS**) is currently one of the most reliable ways to obtain multiple UPOs for head-to-head aromatic screening.
+  - For rapid mutational cycles, consider **E. coli sfGFP secretion** if your target UPO is compatible.
 
-### E. Assay design suggestions (for your substrates)
-- Use **orthogonal readouts**:
-  - **ABTS** for peroxidase activity (control for radical propensity), but do not optimize solely on ABTS.
-  - **GC/LC** for veratryl alcohol (veratraldehyde/acid vs hydroxylated products), naphthalene (naphthol vs naphthoquinone), and NBD probes (confirm structures).
-- Include a **peroxide feed regime** in screening (e.g., glucose oxidase or syringe pump) to select variants that perform under realistic conditions.
+### E. Suggested screening stack for your listed substrates
+- **ABTS**: track peroxidase activity (undesired for aromatic hydroxylation yield, but useful as expression/activity proxy).
+- **NBD**: track peroxygenation activity (used in CmaUPO characterization).
+- **Naphthalene**: track aromatic hydroxylation vs overoxidation (naphthol vs naphthoquinone ratio; sensitive to chemoselectivity).
+- **Veratryl alcohol**: benzylic oxidation model; can reveal whether variants bias toward benzylic vs aromatic ring oxidation.
+- Add a **phenol “overoxidation challenge”** (e.g., start from naphthol or guaiacol-like phenols) to quantify peroxidative propensity directly.
 
 ---
 
-## 9. References (reviews/tools vs primary)
+## 9. References (reviews and primary; with DOI/PMID where available)
 
-**Primary research**
-- Molina-Espeja, P.; García-Ruiz, E.; González-Pérez, D.; Ullrich, R.; Hofrichter, M.; Alcalde, M. (2014). *Directed Evolution of Unspecific Peroxygenase from Agrocybe aegerita.* **Applied and Environmental Microbiology** 80(11), 3496–3507. DOI: **10.1128/AEM.00490-14**.  
-- Knorrscheidt, A.; Soler, J.; Hünecke, N.; Püllmann, P.; Garcia-Borràs, M.; Weissenborn, M. J. (2021). *Accessing Chemo- and Regioselective Benzylic and Aromatic Oxidations by Protein Engineering of an Unspecific Peroxygenase.* **ACS Catalysis** 11, 7327–7338. DOI: **10.1021/acscatal.1c00847**.  
-- Linde, D.; González-Benjumea, A.; Aranda, C.; Carro, J.; Gutiérrez, A.; Martínez, A. T. (2022). *Engineering Collariella virescens Peroxygenase for Epoxides Production from Vegetable Oil.* **Antioxidants** 11, 915. DOI: **10.3390/antiox11050915**. (Open access)  
-- Olmedo, A.; Ullrich, R.; Hofrichter, M.; del Río, J. C.; Martínez, Á. T.; Gutiérrez, A. (2022). *Novel Fatty Acid Chain-Shortening by Fungal Peroxygenases Yielding 2C-Shorter Dicarboxylic Acids.* **Antioxidants** 11(4), 744. DOI: **10.3390/antiox11040744**. PMID: **35453429**. (Open access)  
-- Münch, J.; Soler, J.; Hünecke, N.; Homann, D.; Garcia-Borràs, M.; Weissenborn, M. J. (2023). *Computational-Aided Engineering of a Selective Unspecific Peroxygenase toward Enantiodivergent β‑Ionone Hydroxylation.* **ACS Catalysis** 13, 8963–8972. DOI: **10.1021/acscatal.3c00702**.  
-- Münch, J.; Dietz, N.; Barber-Zucker, S.; et al. (2024). *Functionally Diverse Peroxygenases by AlphaFold2, Design, and Signal Peptide Shuffling.* **ACS Catalysis** 14, 4738–4748. DOI: **10.1021/acscatal.4c00883**.  
-- Barber, V.; Mielke, T.; Cartwright, J.; Díaz-Rodríguez, A.; Unsworth, W. P.; Grogan, G. (2024). *Unspecific Peroxygenase Can be Tuned for Oxygenation or Halogenation Activity by Controlling the Reaction pH.* **Chemistry – A European Journal** 30, e202401706. DOI: **10.1002/chem.202401706**.  
-- Yan, X.; Zhang, X.; Li, H.; et al. (2024). *Engineering of Unspecific Peroxygenases Using a Superfolder-Green-Fluorescent-Protein-Mediated Secretion System in Escherichia coli.* **JACS Au** 4, 1654–1663. (DOI in article PDF; not provided in your excerpt.)
+**Databases / resources**
+- Muniba, F.; Dongming, L.; Huang, S.; Wang, Y. (2019). *UPObase: an online database of unspecific peroxygenases.* **Database (Oxford)**. DOI: **10.1093/database/baz122**. PMID: **31820805**.
 
-**Databases / tools**
-- Muniba, F.; Dongming, L.; Huang, S.; Wang, Y. (2019). *UPObase: an online database of unspecific peroxygenases.* **Database (Oxford)**. DOI: **10.1093/database/baz122**. PMID: **31820805**. (Open access)  
-- (Process/biotransformation example) 2024 rutin study: PMID **39181196** (*New Biotechnology*). (Not open access; useful for peroxygenation vs peroxidation process control via ascorbate and reactor handling stability issues.)
+**Expression & directed evolution**
+- Molina-Espeja, P.; García-Ruiz, E.; González-Pérez, D.; Ullrich, R.; Hofrichter, M.; Alcalde, M. (2014). *Directed Evolution of Unspecific Peroxygenase from Agrocybe aegerita.* **Applied and Environmental Microbiology** 80, 3496–3507. DOI: **10.1128/AEM.00490-14**.
+- Münch, J.; Dietz, N.; Barber-Zucker, S.; et al. (2024). *Functionally Diverse Peroxygenases by AlphaFold2, Design, and Signal Peptide Shuffling.* **ACS Catalysis** 14, 4738–4748. DOI: **10.1021/acscatal.4c00883**.
+
+**Selectivity engineering (aromatics/benzylic)**
+- Knorrscheidt, A.; Soler, J.; Hünecke, N.; et al. (2021). *Accessing Chemo- and Regioselective Benzylic and Aromatic Oxidations by Protein Engineering of an Unspecific Peroxygenase.* **ACS Catalysis** 11, 7327–7338. DOI: **10.1021/acscatal.1c00847**.
+- Münch, J.; Soler, J.; Hünecke, N.; et al. (2023). *Computational-Aided Engineering of a Selective Unspecific Peroxygenase toward Enantiodivergent β‑Ionone Hydroxylation.* **ACS Catalysis** 13, 8963–8972. DOI: **10.1021/acscatal.3c00702**.
+- Yan, X.; Zhang, X.; Li, H.; et al. (2024). *Engineering of Unspecific Peroxygenases Using a Superfolder-Green-Fluorescent-Protein-Mediated Secretion System in Escherichia coli.* **JACS Au** 4, 1654–1663. DOI: **10.1021/jacsau.4c00129**.
+
+**Peroxygenation vs peroxidation control**
+- Mate, D. M.; Palomino, M. A.; Molina-Espeja, P.; et al. (2017). *Modification of the peroxygenative-peroxidative activity ratio in the unspecific peroxygenase from Agrocybe aegerita by structure-guided evolution.* **Protein Engineering, Design & Selection** 30, 191–198. DOI: **10.1093/protein/gzw073**.
+
+**CviUPO engineering (channel)**
+- Linde, D.; González-Benjumea, A.; Aranda, C.; Carro, J.; Gutiérrez, A.; Martínez, A. T. (2022). *Engineering Collariella virescens Peroxygenase for Epoxides Production from Vegetable Oil.* **Antioxidants** 11, 915. DOI: **10.3390/antiox11050915**. PMID: **35624779**.
+
+**Mechanism/process & side reactions (aromatic polyphenols)**
+- (2024). *Exploiting UPO versatility to transform rutin in more soluble and bioactive products.* **New Biotechnology**. PMID: **39181196**.
+- Barber, V.; Mielke, T.; Cartwright, J.; Díaz-Rodríguez, A.; Unsworth, W. P.; Grogan, G. (2024). *Unspecific Peroxygenase can be Tuned for Oxygenation or Halogenation Activity by Controlling the Reaction pH.* **Chemistry – A European Journal**. DOI: **10.1002/chem.202401706**.
+- Monterrey, D. T.; Menés-Rubio, A.; Keser, M.; Gonzalez-Perez, D.; Alcalde, M. (2023). *Unspecific peroxygenases: The pot of gold at the end of the oxyfunctionalization rainbow?* **Current Opinion in Green and Sustainable Chemistry** 41, 100786. DOI: **10.1016/j.cogsc.2023.100786**. (Review)
 
 ---
 
-If you share (i) your intended expression host (yeast vs *E. coli*), (ii) target aromatic(s) and desired product(s) (e.g., specific hydroxylation position on veratryl alcohol or naphthalene), and (iii) solvent/peroxide regime, I can propose a **first-round mutational map** for CviUPO (channel residues + second-shell polar network) and a **screening panel** that separates peroxygenation from peroxidation early.
+If you share the **CviUPO sequence (FASTA) and your intended expression host**, I can (i) map **channel/tunnel residues** by alignment to published engineered positions (e.g., F88/T158 equivalents), (ii) propose a **10–30 variant smart library** for aromatic peroxygenation, and (iii) outline an **ABTS/NBD/naphthalene triage screen** that explicitly selects against peroxidative overoxidation.

@@ -36,6 +36,16 @@ def _resolve_base_directory(inputs: Dict[str, Any]) -> str:
 
 
 def default_user_inputs() -> Dict[str, Any]:
+    """
+    Return default configuration for stability-ddG prediction workflow.
+
+    Input format:
+        Dictionary of runtime options (backend, path roots, file lists,
+        interpreter options, and output controls).
+
+    Returns:
+        Dict pre-populated with recommended defaults for notebook editing.
+    """
     return {
         "stability_backend": "pythia",  # options: pythia (more backends later)
         "base_directory_key": "",  # recommended: key from address_dict in project_config/variables.py

@@ -176,6 +176,12 @@ def predict_boltz2(
 
 
 def _parse_args() -> argparse.Namespace:
+    """
+    Parse CLI arguments for standalone Boltz-2 prediction utility.
+
+    Returns:
+        Parsed argparse namespace with sequences, ligand options, and output paths.
+    """
     p = argparse.ArgumentParser(description="Run Boltz-2 structure prediction via OpenProtein API.")
     p.add_argument("--sequence", action="append", default=[], help="Protein sequence. Repeat for multiple proteins.")
     p.add_argument("--smiles", action="append", default=[], help="Ligand SMILES. Repeat for multiple ligands.")
@@ -190,6 +196,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    CLI entrypoint: run Boltz-2 prediction and print JSON summary.
+    """
     args = _parse_args()
     summary = predict_boltz2(
         sequences=args.sequence,

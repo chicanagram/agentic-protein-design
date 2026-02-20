@@ -15,6 +15,17 @@ def get_openai_client(
     missing_package_message: str = "The `openai` package is required for LLM operations.",
     missing_key_message: str = "OPENAI_API_KEY is not set. Export it before running LLM operations.",
 ) -> Any:
+    """
+    Create an OpenAI client with consistent dependency and key checks.
+
+    Args:
+        env_var: Environment variable name that stores API key.
+        missing_package_message: Error text if `openai` is not installed.
+        missing_key_message: Error text if the API key is unavailable.
+
+    Returns:
+        Instantiated `openai.OpenAI` client object.
+    """
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -26,6 +37,16 @@ def get_openai_client(
 
 
 def table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
+    """
+    Convert a DataFrame into JSON-serializable row records with row cap.
+
+    Args:
+        df: Input DataFrame.
+        max_rows: Maximum number of rows to include.
+
+    Returns:
+        List of dictionaries suitable for LLM payload serialization.
+    """
     if df.empty:
         return []
     subset = df.head(max_rows).copy()
@@ -34,6 +55,16 @@ def table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
 
 
 def summarize_compact_text(text: str, max_chars: int = 1000) -> str:
+    """
+    Collapse whitespace and truncate text for compact logging/metadata.
+
+    Args:
+        text: Input text string.
+        max_chars: Maximum output length.
+
+    Returns:
+        Normalized summary string.
+    """
     compact = " ".join((text or "").split())
     if len(compact) <= max_chars:
         return compact
@@ -41,6 +72,17 @@ def summarize_compact_text(text: str, max_chars: int = 1000) -> str:
 
 
 def save_text_output(text: str, output_dir: Path, filename: str) -> Path:
+    """
+    Save a text artifact to disk.
+
+    Args:
+        text: Text content to write.
+        output_dir: Destination directory.
+        filename: Output filename.
+
+    Returns:
+        Absolute path of the written file.
+    """
     out_path = output_dir / filename
     out_path.write_text(text, encoding="utf-8")
     return out_path
@@ -79,6 +121,20 @@ def persist_thread_message(
     content: str,
     metadata: Dict[str, Any],
 ) -> str:
+    """
+    Append a message to thread history and return new thread timestamp.
+
+    Args:
+        root_key: Logical data root key.
+        thread_id: Thread identifier.
+        llm_process_tag: Process tag for namespaced thread storage.
+        source_notebook: Source label for traceability.
+        content: Message body text.
+        metadata: Structured metadata payload.
+
+    Returns:
+        Updated thread timestamp (`updated_at` ISO string).
+    """
     append_message(
         root_key=root_key,
         thread_id=thread_id,

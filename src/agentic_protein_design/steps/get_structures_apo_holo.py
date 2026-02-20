@@ -6,6 +6,17 @@ from tools.openprotein import predict_boltz2
 
 
 def run_structure_prediction(inputs: Dict[str, Any], out_cif_path: Path, out_summary_path: Path) -> Dict[str, Any]:
+    """
+    Select and run structure-prediction backend for apo/holo workflow step.
+
+    Args:
+        inputs: Structure step configuration dict (tool choice, sequences, ligands).
+        out_cif_path: Destination CIF path for generated structure.
+        out_summary_path: Destination JSON summary path.
+
+    Returns:
+        Backend status/summary dictionary.
+    """
     tool = str(inputs.get("preferred_structure_tool", "")).strip().lower()
 
     if tool == "rcsb_search":

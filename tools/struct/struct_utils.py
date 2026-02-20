@@ -35,6 +35,17 @@ def convert_cif_to_pdb_pymol(cif_fpath, pdb_fpath):
 
 # Section: residue selection utilities -----------------------------------------
 def filter_residues(pdb_fpath, selection_condition="byres (chain A within 5 of chain B)", selection_name='selection'):
+    """
+    Filter a structure using a PyMOL selection and overwrite output PDB.
+
+    Args:
+        pdb_fpath: Input/output PDB path.
+        selection_condition: PyMOL selection expression.
+        selection_name: Temporary selection object name.
+
+    Returns:
+        None. Writes filtered structure to `pdb_fpath`.
+    """
     cmd.reinitialize()
     cmd.load(pdb_fpath, "obj")
     cmd.select(selection_name, selection_condition)
@@ -47,6 +58,16 @@ def filter_residues(pdb_fpath, selection_condition="byres (chain A within 5 of c
 
 # Section: structure alignment utilities -----------------------------------------
 def align_structures(pdb_fpath_target, pdb_fpath_ref):
+    """
+    Align target structure to reference using PyMOL `align`.
+
+    Args:
+        pdb_fpath_target: Target PDB path (moved/aligned in output).
+        pdb_fpath_ref: Reference PDB path.
+
+    Returns:
+        None. Writes aligned target structure back to `pdb_fpath_target`.
+    """
     cmd.reinitialize()
     cmd.load(pdb_fpath_target, "target")
     cmd.load(pdb_fpath_ref, "ref")

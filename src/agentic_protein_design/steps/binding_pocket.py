@@ -9,6 +9,7 @@ import pandas as pd
 
 from agentic_protein_design.core import resolve_input_path
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
+from agentic_protein_design.core.llm_display import display_llm_output_bundle
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -25,6 +26,7 @@ LLM_PROCESS_TAG = "binding_pocket_llm_analysis"
 BASE_REQUIRED_COLS = [
     "struct_name",
 ]
+STEP_OUTPUT_SUBDIR = "09_binding_pocket_analysis"
 
 prompt_1 = """
 Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
@@ -211,6 +213,15 @@ def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple
     return data_root, resolved_dirs
 
 
+def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
+    """
+    Return/create processed output directory for this notebook step.
+    """
+    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
+    step_dir.mkdir(parents=True, exist_ok=True)
+    return step_dir
+
+
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
     thread_ref = str(existing_thread_id or "").strip()
     if thread_ref:
@@ -232,6 +243,12 @@ def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tupl
 
 
 def default_user_inputs() -> Dict[str, Any]:
+    """
+    Return editable defaults for binding-pocket analysis workflow.
+
+    Returns:
+        Dict of analysis controls, reaction context text, and LLM settings.
+    """
     return {
         "selected_positions": [100, 103, 104, 107, 141, 222],
         "pairwise_comparisons": None,  # e.g. [("CviUPO", "AaeUPO"), ("MroUPO", "rCviUPO")]
@@ -251,10 +268,21 @@ def default_user_inputs() -> Dict[str, Any]:
         "llm_model": "gpt-5.2",
         "llm_temperature": 0.2,
         "llm_max_rows_per_table": 300,
+        "display_llm_output": True,
+        "display_max_height": "640px",
     }
 
 
 def default_input_paths(data_root: Path) -> Tuple[Path, Path]:
+    """
+    Build default binding/alignment CSV locations under selected data root.
+
+    Args:
+        data_root: Resolved data-root path.
+
+    Returns:
+        Tuple of `(binding_csv_path, alignment_csv_path)`.
+    """
     base = data_root / subfolders["pdb"] / "UPOs_peroxygenation_analysis/docked/REPS"
     binding_csv = base / "bindingpocket_analysis.csv"
     alignment_csv = base / "msa/reps_ali_withDist_FILT.csv"
@@ -266,6 +294,17 @@ def load_input_tables(
     alignment_csv: Path,
     reaction_data_csv: Optional[Path] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
+    """
+    Load binding-pocket, alignment, and optional reaction-data tables.
+
+    Args:
+        binding_csv: Path to binding-pocket feature table CSV.
+        alignment_csv: Path to alignment CSV.
+        reaction_data_csv: Optional path to reaction-data CSV.
+
+    Returns:
+        Tuple `(binding_df, alignment_df, reaction_df_or_none)`.
+    """
     if not binding_csv.exists():
         raise FileNotFoundError(f"Missing binding pocket file: {binding_csv}")
     if not alignment_csv.exists():
@@ -282,6 +321,16 @@ def load_input_tables(
 
 
 def build_prompt_with_context(reaction_df: Optional[pd.DataFrame], user_inputs: Dict[str, Any]) -> str:
+    """
+    Compose stage-1 LLM prompt with user-configured reaction context.
+
+    Args:
+        reaction_df: Optional reaction-data table.
+        user_inputs: Input dictionary (expects pairwise/reaction fields).
+
+    Returns:
+        Prompt text for the stage-1 pocket analysis call.
+    """
     if reaction_df is None or reaction_df.empty:
         reaction_context = "REACTION_DATA_STATUS: not provided."
     else:
@@ -323,6 +372,15 @@ def run_llm_pocket_analysis_stages(
 ) -> Dict[str, str]:
     """
     Run prompt_1 and prompt_2 sequentially and return both stage outputs.
+
+    Args:
+        pocket: Binding-pocket metrics DataFrame.
+        ali: Alignment DataFrame.
+        reaction_df: Optional reaction-data DataFrame.
+        user_inputs: Runtime settings including model/temperature/max rows.
+
+    Returns:
+        Dict containing prompt texts, stage outputs, and combined markdown analysis.
     """
     model = str(user_inputs.get("llm_model", "gpt-5.2"))
     temperature = float(user_inputs.get("llm_temperature", 0.2))
@@ -340,8 +398,6 @@ def run_llm_pocket_analysis_stages(
         missing_package_message="The `openai` package is required for LLM analysis.",
         missing_key_message="OPENAI_API_KEY is not set. Export it before running LLM analysis.",
     )
-    print("=== Prompt 1 Sent To LLM ===")
-    print(prompt1_text)
     response_1 = client.chat.completions.create(
         model=model,
         temperature=temperature,
@@ -359,8 +415,6 @@ def run_llm_pocket_analysis_stages(
     response_1_text = (response_1.choices[0].message.content or "").strip()
     if not response_1_text:
         raise RuntimeError("LLM returned an empty analysis response for prompt 1.")
-    print("\n=== LLM Output 1 ===")
-    print(response_1_text)
 
     prompt2_text = prompt_2
     payload_2 = {
@@ -368,8 +422,6 @@ def run_llm_pocket_analysis_stages(
         "structural_summary_text": response_1_text,
         "focus_question": user_inputs.get("focus_question", ""),
     }
-    print("\n=== Prompt 2 Sent To LLM ===")
-    print(prompt2_text)
     response_2 = client.chat.completions.create(
         model=model,
         temperature=temperature,
@@ -390,8 +442,6 @@ def run_llm_pocket_analysis_stages(
     response_2_text = (response_2.choices[0].message.content or "").strip()
     if not response_2_text:
         raise RuntimeError("LLM returned an empty analysis response for prompt 2.")
-    print("\n=== LLM Output 2 ===")
-    print(response_2_text)
 
     combined = (
         "## Stage 1: Global Pocket Phenotypes\n\n"
@@ -399,6 +449,28 @@ def run_llm_pocket_analysis_stages(
         "## Stage 2: Residue-Level Mechanistic Drivers\n\n"
         f"{response_2_text}"
     )
+    if bool(user_inputs.get("display_llm_output", True)):
+        display_llm_output_bundle(
+            exchanges=[
+                {
+                    "title": "Binding Pocket Analysis - Stage 1",
+                    "prompt_text": prompt1_text,
+                    "response_text": "(Stage 1 output included in compact combined view below.)",
+                },
+                {
+                    "title": "Binding Pocket Analysis - Stage 2",
+                    "prompt_text": prompt2_text,
+                    "response_text": "(Stage 2 output included in compact combined view below.)",
+                },
+            ],
+            compact_markdown_blocks=[
+                {
+                    "heading": "Combined Pocket Analysis",
+                    "text": combined,
+                    "max_height": str(user_inputs.get("display_max_height", "640px")),
+                }
+            ],
+        )
     return {
         "prompt_1_text": prompt1_text,
         "prompt_1_output": response_1_text,
@@ -414,6 +486,18 @@ def generate_llm_pocket_analysis(
     reaction_df: Optional[pd.DataFrame],
     user_inputs: Dict[str, Any],
 ) -> str:
+    """
+    Generate two-stage LLM pocket analysis and return combined markdown.
+
+    Args:
+        pocket: Binding-pocket metrics DataFrame.
+        ali: Alignment DataFrame.
+        reaction_df: Optional reaction-data DataFrame.
+        user_inputs: Analysis/LLM settings.
+
+    Returns:
+        Combined stage-1 + stage-2 LLM output text.
+    """
     stage_outputs = run_llm_pocket_analysis_stages(pocket, ali, reaction_df, user_inputs)
     return stage_outputs["combined_analysis"]
 
@@ -444,8 +528,6 @@ def generate_llm_mutation_design_proposal(
         missing_package_message="The `openai` package is required for LLM analysis.",
         missing_key_message="OPENAI_API_KEY is not set. Export it before running LLM analysis.",
     )
-    print("\n=== Prompt 3 Sent To LLM ===")
-    print(prompt_3)
     response = client.chat.completions.create(
         model=model,
         temperature=temperature,
@@ -463,8 +545,23 @@ def generate_llm_mutation_design_proposal(
     text = (response.choices[0].message.content or "").strip()
     if not text:
         raise RuntimeError("LLM returned an empty mutation design proposal for prompt 3.")
-    print("\n=== LLM Output 3 ===")
-    print(text)
+    if bool(settings.get("display_llm_output", True)):
+        display_llm_output_bundle(
+            exchanges=[
+                {
+                    "title": "Binding Pocket Mutation Design Proposal",
+                    "prompt_text": prompt_3,
+                    "response_text": "(Full mutation proposal shown below in compact view.)",
+                }
+            ],
+            compact_markdown_blocks=[
+                {
+                    "heading": "Mutation Design Proposal",
+                    "text": text,
+                    "max_height": str(settings.get("display_max_height", "640px")),
+                }
+            ],
+        )
     return text
 
 
@@ -511,6 +608,17 @@ def analyze_pocket_profiles(
     ali: pd.DataFrame,
     selected_positions: List[int],
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Compute per-structure metric interpretation and cross-structure extrema.
+
+    Args:
+        pocket: Binding-pocket metrics DataFrame.
+        ali: Alignment DataFrame.
+        selected_positions: Alignment positions for residue signatures.
+
+    Returns:
+        Tuple `(interpretations_df, pattern_summary_df)`.
+    """
     missing_base = [c for c in BASE_REQUIRED_COLS if c not in pocket.columns]
     if missing_base:
         raise KeyError(f"Pocket table missing required columns: {missing_base}")
@@ -654,6 +762,25 @@ def persist_thread_update(
     literature_context_thread_key: Optional[str] = None,
     llm_model: Optional[str] = None,
 ) -> str:
+    """
+    Persist binding-pocket run metadata and compact LLM summary to thread.
+
+    Args:
+        root_key: Logical data root key.
+        thread_id: Chat thread identifier.
+        user_inputs: Runtime input dictionary.
+        input_paths: Input file path mapping.
+        selected_positions: Selected alignment positions.
+        reaction_df: Optional reaction data.
+        out_interp: Interpretation CSV output path.
+        out_patterns: Pattern-summary CSV output path.
+        llm_analysis_path: Optional LLM analysis markdown path.
+        llm_analysis_text: Optional full LLM analysis text.
+        llm_model: Optional model identifier.
+
+    Returns:
+        Updated thread timestamp string.
+    """
     prompt_text = build_prompt_with_context(reaction_df, user_inputs)
     llm_summary = "" if not llm_analysis_text else summarize_llm_analysis(llm_analysis_text)
     mutation_design_summary = "" if not mutation_design_text else summarize_llm_analysis(mutation_design_text)
@@ -691,9 +818,24 @@ def run_binding_pocket_step(
     persist: bool = True,
 ) -> Dict[str, Any]:
     """
+    Execute end-to-end binding-pocket analysis step.
+
+    Args:
+        root_key: Logical data root key.
+        user_inputs: Runtime input dictionary.
+        input_paths: Optional explicit input-path overrides.
+        existing_thread_id: Optional existing thread id.
+        run_llm: Whether to run LLM analysis.
+        persist: Whether to persist thread metadata/messages.
+
+    Returns:
+        Dictionary containing dataframes, outputs, and thread metadata.
+    """
+    """
     Run the full binding-pocket step and return outputs for downstream composition.
     """
     data_root, resolved_dirs = setup_data_root(root_key)
+    step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_id)
     thread_id = str(thread["thread_id"])
 
@@ -707,13 +849,13 @@ def run_binding_pocket_step(
 
     selected_positions = user_inputs.get("selected_positions")
     interp_df, pattern_summary = analyze_pocket_profiles(pocket, ali, selected_positions=selected_positions)
-    out_interp, out_patterns = save_binding_outputs(interp_df, pattern_summary, resolved_dirs["processed"])
+    out_interp, out_patterns = save_binding_outputs(interp_df, pattern_summary, step_processed_dir)
 
     llm_analysis_text: Optional[str] = None
     llm_analysis_path: Optional[Path] = None
     if run_llm:
         llm_analysis_text = generate_llm_pocket_analysis(pocket, ali, reaction_df, user_inputs)
-        llm_analysis_path = save_llm_analysis(llm_analysis_text, resolved_dirs["processed"])
+        llm_analysis_path = save_llm_analysis(llm_analysis_text, step_processed_dir)
 
     updated_at: Optional[str] = None
     if persist:
@@ -737,6 +879,7 @@ def run_binding_pocket_step(
         "thread_updated_at": updated_at,
         "data_root": data_root,
         "resolved_dirs": resolved_dirs,
+        "step_processed_dir": step_processed_dir,
         "user_inputs": user_inputs,
         "input_paths": input_paths,
         "pocket": pocket,

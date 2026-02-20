@@ -11,6 +11,17 @@ from tools.encodings.encoding_variables import GEORGIEV_PARAMETERS, GEORGIEV_AA_
 from utils import fetch_sequences_from_fasta
 
 def load_sequences_csv(csv_path, sequence_col='sequence', sequence_base_col='sequence_base'):
+    """
+    Load mutant/base sequence columns from a CSV file.
+
+    Args:
+        csv_path: Input CSV path.
+        sequence_col: Column containing mutant/target sequences.
+        sequence_base_col: Optional base/wildtype sequence column.
+
+    Returns:
+        Tuple `(sequence_base_list_or_none, sequence_list)`.
+    """
     df = pd.read_csv(csv_path)
     if sequence_col not in df.columns:
         raise ValueError(f"Column '{sequence_col}' not found in {csv_path}")
@@ -66,6 +77,17 @@ ENCODER_REGISTRY = {
 
 
 def encode_sequences(sequences, encoder_name, max_length=None):
+    """
+    Encode a list of amino-acid sequences with selected encoder backend.
+
+    Args:
+        sequences: List of sequence strings.
+        encoder_name: One of keys in `ENCODER_REGISTRY`.
+        max_length: Optional fixed sequence length for padding/truncation.
+
+    Returns:
+        Numpy array shaped `(n_sequences, max_length, n_features)`.
+    """
     if encoder_name not in ENCODER_REGISTRY:
         raise ValueError(f"Unknown encoder '{encoder_name}'. Available: {sorted(ENCODER_REGISTRY)}")
     max_len = get_max_length(sequences, max_length=max_length)
@@ -75,6 +97,18 @@ def encode_sequences(sequences, encoder_name, max_length=None):
 
 
 def build_feature_matrix(sequence_list, sequence_base_list=None, encoder_name='one_hot', max_length=None):
+    """
+    Build flattened feature matrices for mutant-only and base+mutant encodings.
+
+    Args:
+        sequence_list: Mutant/target sequence list.
+        sequence_base_list: Optional matched base sequence list.
+        encoder_name: Encoder backend name.
+        max_length: Optional fixed sequence length.
+
+    Returns:
+        Tuple `(combined_flat, mutant_only_flat)` feature matrices.
+    """
     seq_encoded = encode_sequences(sequence_list, encoder_name=encoder_name, max_length=max_length)
     if sequence_base_list is None:
         seq_flat = seq_encoded.reshape(seq_encoded.shape[0], -1)
@@ -103,6 +137,12 @@ def default_paths(data_key, data_subfolder, input_fname):
 
 
 def parse_args():
+    """
+    Parse CLI arguments for sequence encoding utility.
+
+    Returns:
+        Parsed argparse namespace.
+    """
     parser = argparse.ArgumentParser(description='General protein sequence encoding utility.')
     parser.add_argument('--encoding', default='one_hot', choices=sorted(ENCODER_REGISTRY.keys()))
     parser.add_argument('--data-key', default='PIPS2', choices=sorted(address_dict.keys()))
@@ -118,6 +158,9 @@ def parse_args():
 
 
 def main():
+    """
+    CLI entrypoint: read sequences, encode features, and save output arrays.
+    """
     args = parse_args()
     input_path, output_dir = default_paths(args.data_key, args.data_subfolder, args.input_fname)
     output_prefix = args.output_prefix or args.encoding

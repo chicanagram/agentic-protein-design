@@ -470,6 +470,7 @@ def run_llm_pocket_analysis_stages(
                     "max_height": str(user_inputs.get("display_max_height", "640px")),
                 }
             ],
+            use_compact_markdown=bool(user_inputs.get("display_compact_markdown", False)),
         )
     return {
         "prompt_1_text": prompt1_text,
@@ -561,6 +562,7 @@ def generate_llm_mutation_design_proposal(
                     "max_height": str(settings.get("display_max_height", "640px")),
                 }
             ],
+            use_compact_markdown=bool(settings.get("display_compact_markdown", False)),
         )
     return text
 

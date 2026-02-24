@@ -5,6 +5,7 @@ pull optional heavy dependencies (for example PyMOL).
 """
 
 __all__ = [
+    "analyze_mutants",
     "binding_pocket",
     "calculate_ddgstability_mutants",
     "literature_review",

@@ -1194,6 +1194,7 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
                     "max_height": str(inputs.get("display_max_height", "640px")),
                 }
             ],
+            use_compact_markdown=bool(inputs.get("display_compact_markdown", False)),
         )
     return text
 

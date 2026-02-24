@@ -453,6 +453,7 @@ def generate_design_strategy_plan(
                     "max_height": str(user_inputs.get("display_max_height", "640px")),
                 }
             ],
+            use_compact_markdown=bool(user_inputs.get("display_compact_markdown", False)),
         )
         try:
             from IPython.display import Markdown, display
@@ -606,6 +607,7 @@ def reflect_and_regenerate_design_strategy_plan(
                     "max_height": str(user_inputs.get("display_max_height", "640px")),
                 }
             ],
+            use_compact_markdown=bool(user_inputs.get("display_compact_markdown", False)),
         )
         try:
             from IPython.display import Markdown, display

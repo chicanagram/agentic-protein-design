@@ -19,7 +19,7 @@ Steps executable in the workflow include:
 - Calculation of binding energies via MD simulations
 - Prediction of stability changes
 
-See full architecture and roadmap in [Plans.md](Plans.md).
+![Flow](assets/agentic-protein-design-modules.png)
 
 ## Current Workflow Architecture
 
@@ -61,7 +61,7 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/08_get_binding_pocket_properties.ipynb`](notebooks/08_get_binding_pocket_properties.ipynb)
   (Placeholder - implementation pending). Compute and aggregate binding-pocket descriptors.
 
-- [`notebooks/09_binding_pocket_analysis.ipynb`](notebooks/09_binding_pocket_analysis.ipynb)  
+- [`notebooks/09_binding_pocket_analysis.ipynb`](notebooks/09_analyze_binding_pocket.ipynb)  
   Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
 
 - [`notebooks/10_run_MD_calculate_dGbind.ipynb`](notebooks/10_run_MD_calculate_dGbind.ipynb)  
@@ -79,7 +79,7 @@ See full architecture and roadmap in [Plans.md](Plans.md).
 - [`notebooks/14_train_evaluate_supervised_ML_models.ipynb`](notebooks/14_train_evaluate_supervised_ML_models.ipynb)  
   (Placeholder - implementation pending). Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
 
-- [`notebooks/15_run_sequence_patent_search.ipynb`](notebooks/15_run_sequence_patent_search.ipynb)  
+- [`notebooks/15_run_sequence_patent_search.ipynb`](notebooks/16_run_sequence_patent_search.ipynb)  
   (Placeholder - implementation pending). Run patent search and analysis for sequences of interest. 
 
 In addition to notebook cells, workflow steps can also be run from python scripts found

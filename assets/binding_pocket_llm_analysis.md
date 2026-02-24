@@ -1,250 +1,233 @@
 ## Stage 1: Global Pocket Phenotypes
 
-## Per-protein interpretations (proximal <6 Å; distal ~6–11 Å)
+## Per-protein integrated interpretations (structure → mechanism → selectivity)
 
-### ET096 — *“Small, dry inner pocket; big output but leaky selectivity.”*
-- **Proximal electrostatics:** Essentially **uncharged** (charged_fraction 0.0) and **low polar** (0.182) with **high hydrophobicity** (hw_weighted −0.94) → weak pose-locking by H-bonds/salt bridges; favors non-specific hydrophobic binding.
-- **Proximal sterics:** **Many small residues** (small_residue_frac 0.636) and **lower mean volume** (88 Å³) → a *compliant* inner pocket that can admit multiple poses. Reactive center is **moderately far** (reactive_center_distance 7.10 Å) despite decent closest contacts (median_min_dist 4.33 Å).
-- **Distal electrostatics:** Distal shell is **mildly polar/charged** (polar 0.368; charged 0.132) but still not strongly ionic; kd_weighted 0.967 suggests moderate polarity overall.
-- **Distal sterics / outer size:** Distal centroid distances are among the **largest** (mean_dist_to_centroid 10.25 Å; mean_min_dist_to_centroid 8.57 Å) → a more open outer vestibule that can feed substrate in multiple orientations.
-- **Phenotype & catalytic implication:** “Open-feed + non-polar inner pocket” tends to increase throughput but reduce control of the reactive approach geometry → consistent with **high total S82 conversion (41.1%)** but **peroxidation-biased over-oxidation** (**Mono:Di 0.3**, strong Di-Ox). ABTS is low (0.146), suggesting the peroxidative pathway here is more about *poor geometric control near Cpd I* than a strongly electron-transfer-friendly charged pocket.
-
----
-
-### CviUPO — *“Polar, bulky clamp: pose-locking that boosts mono-oxidation and peroxidase-like ET.”*
-- **Proximal electrostatics:** **More polar and some charge** (polar 0.385; charged 0.077) with still-hydrophobic character (hw_weighted −0.825). This mixed environment can stabilize a productive binding pose while still accommodating hydrophobic substrate faces.
-- **Proximal sterics:** **Bulky-rich inner pocket** (bulky_residue_frac 0.615; mean_volume 111 Å³) with **tight closest approach** (median_min_dist 3.58 Å) → a “clamp” that can enforce a specific reactive presentation even if the reactive center distance is not minimal (7.72 Å).
-- **Distal electrostatics:** Distal region is **quite polar** (polar 0.513) with moderate charge (0.128) but **overall less polar by kd** (kd_weighted 0.387) → suggests polarity is present but arranged in a way that may not strongly solvate; could support ET networks without making the pocket globally hydrophilic.
-- **Distal sterics / outer size:** Outer pocket is **somewhat more compact** than ET096 (mean_dist_to_centroid 9.91; mean_min_dist_to_centroid 8.08), potentially reducing “wrong-way” entry trajectories.
-- **Phenotype & catalytic implication:** A **pose-locking, polar/bulky proximal shell** tends to favor **selective peroxygenation** (productive rebound) over uncontrolled secondary oxidation. Matches **Mono:Di 1.7** (mono favored) and decent peroxygenation on NBD (0.169). However, **very high ABTS (3.939)** indicates this pocket/environment also supports **peroxidative electron transfer** (likely via polar/charged residues enabling ET access/positioning), i.e., it can be both pose-locking *and* peroxidase-competent.
+### ET096_S82_glide — **“Small, dry inner pocket; chemistry happens at arm’s length.”**
+- **Proximal electrostatics:** Very low polarity/charge (charged_fraction **0.00**, polar_fraction **0.18**); high hydropathy (hw_weighted **−0.94**) and high KD (kd_weighted **2.18**) → a **hydrophobic, poorly H-bonding** near-field. Median residue→reactive-center distance **7.92 Å** suggests few residues directly “coach” the reactive geometry.
+- **Proximal sterics:** Many small residues (small_residue_frac **0.64**) with modest mean volume (**88 Å³**) and 12 residues <6 Å; ligand closest approach median **4.33 Å** but reactive center sits relatively far (reactive_center_distance **7.10 Å**) → **roomy microcavity but weak pose-locking at the reactive atom**.
+- **Distal electrostatics:** Slightly more polar/charged than proximal (charged **0.13**, polar **0.37**) but still overall hydrophobic (hw_weighted **−0.46**) → distal shell not strongly “electrostatic-funneling”.
+- **Distal sterics / outer size:** Outer pocket is relatively extended (mean_dist_to_centroid distal **10.25 Å**; mean_min_dist_to_centroid **8.57 Å**) with moderate distal volumes (~**100 Å³**) → **open outer vestibule**.
+- **Phenotype synthesis (with reaction data):** ET096 shows **high S82 di-oxidation** (Mono:Di **0.3**) and modest ABTS (**0.146**). The **hydrophobic, small-residue proximal set + long reactive-center distance** is consistent with **substrate mobility and repeated oxidation** (di-ox) rather than a single, well-registered peroxygenative event. The open distal region likely supports **re-binding/reshuffling**, enabling over-oxidation.
 
 ---
 
-### CviUPO-F88L+T158A — *“De-aromatized clamp: closer chemistry, slightly less polar guidance.”*  
-(Variant of CviUPO; no reaction data provided for this construct.)
-- **Proximal electrostatics:** Similar charge (0.077) but **lower polar fraction** than CviUPO (0.308 vs 0.385) and **higher kd_weighted** (1.40 vs 1.06) → net effect: less H-bonding “guidance,” slightly more polarizable/less hydrophobic mix by kd.
-- **Proximal sterics:** Still **bulky-dominated** (bulky 0.615) but with **fewer proximal residues** (num_pocket_res<6 = 10 vs 13) and **reactive center brought closer** (reactive_center_distance 5.83 vs 7.72) → potentially more reactive geometry if the pose is productive.
-- **Distal electrostatics:** Distal polarity remains high-ish (polar 0.485) but **kd_weighted increases** (0.73 vs 0.387) → distal becomes “more polar” by this metric, possibly altering access/solvent coupling.
-- **Distal sterics / outer size:** Slightly **more compact** outer shell (mean_dist_to_centroid 9.63 vs 9.91) with similar volumes.
-- **Phenotype & catalytic implication:** Removing an aromatic at 88 (F→L) plus T158A likely **reduces π-stacking/anchoring** and **reduces local H-bond capacity**, while the geometry suggests **easier close approach** to the reactive center. Mechanistically, this often trades *selectivity/pose-locking* for *reactivity* (more poses can reach “close enough”), which can either increase turnover or increase off-pathway oxidation depending on how the remaining clamp residues constrain orientation.
+### CviUPO_S82_glide — **“Polar-and-bulky clamp near the ligand; tuned for single-hit outcomes.”**
+- **Proximal electrostatics:** More polar/charged than ET096 (charged **0.077**, polar **0.385**); still hydrophobic overall (hw_weighted **−0.83**) but with **more H-bonding capacity** near-field. Median residue→reactive-center distance **6.68 Å** (closer than ET096) → better geometric “guidance”.
+- **Proximal sterics:** Strongly bulky proximal composition (bulky_residue_frac **0.615**) with high mean volume (**111 Å³**); ligand closest approach median **3.58 Å** and 13 residues <6 Å → **tight, shape-complementary inner pocket** that can enforce a preferred pose.
+- **Distal electrostatics:** Distal shell is quite polar (polar **0.513**) with modest charge (0.128) and relatively low KD (kd_weighted **0.387**) → **more hydrophilic outer environment** than ET096, potentially affecting access/solvent organization.
+- **Distal sterics / outer size:** Distal centroid distances slightly smaller than ET096 (mean_dist_to_centroid **9.91 Å**, mean_min **8.08 Å**) → **somewhat more compact vestibule**.
+- **Phenotype synthesis (with reaction data):** CviUPO has **very high ABTS** (**3.939**) yet S82 is **mono-oxidation biased** (Mono:Di **1.7**). A plausible reconciliation is: the **bulky/polar proximal clamp** favors **a single productive orientation** for S82 (mono), while the **polar/charged distal shell** may stabilize **electron-transfer competent states / solvent networks** that enhance **peroxidative turnover** (ABTS). Net: **selective mono-ox on S82 but strong peroxidase-like behavior on ABTS**.
 
 ---
 
-### DcaUPO — *“Charged outer ring + hydrophobic inner wall: strong oxidant delivery with controlled mono-oxidation.”*
-- **Proximal electrostatics:** **Very low polar proximal** (0.154) with some charge (0.077) and **very hydrophobic** (hw_weighted −1.042) → inner pocket is “dry” and rebound-friendly once substrate is positioned.
-- **Proximal sterics:** Bulky-rich (bulky 0.615) with **largest proximal variance** (volume_variance 1183) → heterogeneous wall: some tight blocking features plus some voids. **Reactive center is close** (4.93 Å), supporting efficient HAT/oxygen rebound when aligned.
-- **Distal electrostatics:** **Highest distal charge** among the set (charged 0.20) with moderate polarity (polar 0.40) → distal shell can support **substrate pre-orientation, gating, and/or ET pathways**.
-- **Distal sterics / outer size:** Outer size is mid-to-open (mean_dist_to_centroid 10.00; mean_min_dist_to_centroid 8.20), not as open as ET096 but not tight.
-- **Phenotype & catalytic implication:** This “**charged vestibule + hydrophobic reactive core**” is a classic architecture for strong peroxygenation: distal residues help steer/activate binding while the proximal dry wall favors productive rebound over solvent-mediated side reactions. Consistent with **high peroxygenation on veratryl alcohol (1.558) and NBD (1.242)** and **Mono:Di 1.6** (mono favored). ABTS is also high (2.7), implying the distal charged network may also facilitate peroxidative ET—yet the S82 outcome suggests the pocket still maintains good control against over-oxidation.
+### CviUPO-F88L+T158A_S82_chai1_0 — **“Same scaffold, slightly ‘de-bulky’ and closer to the reactive center.”**
+*(Variant family analysis vs CviUPO reference is detailed below; here is the per-protein readout.)*
+- **Proximal electrostatics:** Similar charge (charged **0.077**) but **lower polarity** than CviUPO (polar **0.308** vs 0.385); kd_weighted **1.40** (higher than CviUPO’s 1.06) → **more hydrophobic/less H-bonding** proximal field.
+- **Proximal sterics:** Mean volume slightly down (**108 Å³**) and fewer residues <6 Å (**10** vs 13). Reactive center is **closer** (reactive_center_distance **5.83 Å**) → fewer contacts, but potentially **more direct access** to the oxidizing center.
+- **Distal electrostatics:** Distal remains polar (polar **0.485**) with kd_weighted **0.73** → still relatively hydrophilic outer shell.
+- **Distal sterics / outer size:** Distal centroid distances slightly smaller (mean_dist_to_centroid **9.63 Å**) and fewer aligned pocket residues (num_pocket_res_ali **33**) → could reflect **a somewhat simplified/less extensive pocket definition** in this model.
+- **Phenotype synthesis:** Without reaction data for this variant, the structural shift suggests a pocket that is **less pose-locking** (fewer <6 Å contacts) but places the reactive center **closer**, which can increase raw reactivity yet risk **less controlled selectivity** depending on substrate.
 
 ---
 
-### TE314 — *“Balanced pocket: neither tight nor guiding—mixed outcomes.”*
-- **Proximal electrostatics:** Uncharged (0.0) but **moderately polar** (0.308) with hydrophobicity (hw_weighted −0.894) → some H-bonding possible but no strong ionic steering.
-- **Proximal sterics:** More **medium-sized / less bulky** than CviUPO/DcaUPO (bulky 0.308; mean_volume 98.5) with **close reactive center** (4.08 Å) → can be reactive, but may not enforce a single dominant pose.
-- **Distal electrostatics:** Distal is modestly polar (0.371) and low charge (0.114); kd_weighted 1.428 suggests a more polar distal environment by that metric.
-- **Distal sterics / outer size:** Distal centroid distances are on the **compact side** (mean_dist_to_centroid 9.73; mean_min_dist_to_centroid 7.86) → less vestibule freedom than ET096.
-- **Phenotype & catalytic implication:** “Moderate guidance + moderate openness” often yields **mixed selectivity**. Reaction data agrees: **Mono:Di 0.7** (still Di significant) with **good total yield (36.5%)**—suggesting decent turnover but incomplete suppression of secondary oxidation.
+### DcaUPO_S82_glide — **“Reactive-center proximity with a charged outer ring: high activity, mixed pathway pressure.”**
+- **Proximal electrostatics:** Low proximal polarity (polar **0.154**) with some charge (0.077); very hydrophobic proximal field (hw_weighted **−1.04**) and high KD (kd_weighted **1.79**) → **nonpolar inner cavity**.
+- **Proximal sterics:** Many residues <6 Å (**15**, highest here) and bulky proximal fraction **0.615** with high variance (**1183**) → **tight but heterogeneous** inner pocket; reactive center is close (reactive_center_distance **4.93 Å**) → supports **productive HAT/O-transfer geometry**.
+- **Distal electrostatics:** Distal is the **most charged** set (charged **0.20**) with moderate polarity (0.40) → a **charged outer shell** that can influence peroxide/water organization and substrate ingress.
+- **Distal sterics / outer size:** Distal centroid distances similar to others (mean_dist_to_centroid **10.00 Å**) with moderate volumes (~**104 Å³**).
+- **Phenotype synthesis (with reaction data):** DcaUPO is **high on peroxygenative probes** (Veratryl alcohol **1.558**, NBD **1.242**) but also **high ABTS** (**2.7**); S82 is **mono-biased** (Mono:Di **1.6**). The **short reactive-center distance + many close contacts** fits strong peroxygenation. The **charged distal shell** plausibly promotes **peroxidative competence** (ABTS) by stabilizing ET/solvent networks—yielding a **high-activity, less pathway-exclusive** phenotype.
 
 ---
 
-### OA167 — *“Hydrophobic, bulky inner pocket with an open-ish vestibule: high conversion, over-oxidation prone.”*
-- **Proximal electrostatics:** Uncharged (0.0) with moderate polar (0.308) but **very hydrophobic** (hw_weighted −1.359; most negative here) → strongly nonpolar reactive environment.
-- **Proximal sterics:** **Bulky proximal wall** (bulky 0.538; weighted_mean_volume 111) with **tight closest approach** (median_min_dist 3.60) and **reactive center close** (4.55 Å) → can drive fast chemistry once bound.
-- **Distal electrostatics:** Distal modest polarity/charge (polar 0.40; charged 0.114) with kd_weighted 1.03.
-- **Distal sterics / outer size:** Outer pocket is mid-sized (mean_dist_to_centroid 9.74; mean_min_dist_to_centroid 8.08), not extremely open.
-- **Phenotype & catalytic implication:** A **very hydrophobic proximal pocket** can increase binding of hydrophobic substrates and accelerate rebound, but if it lacks polar “brakes” to enforce a single productive pose, it can promote **repeat binding/over-oxidation**. Consistent with **highest S82 total yield (46.8%)** but **Mono:Di 0.6** (Di substantial).
+### TE314_S82_chai1_0 — **“Balanced pocket: neither clamp nor cavern, tends toward over-oxidation.”**
+- **Proximal electrostatics:** No proximal charge (0.00) and moderate polarity (0.308); kd_weighted **1.82**, hw_weighted **−0.89** → **hydrophobic but not extremely**.
+- **Proximal sterics:** Mean volume lower (**98.5 Å³**) with moderate bulky fraction (0.308) and 12 residues <6 Å; reactive center very close (**4.08 Å**) but median residue→reactive-center distance is high (**8.21 Å**) → suggests **a close approach exists but not broadly supported by many residues** (less “caging”).
+- **Distal electrostatics:** Distal is fairly hydrophobic (hw_weighted **−0.63**) with kd_weighted **1.43** → **less polar outer shell** than CviUPO/DcaUPO.
+- **Distal sterics / outer size:** Distal centroid distances are on the smaller side (mean_dist_to_centroid **9.73 Å**) with relatively low proximal variance (**559**) → **more uniform pocket**.
+- **Phenotype synthesis (with reaction data):** S82 Mono:Di **0.7** (di-ox favored). A **less polar, less bulky proximal environment** plus a **not-strongly-structured distal shell** is consistent with **substrate reorientation/rebinding**, enabling sequential oxidation.
+
+---
+
+### OA167_S82_swissdock_0 — **“Bulky hydrophobic inner wall with a permissive vestibule: high total turnover, modest control.”**
+- **Proximal electrostatics:** No proximal charge (0.00) but moderate polarity (0.308); very hydrophobic proximal field (hw_weighted **−1.36**, most negative here) with kd_weighted **1.41** → **strongly nonpolar inner pocket**.
+- **Proximal sterics:** Bulky proximal fraction **0.538** with high mean volume (**108.5 Å³**) and only 10 residues <6 Å → **hydrophobic packing** but fewer close “steering” contacts; reactive center close (**4.55 Å**).
+- **Distal electrostatics:** Distal moderately polar (0.40) and mildly hydrophobic (hw_weighted **−0.67**) → outer shell not strongly charged/polar.
+- **Distal sterics / outer size:** Distal centroid distances ~**9.74 Å** (moderate) with typical distal volume (~**101 Å³**) → **reasonably open outer pocket**.
+- **Phenotype synthesis (with reaction data):** Highest S82 total yield (**46.8%**) but Mono:Di **0.6** (di-ox favored). This matches a **hydrophobic, permissive pocket** that supports binding/turnover but allows **multiple productive poses over time**, increasing total conversion while sacrificing mono-selectivity.
 
 ---
 
 ## 2A) Intra-protein variant analysis (families with variants)
 
-### CviUPO family: CviUPO (reference) vs CviUPO-F88L+T158A
-Assumption: **CviUPO_S82_glide** is the WT/reference for the **CviUPO-F88L+T158A** variant.
+### Family: **CviUPO** (reference: **CviUPO_S82_glide**; variant: **CviUPO-F88L+T158A_S82_chai1_0**)  
+Assumption: CviUPO_S82_glide is the closest “WT/reference” because it is the unmutated label and shares the same base name.
 
-**(i) Proximal electrostatics changed**
-- Polar fraction **decreases** (0.385 → 0.308); kd_weighted **increases** (1.055 → 1.40).
-- Mechanistic read: fewer/less optimally placed H-bond donors/acceptors near the ligand can **weaken pose-locking**, increasing pose diversity (risking peroxidative/over-oxidation routes) unless sterics compensate.
+**Variant vs reference — what changed?**
+- **(i) Proximal electrostatics:** **Less polar / more hydrophobic** in variant (polar_fraction **0.385 → 0.308**; kd_weighted **1.06 → 1.40**). Likely reduces H-bond anchoring and increases pose degeneracy.
+- **(ii) Proximal sterics:** Slightly **less crowded** (num_pocket_res<6 **13 → 10**) and slightly smaller mean volume (**111 → 108 Å³**), but **reactive center gets closer** (**7.72 → 5.83 Å**). Mechanistically: fewer near contacts can reduce “clamping”, while shorter reactive distance can increase intrinsic oxidation probability once bound.
+- **(iii) Distal electrostatics:** Distal becomes **less hydrophilic** (polar **0.513 → 0.485**; kd_weighted **0.387 → 0.73**). This could weaken distal solvent structuring that supports peroxidative ET networks (ABTS-like behavior), potentially shifting balance toward peroxygenation *if* proximal geometry remains productive.
+- **(iv) Distal sterics / outer size:** Slightly **more compact** (mean_dist_to_centroid **9.91 → 9.63 Å**) and fewer aligned residues (**39 → 33**), consistent with a subtly altered vestibule definition/shape in the model.
 
-**(ii) Proximal sterics changed**
-- num_pocket_res<6 **drops** (13 → 10) and reactive_center_distance **drops strongly** (7.72 → 5.83).
-- Mechanistic read: fewer close-contact residues but closer reactive approach suggests **a more open “direct line” to Cpd I**—often increases intrinsic reactivity, but can also allow **non-ideal attack vectors**.
-
-**(iii) Distal electrostatics changed**
-- kd_weighted distal **increases** (0.387 → 0.73) with similar charged fraction.
-- Mechanistic read: distal environment may become more polar/solvent-coupled, potentially shifting the balance toward **ET-competent (peroxidative) behavior** if it improves access for redox mediators/substrates.
-
-**(iv) Distal sterics / outer pocket size changed**
-- Slight compaction (mean_dist_to_centroid 9.91 → 9.63) and fewer aligned pocket residues (39 → 33).
-- Mechanistic read: subtle reshaping/gating differences could alter substrate entry trajectories and residence time, influencing whether the enzyme favors **single-hit mono-oxidation** vs **multiple-hit** outcomes.
+**Mechanistic expectation:** F88L+T158A trends toward a **more hydrophobic, less H-bond-directed pocket** with **more direct access** to the reactive center but **less pose-locking**. For substrates where regio-/stereocontrol depends on tight anchoring, expect **reduced selectivity**; for substrates limited by approach distance, expect **maintained or increased turnover**.
 
 ---
 
 ## 2B) Requested pairwise comparison: **CviUPO vs ET096**
 
-**Proximal electrostatics**
-- **CviUPO is more polar/charged** (polar 0.385; charged 0.077) vs **ET096 is dry/uncharged** (polar 0.182; charged 0.0).
-- Mechanistic implication: CviUPO should **better orient/lock** S82-like substrates (favoring productive peroxygenation), while ET096 allows **more pose degeneracy**.
+### CviUPO_S82_glide **vs** ET096_S82_glide
+- **Proximal electrostatics:** CviUPO is **much more polar/charged** near the ligand (polar **0.385 vs 0.182**; charged **0.077 vs 0.00**) and has lower KD (kd_weighted **1.06 vs 2.18**) → **better capacity to orient/polarize substrate** and stabilize specific binding modes.
+- **Proximal sterics:** CviUPO is **bulkier and tighter** (bulky **0.615 vs 0.273**; mean_volume **111 vs 88 Å³**; median_min_dist **3.58 vs 4.33 Å**) → stronger **shape complementarity/pose restriction**. ET096 has many small residues (small **0.64**) → more “slippery” cavity.
+- **Distal electrostatics:** CviUPO distal shell is **more polar** (polar **0.513 vs 0.368**) and less hydrophobic (hw_weighted **−0.48 vs −0.46**, similar) but notably lower KD (kd_weighted **0.387 vs 0.967**) → **more hydrophilic vestibule** in CviUPO.
+- **Distal sterics / outer size:** ET096 is **more extended/open** distally (mean_dist_to_centroid **10.25 vs 9.91 Å**; mean_min_dist **8.57 vs 8.08 Å**) → easier access and potentially more re-binding/reorientation.
 
-**Proximal sterics**
-- CviUPO has a **bulkier, larger proximal wall** (mean_volume 111; bulky 0.615) and **tighter closest approach** (3.58 Å) vs ET096’s **small-residue-rich** inner pocket (small 0.636; mean_volume 88).
-- Mechanistic implication: CviUPO’s “clamp” promotes **mono-selectivity**; ET096’s compliant pocket promotes **over-oxidation** via re-binding and multiple accessible reactive poses.
-
-**Distal electrostatics**
-- CviUPO distal is **more polar by fraction** (0.513 vs 0.368) but **less polar by kd_weighted** (0.387 vs 0.967).
-- Mechanistic implication: CviUPO likely has **structured polarity** (specific polar residues positioned for interactions/ET), whereas ET096 has a more **diffuse** polar character.
-
-**Distal sterics / outer pocket size**
-- ET096 is **more open** (mean_dist_to_centroid 10.25; mean_min_dist_to_centroid 8.57) than CviUPO (9.91; 8.08).
-- Mechanistic implication: ET096’s larger vestibule increases **access and throughput** but reduces **trajectory control**, consistent with **higher total S82 yield** but **much lower Mono:Di (0.3)**.
-
-**Reaction-data consistency**
-- **CviUPO:** Mono:Di **1.7** (mono favored) + ABTS **3.939** (strong peroxidation) → selective mono-oxygenation *and* strong ET capability.
-- **ET096:** Mono:Di **0.3** (Di dominates) + ABTS **0.146** → over-oxidation likely driven by **geometric looseness** rather than a highly ET-optimized peroxidase pocket.
+**Mechanistic rationale tied to reaction data:**
+- ET096’s **open, hydrophobic, small-residue proximal pocket** aligns with **di-oxidation dominance on S82** (Mono:Di **0.3**)—substrate can reorient and get hit multiple times.
+- CviUPO’s **polar + bulky proximal clamp** aligns with **mono-oxidation bias** (Mono:Di **1.7**) by enforcing a preferred pose and limiting over-oxidation.
+- CviUPO’s **high ABTS** (3.939 vs 0.146) is consistent with its **more polar/charged pocket environment** (proximal and distal), which can support **peroxidative electron-transfer chemistry** and/or stabilize reactive intermediates/solvent networks relative to ET096’s “dry” pocket.
 
 ---
 
-## 3) Cross-protein “pocket phenotypes” (clusters) and functional trade-offs
+## 3) Cross-protein “pocket phenotypes” (recurring archetypes → turnover/selectivity trade-offs)
 
-1) **Open vestibule + small-residue proximal (“throughput, low control”)**
-- Representative: **ET096**
-- Signature: large distal centroid distances + proximal small-residue enrichment + low proximal polarity/charge.
-- Behavior: **high conversion**, but **over-oxidation/peroxidative leakage** via multiple binding poses and easy re-entry.
+### Phenotype 1: **Hydrophobic–permissive cavities (mobility → over-oxidation)**
+- **Members:** ET096, TE314, OA167 (strongest in ET096/OA167 by proximal hydropathy and/or low proximal charge).
+- **Signature:** Low proximal charge, relatively hydrophobic hw_weighted, fewer polar anchors; often more open distal geometry.
+- **Functional tendency:** Higher likelihood of **multiple binding poses and sequential oxidation** → **lower mono-selectivity (lower Mono:Di)** but can give **high total conversion** (OA167).
 
-2) **Bulky/polar proximal clamp (“pose-locking mono-selective”)**
-- Representative: **CviUPO** (and partially DcaUPO)
-- Signature: high proximal bulky fraction + elevated proximal polarity/charge.
-- Behavior: improved **mono-selectivity** (higher Mono:Di), but can still show **high ABTS** if distal networks support ET.
+### Phenotype 2: **Bulky/polar pose-locking inner pockets (control → mono-selectivity)**
+- **Members:** CviUPO, DcaUPO (both have high bulky proximal fraction; CviUPO has highest proximal polarity).
+- **Signature:** High bulky_residue_frac proximal, closer median_min_dist to ligand, and increased proximal polarity/charge.
+- **Functional tendency:** Better **regio-/chemoselective “single-hit” outcomes** on S82 (higher Mono:Di), but can still support peroxidation if distal shell is polar/charged (CviUPO, DcaUPO high ABTS).
 
-3) **Charged distal vestibule + hydrophobic reactive core (“steered peroxygenation with strong activity”)**
-- Representative: **DcaUPO**
-- Signature: high distal charged fraction with a dry/hydrophobic proximal wall and close reactive center.
-- Behavior: strong **peroxygenative activity** (veratryl alcohol, NBD) with **mono favored**, while retaining some peroxidative competence.
+### Phenotype 3: **Charged distal shell “peroxidation enabler”**
+- **Members:** DcaUPO (charged distal **0.20**), CviUPO (high distal polarity).
+- **Signature:** Elevated distal charge/polarity with relatively hydrophilic KD.
+- **Functional tendency:** Promotes **peroxidative competence** (ABTS) by stabilizing ET/solvent organization, sometimes at the cost of pathway exclusivity (DcaUPO: high peroxygenation *and* high ABTS).
 
-4) **Hydrophobic bulky core without strong electrostatic guidance (“fast but re-oxidation prone”)**
-- Representative: **OA167** (and to a lesser extent TE314)
-- Signature: very hydrophobic proximal (very negative hw_weighted) + bulky wall, but limited ionic/polar steering.
-- Behavior: **high total yield** but **Mono:Di < 1** due to repeated oxidation cycles.
-
-If you want, I can also (i) map the **pocket_alignment_table** positions onto these phenotypes (identify which aligned sites are likely “clamp” vs “vestibule charge” determinants), and (ii) propose 2–3 concrete mutation ideas per phenotype to push mono-selectivity up without sacrificing total yield.
+If you want, I can also (i) map the pocket_alignment_table positions onto these phenotypes (which specific aligned sites are likely “gatekeepers”), and (ii) propose 2–3 mutation ideas per phenotype to push toward mono-selective peroxygenation vs peroxidation suppression.
 
 ## Stage 2: Residue-Level Mechanistic Drivers
 
-## 1) Key variable pocket positions → residue chemistry → mechanistic consequences  
-(Positions are given in **each protein’s own numbering**; effects are tied back to the pocket phenotypes in the structural summary.)
+## 1) Key variable pocket positions → residue-level mechanistic hypotheses
+(Positions are given in each protein’s **own numbering** as requested; I refer back to the earlier pocket phenotypes: **ET096/TE314/OA167 = hydrophobic–permissive/over-oxidation**, **CviUPO/DcaUPO = bulky/polar clamp/mono-bias**, **DcaUPO/CviUPO distal polarity/charge = peroxidation enabler**.)
 
-### A. **CviUPO 88 / ET096 103 / DcaUPO 86 / TE314 108 / OA167 104**  *(“aromatic clamp” position; proximal wall/pose-locking)*
-- **Residues**
-  - **ET096 I103**, **TE314 I108**, **OA167 I104** (bulky aliphatic, hydrophobic)
-  - **DcaUPO L86** (slightly smaller aliphatic)
-  - **CviUPO F88** (bulky aromatic)
-  - **Variant:** **CviUPO-F88L+T158A has L88** (de-aromatized)
+### A. “Clamp vs permissive wall” near the ligand: **CviUPO 88 / ET096 103 / DcaUPO 86 / TE314 108 / OA167 104**
+- **Identities**
+  - ET096 **I103**
+  - CviUPO **F88** → variant **L88** (F88L)
+  - DcaUPO **L86**
+  - TE314 **I108**
+  - OA167 **I104**
 - **Substitution class**
-  - **Steric/shape + π-character shift:** F ↔ I/L (aromatic → aliphatic); also a **polarity shift** (loss of aromatic quadrupole/π surface).
+  - **Steric/aromaticity shift:** F ↔ (I/L). Phenylalanine is bulkier and π-capable; Leu/Ile are smaller, purely aliphatic.
+  - **Polarity:** all hydrophobic; main change is **shape + π interactions**, not charge.
 - **Mechanistic consequence**
-  - **CviUPO F88** plausibly contributes to the **“bulky clamp”** phenotype: an aromatic face can **buttress a single productive pose** (π/CH–π contacts, flatter wall), consistent with **mono-selective pose-locking** described for CviUPO.
-  - **ET096/TE314/OA167 I at this site** keeps hydrophobic bulk but **removes π-anchoring**, which tends to **increase pose degeneracy** (fits ET096 “compliant inner pocket” and OA167 “hydrophobic but not guiding”).
-- **Intra-family contrast (CviUPO → F88L variant)**
-  - **F88L** removes π-stacking/planar packing, likely **weakening pose-locking** while keeping hydrophobic bulk. This directly matches the summary: **lower proximal polar guidance** and a shift toward “more poses can reach close enough,” i.e., **higher chance of non-ideal attack vectors** and potentially more off-pathway oxidation if other clamp residues don’t compensate.
+  - **CviUPO F88** is a classic **pose-locking “clamp” element**: aromatic face can pack against hydrophobic substrate and reduce pose degeneracy → consistent with CviUPO’s **bulky/polar clamp** phenotype and **mono-oxidation bias** (Mono:Di 1.7).
+  - **F88L (variant)** removes π-stacking and slightly reduces sidechain volume → **weakens clamping**, increases microcavity “slipperiness,” matching the summary: **fewer <6 Å contacts** and **lower proximal polarity** → predicted **reduced selectivity / more reorientation**, even if reactive-center access improves.
+- **Within-family contrast (CviUPO vs F88L+T158A)**
+  - **F88→L88** specifically “de-aromatizes” the clamp: expect **less enforced substrate orientation** (more trajectories that still reach the oxidant), aligning with the variant’s “less pose-locking” description.
 
-**Confidence:** High (directly matches the “de-aromatized clamp” narrative and a classic UPO clamp determinant).
+**Confidence:** High (directly matches “bulky clamp” vs “de-bulky” narrative and is a large physicochemical change at a proximal site).
 
 ---
 
-### B. **CviUPO 158 / ET096 171 / DcaUPO 154 / TE314 183 / OA167 174** *(proximal contact/gating; local H-bond capacity and wall rigidity)*
-- **Residues**
-  - **ET096 A171** (small, nonpolar)
-  - **CviUPO T158** (polar OH; H-bond donor/acceptor)
-  - **Variant:** **CviUPO-F88L+T158A has A158**
-  - **DcaUPO F154** (bulky aromatic)
-  - **TE314 V183** (hydrophobic medium)
-  - **OA167 P174** (rigid cyclic; constrains backbone/loop geometry)
+### B. “Electrostatic gate / distal-shell charge injector”: **CviUPO 165 / ET096 178 / DcaUPO 161 / TE314 190 / OA167 181**
+- **Identities**
+  - ET096 **A178**
+  - CviUPO **K165** (also **K165** in variant)
+  - DcaUPO **C161**
+  - TE314 **V190**
+  - OA167 **A181**
 - **Substitution class**
-  - **Electrostatic/polarity:** T ↔ A (loss of OH; reduced H-bonding)
-  - **Steric:** A/T/V ↔ F (bulky aromatic insertion); P is a **conformational/steric modulator** (rigidity more than volume).
+  - **Electrostatic:** Lys (**+1**) vs A/V/C (neutral). This is the strongest explicit charge difference in the table.
+  - **Steric:** K is also longer/bulkier than A/V/C.
 - **Mechanistic consequence**
-  - **CviUPO T158** can provide **local polar “braking”/pose registration** (even a single OH can bias substrate orientation), supporting the **polar/bulky clamp** phenotype.
-  - **ET096 A171** fits the **small, dry inner pocket**: fewer polar anchors → **weaker pose-locking**, more rebinding/over-oxidation risk (consistent with ET096 “leaky selectivity”).
-  - **DcaUPO F154** likely contributes to a **hard steric gate** near the reactive approach path: can **exclude unproductive poses** while still allowing close approach (consistent with DcaUPO’s “controlled mono-oxidation” despite high activity).
-  - **OA167 P174** can reshape the pocket by **locking loop geometry**, often creating a “hydrophobic funnel” that is fast but not necessarily orienting—consistent with OA167 high conversion but **over-oxidation prone**.
-- **Intra-family contrast (CviUPO → F88L+T158A)**
-  - **T158A** specifically removes an H-bond handle in the proximal shell, matching the observed **drop in proximal polar fraction** in the summary. Mechanistically: **less polar guidance → more pose diversity**, which synergizes with **F88L** (loss of π-anchoring) to erode the clamp’s orientational control.
+  - **CviUPO K165** can create a **local positive electrostatic patch** that:
+    - stabilizes/organizes **water/peroxide networks** and polar transition states (supporting the earlier “polar/charged environment → ABTS competence”),
+    - can **electrostatically steer** polar substrate moieties or constrain approach vectors (a “soft gate”).
+  - In **ET096/TE314/OA167** (A/V/A) the same region is **electrostatically silent**, consistent with their more “dry/permissive” phenotypes and greater tendency toward **reorientation → di-oxidation**.
+  - **DcaUPO C161** is neutral but polarizable; it won’t replicate the strong distal/proximal electrostatic steering of Lys—consistent with DcaUPO’s distal charge being distributed elsewhere (summary: **charged distal shell** overall), not necessarily at this exact site.
+- **Within-family contrast**
+  - No change between CviUPO and its variant at 165, so **K165 likely preserves** part of CviUPO’s electrostatic “peroxidation-enabling” character even as F88L/T158A reduce pose-locking/polar anchoring elsewhere.
 
-**Confidence:** High (directly explains the variant’s reduced polar fraction and the clamp→less-guiding shift).
+**Confidence:** High for electrostatics/pathway bias (charged vs neutral at pocket edge is a canonical driver).
 
 ---
 
-### C. **CviUPO 165 / ET096 178 / DcaUPO 161 / TE314 190 / OA167 181** *(charged vs neutral “electrostatic hotspot” near pocket; proximal steering/ET competence)*
-- **Residues**
-  - **CviUPO K165** (positively charged)
-  - **Variant:** **CviUPO-F88L+T158A K165** (unchanged)
-  - **ET096 A178** (neutral small)
-  - **DcaUPO C161** (neutral, polarizable thiol; can be weakly polar)
-  - **TE314 V190** (neutral hydrophobic)
-  - **OA167 A181** (neutral small)
+### C. “Hydrogen-bond anchor vs hydrophobic release” at the T158A mutation site: **CviUPO 158 / ET096 171 / DcaUPO 154 / TE314 183 / OA167 174**
+- **Identities**
+  - ET096 **A171**
+  - CviUPO **T158** → variant **A158** (T158A)
+  - DcaUPO **F154**
+  - TE314 **V183**
+  - OA167 **P174**
 - **Substitution class**
-  - **Electrostatic:** K (charged) ↔ A/V/C (neutral)
-  - **Steric:** K is also longer/bulkier than A/V.
+  - **Polarity/H-bonding:** Thr (polar, H-bond donor/acceptor) → Ala (nonpolar).
+  - **Steric:** small-to-small (minor volume change), but **loss of hydroxyl** is major chemically.
 - **Mechanistic consequence**
-  - **CviUPO K165** is a plausible contributor to CviUPO’s **“more polar and some charge” proximal environment** and its **high ABTS/peroxidase-like ET** competence: a Lys can stabilize polar transition states, organize waters, or support an **ET-accessible electrostatic landscape**.
-  - **ET096/OA167/TE314 neutral residues here** align with their **uncharged proximal electrostatics**; in ET096 this reinforces the “dry/uncharged” inner pocket that lacks steering.
-  - **DcaUPO C161** is neutral but can tune **local polarizability**; however it won’t replicate the strong electrostatic steering of Lys—consistent with DcaUPO’s model where **distal charge** (not necessarily proximal) is the major electrostatic feature.
-- **Intra-family contrast**
-  - No change between CviUPO and its variant at 165, so **any electrostatic differences in the variant are not due to loss of this positive charge**; instead they are better attributed to **T158A and F88L** (loss of H-bond/π guidance) plus geometry changes noted in the summary.
+  - In **CviUPO (T158)**: provides a **specific H-bonding handle** that can “register” substrate orientation and/or stabilize a local water network → consistent with the **polar proximal clamp** phenotype and mono-selectivity.
+  - **T158A (variant)** removes that anchor → **reduced H-bond-directed positioning**, increased pose degeneracy and potentially increased radical/oxygen rebound variability. This directly matches the summary: variant becomes **less polar / more hydrophobic** and **less pose-locking**.
+  - Cross-protein context: ET096 already has **A171** (no anchor) and shows **di-oxidation dominance**; T158A pushes CviUPO **toward the ET096-like “dry/permissive” behavior**.
+- **Within-family contrast**
+  - This is the cleanest causal link to the variant’s reported **polarity drop** (0.385 → 0.308): **T158A is a primary driver** of that shift.
 
-**Confidence:** Medium–high (clear charge difference across homologs; mechanistic link to ABTS/ET is plausible but would benefit from mapping to the ET pathway geometry).
+**Confidence:** High (directly changes H-bond capacity at a pocket residue and aligns with the observed phenotype shift).
 
 ---
 
-### D. **ET096 77 / CviUPO 60 / DcaUPO 58 / TE314 80 / OA167 76** *(rare charged insertion; local electrostatics + steric micro-gating)*
-- **Residues**
-  - **ET096 A77**, **OA167 A76** (small neutral)
-  - **CviUPO T60**, **TE314 T80** (polar OH)
-  - **DcaUPO D58** (negatively charged)
+### D. “Bulky plug vs small hinge” controlling local crowding: **ET096 80 / CviUPO 64 / DcaUPO 62 / TE314 84 / OA167 80**
+- **Identities**
+  - ET096 **A80**
+  - CviUPO **L64**
+  - DcaUPO **F62**
+  - TE314 **P84**
+  - OA167 **L80**
 - **Substitution class**
-  - **Electrostatic:** D ↔ A/T (introduces negative charge)
-  - **Polarity:** A ↔ T (adds OH)
+  - **Steric:** A (small) ↔ L/P (medium) ↔ F (bulky aromatic).
+  - **Polarity:** all largely nonpolar (Pro is nonpolar but conformationally special).
 - **Mechanistic consequence**
-  - **DcaUPO D58** is a strong candidate for the **“charged vestibule”** concept (even if this specific site is sometimes slightly >6 Å in the table, it is pocket-proximal in the alignment set): a carboxylate can **pre-orient substrates**, stabilize polar entry conformations, or participate in **ET-friendly networks**—consistent with DcaUPO’s high distal charge and strong peroxygenation.
-  - **ET096 A77** supports the “uncharged, low polar” proximal phenotype → **less steering**.
-  - **CviUPO/TE314 T** provides intermediate polarity: can H-bond but without ionic steering.
-- **Intra-family contrast**
-  - Not a variant site.
+  - **ET096 A80** contributes to the “small-residue proximal set” → **roomier microcavity**, weaker caging → consistent with **substrate mobility and di-oxidation**.
+  - **DcaUPO F62** is a **bulky plug** that can tighten the inner pocket and enforce approach geometry (fits DcaUPO’s **many <6 Å contacts** and close reactive center).
+  - **TE314 P84** can rigidify a loop/turn and shape the pocket wall; proline often acts as a **conformational gate** (less about volume, more about fixing backbone geometry), potentially explaining TE314’s “close approach exists but not broadly supported” (a localized gate rather than a global clamp).
 
-**Confidence:** Medium (because distance-to-ligand varies by structure; still a chemically strong differentiator).
+**Confidence:** Medium-high (strong steric differences; exact effect depends on sidechain orientation/backbone context).
 
 ---
 
-### E. **ET096 174 / CviUPO 161 / DcaUPO 157 / TE314 186 / OA167 177** *(“void vs wall” position; steric confinement and radical escape/rebinding propensity)*
-- **Residues**
-  - **ET096 L174** (bulky aliphatic wall)
-  - **CviUPO G161**, **DcaUPO G157**, **TE314 G186** (glycine → creates space/flexibility)
-  - **OA167 F177** (bulky aromatic wall)
+### E. “Charge/polarity hotspot” at a near-ligand position: **ET096 77 / CviUPO 60 / DcaUPO 58 / TE314 80 / OA167 76**
+- **Identities**
+  - ET096 **A77**
+  - CviUPO **T60** (variant also T60)
+  - DcaUPO **D58**
+  - TE314 **T80**
+  - OA167 **A76**
 - **Substitution class**
-  - **Steric:** G (minimal) ↔ L/F (bulky)
+  - **Electrostatic:** D (−1) vs A/T (neutral).
+  - **Polarity:** T is polar; A is nonpolar.
 - **Mechanistic consequence**
-  - **Glycine at this site (CviUPO/DcaUPO/TE314)** likely creates a **local void or hinge** that can (i) allow the substrate to nestle deeper or (ii) permit subtle rearrangements that support a **defined productive pose** without over-constraining.
-  - **ET096 L174** and **OA167 F177** add a **hard wall**. In OA167, this pairs with an overall hydrophobic pocket to give **tight contact but not necessarily correct orientation**, consistent with fast chemistry + over-oxidation. In ET096, despite being “small-residue-rich” overall, this single wall could still **bias entry trajectories** while the rest of the pocket remains compliant—supporting multiple poses and rebinding.
-- **Intra-family contrast**
-  - Not a variant site.
+  - **DcaUPO D58** introduces a **fixed negative charge** near the pocket that can:
+    - stabilize cationic/polar substrate features,
+    - tune local protonation/water structure, potentially supporting DcaUPO’s **mixed peroxygenation + peroxidation pressure** (summary: charged distal shell; this is one concrete contributor).
+  - ET096/OA167 (A) lack this, consistent with “dry” permissive cavities.
+  - CviUPO/TE314 (T) provide **H-bonding without full charge**, consistent with intermediate polarity.
 
-**Confidence:** Medium (strong steric effect; directionality depends on exact geometry).
+**Confidence:** Medium (clear electrostatic difference, but distances here are somewhat larger in some structures; still within the filtered pocket set).
 
 ---
 
-## 2) Ranked residue lists (mechanistic drivers vs modulators vs likely neutral)
+## 2) Ranked residue list (mechanistic drivers vs modulators vs neutral)
 
 ### High-confidence mechanistic driver residues
-1. **CviUPO F88 → (variant) L88** (CviUPO 88; ET096 103; etc.): **π/shape clamp determinant** controlling pose-locking vs pose diversity.  
-2. **CviUPO T158 → (variant) A158** (CviUPO 158; ET096 171; etc.): **proximal H-bond guidance** loss; synergizes with F88L to weaken clamp chemistry.  
-3. **CviUPO K165 vs neutral residues in others** (CviUPO 165; ET096 178; etc.): **electrostatic hotspot** plausibly tied to CviUPO’s higher proximal charge/polar behavior and ET competence.
+1. **CviUPO K165** (vs ET096 A178 / TE314 V190 / OA167 A181 / DcaUPO C161): **charge-based electrostatic gating/solvent organization** → ties to CviUPO/DcaUPO peroxidation competence vs ET096-like dryness.
+2. **CviUPO T158A (variant)** at **158**: **loss of H-bond anchor** → directly explains variant’s **reduced proximal polarity** and predicted **reduced pose-locking/selectivity**.
+3. **CviUPO F88L (variant)** at **88**: **aromatic clamp removal** → reduces shape/π complementarity, increasing pose degeneracy (variant shift toward permissive behavior).
 
-### Secondary modulators (context-dependent but plausible contributors)
-4. **DcaUPO D58** (DcaUPO 58; ET096 77; etc.): localized **negative charge** supporting the “charged vestibule” steering/ET network.  
-5. **Gly vs bulky at the “void vs wall” site** (CviUPO 161 / DcaUPO 157 / TE314 186 vs ET096 174 / OA167 177): tunes **steric confinement**, residence time, and likelihood of **rebinding/over-oxidation**.  
-6. **DcaUPO F154 / OA167 P174 / TE314 V183 / ET096 A171** (same aligned position as CviUPO 158): steric rigidity differences that can **gate** approach vectors.
+### Secondary modulators (steric shaping; context-dependent)
+- **ET096 A80 / CviUPO L64 / DcaUPO F62 / TE314 P84 / OA167 L80**: steric “plug/hinge” controlling local crowding and backbone rigidity.
+- **DcaUPO D58** (vs A/T): localized **negative electrostatic feature** that can bias binding/solvent structure.
+- **ET096 V74 / OA167 T73 / others L**: small polarity tweak (Thr vs hydrophobe) likely modulates hydration/entry but less decisive alone.
 
-### Likely neutral/background (within this dataset/summary)
-- Positions that are **mostly conservative hydrophobics** across proteins and not implicated by the summary as key electrostatic features, e.g. **ET096 74 V / CviUPO 57 L / DcaUPO 55 L / TE314 77 L** (minor steric tuning only), and **ET096 223 F / CviUPO 210 M / DcaUPO 206 L / TE314 236 V / OA167 226 I** (hydrophobic swap; likely second-order unless it directly lines the reactive trajectory in a given structure).
+### Likely neutral/background (in this dataset; weaker causal leverage)
+- Positions dominated by conservative hydrophobes with similar size and no charge change, e.g. **ET096 223 F vs others M/L/V/I** (mostly hydrophobic packing differences), and **ET096 172/173 region (S/A vs S/T/Y/L)** which are relatively distal in the provided distances and may not strongly control the reactive geometry unless they line the access channel in a specific structure.
 
-If you share which ligand/reactive atom definition was used for the “reactive_center_distance” metric (heme oxo vs substrate site), I can tighten the causal chain for which of these sites most directly controls **approach geometry vs ET access**.
+If you want, I can convert these into **testable mutation hypotheses** (e.g., “make ET096 more mono-selective by introducing a Thr/Lys at the K165-equivalent site + adding an aromatic clamp at the F88-equivalent site”) while keeping each proposal consistent with the phenotypes you summarized.

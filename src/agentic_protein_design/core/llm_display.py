@@ -101,9 +101,10 @@ def display_llm_output_bundle(
     *,
     exchanges: Optional[List[Dict[str, Any]]] = None,
     compact_markdown_blocks: Optional[List[Dict[str, Any]]] = None,
+    use_compact_markdown: bool = False,
 ) -> None:
     """
-    Generalized notebook renderer for one or more LLM exchanges and compact markdown outputs.
+    Generalized notebook renderer for one or more LLM exchanges and markdown outputs.
 
     Args:
         exchanges: List of exchange dictionaries. Supported keys:
@@ -117,6 +118,8 @@ def display_llm_output_bundle(
             - heading (optional)
             - text (required)
             - max_height (optional, defaults to 640px)
+        use_compact_markdown: Whether markdown blocks should be shown in compact
+            scrollable containers. Defaults to False (full markdown rendering).
     """
     exchange_items = list(exchanges or [])
     block_items = list(compact_markdown_blocks or [])
@@ -150,7 +153,10 @@ def display_llm_output_bundle(
         heading = str(item.get("heading", "")).strip()
         if heading:
             display(Markdown(f"### {heading}"))
-        show_markdown_compact(
-            str(item.get("text", "")),
-            max_height=str(item.get("max_height", "640px")),
-        )
+        if use_compact_markdown:
+            show_markdown_compact(
+                str(item.get("text", "")),
+                max_height=str(item.get("max_height", "640px")),
+            )
+        else:
+            display(Markdown(str(item.get("text", ""))))

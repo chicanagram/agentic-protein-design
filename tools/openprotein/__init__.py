@@ -14,6 +14,7 @@ from tools.openprotein.design_boltzgen_openprotein import (
     validate_design_with_boltzgen_kwargs,
 )
 from tools.openprotein.predict_boltz2_structure_openprotein import predict_boltz2
+from tools.openprotein.align_msa_openprotein import create_openprotein_msa, save_openprotein_msa
 
 __all__ = [
     "predict_boltz2",
@@ -28,4 +29,6 @@ __all__ = [
     "run_proteinmpnn_postdesign_pipeline",
     "run_proteinmpnn_from_structures",
     "design_with_boltzgen",
+    "create_openprotein_msa",
+    "save_openprotein_msa",
 ]

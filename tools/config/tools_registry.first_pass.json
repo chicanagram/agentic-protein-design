@@ -1033,7 +1033,7 @@
       "lineno": 26
     },
     {
-      "module": "tools.struct.struct_utils",
+      "module": "tools.utils.struct_utils",
       "file": "tools/struct/struct_utils.py",
       "function": "align_structures",
       "summary": "Align target structure to reference using PyMOL `align`.",
@@ -1041,7 +1041,7 @@
       "lineno": 60
     },
     {
-      "module": "tools.struct.struct_utils",
+      "module": "tools.utils.struct_utils",
       "file": "tools/struct/struct_utils.py",
       "function": "convert_cif_to_pdb_pymol",
       "summary": "Convert CIF fpath into PDB fpath.",
@@ -1049,7 +1049,7 @@
       "lineno": 27
     },
     {
-      "module": "tools.struct.struct_utils",
+      "module": "tools.utils.struct_utils",
       "file": "tools/struct/struct_utils.py",
       "function": "filter_residues",
       "summary": "Filter a structure using a PyMOL selection and overwrite output PDB.",
@@ -1057,7 +1057,7 @@
       "lineno": 37
     },
     {
-      "module": "tools.struct.struct_utils",
+      "module": "tools.utils.struct_utils",
       "file": "tools/struct/struct_utils.py",
       "function": "visualize_overlay_structures",
       "summary": "Visualize one or more PDBs with solid-color protein cartoons.",
@@ -1065,7 +1065,7 @@
       "lineno": 115
     },
     {
-      "module": "tools.struct.struct_utils",
+      "module": "tools.utils.struct_utils",
       "file": "tools/struct/struct_utils.py",
       "function": "visualize_structures",
       "summary": "Visualize structures in pdb_list using NGLview",

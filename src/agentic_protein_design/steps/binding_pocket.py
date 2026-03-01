@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+if __name__ == "__main__" and __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[3]
+    _src_root = _repo_root / "src"
+    for _path in (str(_repo_root), str(_src_root)):
+        if _path not in sys.path:
+            sys.path.insert(0, _path)
+
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -10,6 +20,7 @@ import pandas as pd
 from agentic_protein_design.core import resolve_input_path
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
+from agentic_protein_design.core.paths import setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -18,7 +29,7 @@ from agentic_protein_design.core.pipeline_utils import (
     summarize_compact_text,
     table_records,
 )
-from project_config.variables import address_dict, subfolders
+from project_config.variables import subfolders
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
@@ -186,32 +197,6 @@ RULES
 - If literature_context conflicts with prompt_2_output, state the conflict and choose a conservative design.
 - Prefer practical, testable proposals over speculative broad recommendations.
 """
-
-
-def resolve_project_root() -> Path:
-    root = Path.cwd().resolve()
-    if root.name == "notebooks":
-        return root.parent
-    return root
-
-
-def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple[Path, Dict[str, Path]]:
-    if root_key not in address_dict:
-        raise KeyError(f"Unknown root_key: {root_key}")
-
-    base = project_root or resolve_project_root()
-    data_root = (base / address_dict[root_key]).resolve()
-
-    resolved_dirs: Dict[str, Path] = {}
-    for key in REQUIRED_SUBFOLDERS:
-        if key not in subfolders:
-            raise KeyError(f"Missing subfolder key in variables.subfolders: {key}")
-        resolved = data_root / subfolders[key]
-        resolved.mkdir(parents=True, exist_ok=True)
-        resolved_dirs[key] = resolved
-
-    return data_root, resolved_dirs
-
 
 def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
@@ -836,7 +821,7 @@ def run_binding_pocket_step(
     """
     Run the full binding-pocket step and return outputs for downstream composition.
     """
-    data_root, resolved_dirs = setup_data_root(root_key)
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
     step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_id)
     thread_id = str(thread["thread_id"])
@@ -894,3 +879,103 @@ def run_binding_pocket_step(
         "llm_analysis_text": llm_analysis_text,
         "llm_analysis_path": llm_analysis_path,
     }
+
+
+if __name__ == "__main__":
+    from agentic_protein_design.core.ide_runner import (
+        load_openai_api_key_from_project_config,
+        print_run_summary,
+    )
+    from agentic_protein_design.core.thread_context import build_thread_context_text
+
+    load_openai_api_key_from_project_config()
+
+    root_key = "examples"
+    existing_thread_id = None
+    run_llm = True
+    run_mutation_design = True
+    persist = True
+
+    user_inputs = default_user_inputs()
+    input_paths = {
+        "binding_csv": "pdb/bindingpocket_analysis.csv",
+        "alignment_csv": "pdb/reps_ali_withDist_FILT.csv",
+        "reaction_data_csv": "pdb/substrate_reaction_data.csv",
+    }
+
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
+    step_processed_dir = get_step_processed_dir(resolved_dirs)
+    thread, _ = init_thread(root_key, existing_thread_id)
+    thread_id = str(thread["thread_id"])
+
+    binding_csv = resolve_input_path(data_root, input_paths["binding_csv"])
+    alignment_csv = resolve_input_path(data_root, input_paths["alignment_csv"])
+    reaction_data_csv = None
+    if bool(user_inputs.get("use_reaction_data", False)) and str(input_paths.get("reaction_data_csv", "")).strip():
+        reaction_data_csv = resolve_input_path(data_root, input_paths["reaction_data_csv"])
+
+    pocket, ali, reaction_df = load_input_tables(binding_csv, alignment_csv, reaction_data_csv)
+
+    selected_positions = user_inputs.get("selected_positions")
+    interp_df, pattern_summary = analyze_pocket_profiles(pocket, ali, selected_positions)
+    out_interp, out_patterns = save_binding_outputs(interp_df, pattern_summary, step_processed_dir)
+
+    prompt_2_output = ""
+    llm_analysis = ""
+    out_llm = None
+    if run_llm:
+        stage_outputs = run_llm_pocket_analysis_stages(pocket, ali, reaction_df, user_inputs)
+        prompt_2_output = str(stage_outputs["prompt_2_output"])
+        llm_analysis = str(stage_outputs["combined_analysis"])
+        out_llm = save_llm_analysis(llm_analysis, step_processed_dir)
+
+    mutation_design_text = ""
+    out_mutation_design = None
+    literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
+    if run_mutation_design and run_llm:
+        design_requirements = str(user_inputs.get("design_requirements", "")).strip()
+        context_result = build_thread_context_text(
+            literature_context_thread_key,
+            include_referenced_files=True,
+            max_chars_per_file=20000,
+            on_missing="warn",
+        )
+        literature_context = str(context_result.get("context_text", ""))
+        mutation_design_text = generate_llm_mutation_design_proposal(
+            prompt_2_output=prompt_2_output,
+            design_requirements=design_requirements,
+            user_inputs=user_inputs,
+            literature_context=literature_context,
+        )
+        out_mutation_design = save_mutation_design_proposal(mutation_design_text, step_processed_dir)
+
+    if persist:
+        persist_thread_update(
+            root_key=root_key,
+            thread_id=thread_id,
+            user_inputs=user_inputs,
+            input_paths=input_paths,
+            selected_positions=[] if selected_positions is None else list(selected_positions),
+            reaction_df=reaction_df,
+            out_interp=out_interp,
+            out_patterns=out_patterns,
+            llm_analysis_path=out_llm,
+            llm_analysis_text=llm_analysis or None,
+            mutation_design_path=out_mutation_design,
+            mutation_design_text=mutation_design_text or None,
+            literature_context_thread_key=literature_context_thread_key,
+            llm_model=str(user_inputs.get("llm_model", "")),
+        )
+
+    print_run_summary(
+        {
+            "root_key": root_key,
+            "thread_id": thread_id,
+            "data_root": data_root,
+            "step_processed_dir": step_processed_dir,
+            "out_interp": out_interp,
+            "out_patterns": out_patterns,
+            "llm_analysis_path": out_llm,
+            "mutation_design_path": out_mutation_design,
+        }
+    )

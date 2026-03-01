@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+if __name__ == "__main__" and __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[3]
+    _src_root = _repo_root / "src"
+    for _path in (str(_repo_root), str(_src_root)):
+        if _path not in sys.path:
+            sys.path.insert(0, _path)
+
 import json
 import os
 from pathlib import Path
@@ -14,6 +24,7 @@ import requests
 from agentic_protein_design.core import apply_optional_text_inputs
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
+from agentic_protein_design.core.paths import resolve_project_root, setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -143,32 +154,6 @@ If reactions_of_interest are specified:
 
 The goal is not just to summarize literature, but to extract engineering-relevant insight that can guide rational or ML-assisted enzyme optimization.
 """
-
-
-def resolve_project_root() -> Path:
-    root = Path.cwd().resolve()
-    if root.name == "notebooks":
-        return root.parent
-    return root
-
-
-def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple[Path, Dict[str, Path]]:
-    if root_key not in address_dict:
-        raise KeyError(f"Unknown root_key: {root_key}")
-
-    base = project_root or resolve_project_root()
-    data_root = (base / address_dict[root_key]).resolve()
-
-    resolved_dirs: Dict[str, Path] = {}
-    for key in REQUIRED_SUBFOLDERS:
-        if key not in subfolders:
-            raise KeyError(f"Missing subfolder key in variables.subfolders: {key}")
-        resolved = data_root / subfolders[key]
-        resolved.mkdir(parents=True, exist_ok=True)
-        resolved_dirs[key] = resolved
-
-    return data_root, resolved_dirs
-
 
 def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
@@ -1314,7 +1299,7 @@ def run_literature_review_step(
     """
     Run the full literature-review step and return outputs for downstream composition.
     """
-    data_root, resolved_dirs = setup_data_root(root_key)
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
     step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_id)
     thread_id = str(thread["thread_id"])
@@ -1355,3 +1340,44 @@ def run_literature_review_step(
         "llm_review_text": llm_review_text,
         "llm_review_path": llm_review_path,
     }
+
+
+if __name__ == "__main__":
+    from agentic_protein_design.core.ide_runner import (
+        load_openai_api_key_from_project_config,
+        print_run_summary,
+    )
+
+    load_openai_api_key_from_project_config()
+
+    root_key = "examples"
+    existing_thread_id = None
+    run_llm = True
+    persist = True
+
+    user_inputs = default_user_inputs()
+    input_paths = {
+        "seed_sequences_file": "",
+        "constraints_file": "",
+    }
+
+    result = run_literature_review_step(
+        root_key=root_key,
+        inputs=user_inputs,
+        input_paths=input_paths,
+        existing_thread_id=existing_thread_id,
+        run_llm=run_llm,
+        persist=persist,
+    )
+    print_run_summary(
+        result,
+        keys=[
+            "root_key",
+            "thread_id",
+            "thread_updated_at",
+            "data_root",
+            "step_processed_dir",
+            "out_paths",
+            "llm_review_path",
+        ],
+    )

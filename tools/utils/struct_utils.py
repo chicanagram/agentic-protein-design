@@ -1,4 +1,5 @@
 from pymol import cmd
+from pathlib import Path
 from project_config.variables import mapping_rev, aa_polarity_mapping
 
 def _resi_sort_key(resi_value):
@@ -211,3 +212,25 @@ def visualize_overlay_structures(
                 pass
     view.center()
     return view
+
+
+def run_tmalign(pdb_a, pdb_b, tmalign_exe='/Users/charmainechia/Documents/projects/TMalign-20180426/TMalign'):
+    """
+    Run TMalign on two PDB files.
+    Args:
+        pdb_a: First PDB filepath
+        pdb_b: Second PDB filepath
+        tmalign_exe: Path to TMalign executable (e.g., "./TMalign" or "/path/to/TMalign")
+    Returns:
+        subprocess.CompletedProcess with stdout/stderr as strings.
+    """
+    import subprocess
+    tmalign_exe = str(Path(tmalign_exe))
+    pdb_a = str(Path(pdb_a))
+    pdb_b = str(Path(pdb_b))
+    cmd = [tmalign_exe, pdb_a, pdb_b]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    stdout = res.stdout
+    # parse TM score
+    tmscore = float(stdout[stdout.find('TM-score= ')+10:stdout.find(' (if normalized by length of Chain_1')])
+    return tmscore

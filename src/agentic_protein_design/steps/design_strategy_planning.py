@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+if __name__ == "__main__" and __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[3]
+    _src_root = _repo_root / "src"
+    for _path in (str(_repo_root), str(_src_root)):
+        if _path not in sys.path:
+            sys.path.insert(0, _path)
+
 import json
 import re
 from pathlib import Path
@@ -9,6 +19,7 @@ import pandas as pd
 
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
+from agentic_protein_design.core.paths import setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -17,9 +28,6 @@ from agentic_protein_design.core.pipeline_utils import (
     summarize_compact_text,
 )
 from agentic_protein_design.core.thread_context import build_thread_context_text
-from project_config.variables import address_dict, subfolders
-
-
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "design_strategy_planning"
 STEP_OUTPUT_SUBDIR = "01_design_strategy_planning"
@@ -49,7 +57,7 @@ Requirements:
 7) Prioritize feasibility, information gain per round, and tractable experimental burden.
 
 Available tool categories (non-exhaustive):
-- sequence database search and alignment -> conservation analysis
+- sequence database search and alignment -> conservation_analysis analysis
 - receptor-ligand docking / structure prediction (for example Boltz-2)
 - ddG_bind style simulations (for example OpenMM or YASARA)
 - stability prediction (for example Pythia)
@@ -163,32 +171,6 @@ Output contract:
 - Keep concise/actionable style and the same sectioning as planning prompt part 2.
 """
 
-
-def resolve_project_root() -> Path:
-    root = Path.cwd().resolve()
-    if root.name == "notebooks":
-        return root.parent
-    return root
-
-
-def setup_data_root(root_key: str, project_root: Optional[Path] = None) -> Tuple[Path, Dict[str, Path]]:
-    if root_key not in address_dict:
-        raise KeyError(f"Unknown root_key: {root_key}")
-
-    base = project_root or resolve_project_root()
-    data_root = (base / address_dict[root_key]).resolve()
-
-    resolved_dirs: Dict[str, Path] = {}
-    for key in REQUIRED_SUBFOLDERS:
-        if key not in subfolders:
-            raise KeyError(f"Missing subfolder key in variables.subfolders: {key}")
-        resolved = data_root / subfolders[key]
-        resolved.mkdir(parents=True, exist_ok=True)
-        resolved_dirs[key] = resolved
-
-    return data_root, resolved_dirs
-
-
 def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
     Return/create processed output directory for this notebook step.
@@ -248,7 +230,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "use_binding_pocket_analysis_step": True,
         "available_tools": [
             "sequence database search and alignment",
-            "conservation analysis",
+            "conservation_analysis analysis",
             "Boltz-2 docking/pose assessment",
             "OpenMM/YASARA ddG_bind simulations",
             "Pythia stability prediction",
@@ -711,7 +693,7 @@ def run_design_strategy_planning_step(
     Returns:
         Dict containing thread ids, paths, context, and generated outputs.
     """
-    data_root, resolved_dirs = setup_data_root(root_key)
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
     step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_key)
     thread_id = str(thread["thread_id"])
@@ -765,3 +747,87 @@ def run_design_strategy_planning_step(
         "workflow_steps_path": workflow_steps_path,
         "design_plan_outputs": design_plan_outputs,
     }
+
+
+if __name__ == "__main__":
+    from agentic_protein_design.core.ide_runner import (
+        load_openai_api_key_from_project_config,
+        print_run_summary,
+    )
+
+    load_openai_api_key_from_project_config()
+
+    root_key = "examples"
+    existing_thread_key = None
+    run_reflection = False
+    persist = True
+
+    user_inputs = default_user_inputs()
+    user_feedback = {
+        "plan_reflection_user_feedback": "",
+        "plan_reflection_prompt_override": "",
+    }
+
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
+    step_processed_dir = get_step_processed_dir(resolved_dirs)
+    thread, _ = init_thread(root_key, existing_thread_key)
+    thread_id = str(thread["thread_id"])
+
+    literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
+    context_result = load_literature_context(literature_context_thread_key, max_chars_per_file=20000)
+    literature_context = str(context_result.get("context_text", ""))
+
+    plan_outputs = generate_design_strategy_plan(
+        user_inputs,
+        literature_context=literature_context,
+    )
+    design_plan = str(plan_outputs["strategy_writeup"])
+    workflow_steps_json = list(plan_outputs["workflow_steps_json"])
+
+    out_design_plan = save_design_strategy_plan(design_plan, step_processed_dir)
+    out_workflow_steps = save_design_strategy_workflow_steps(workflow_steps_json, step_processed_dir)
+
+    if run_reflection:
+        reflection_user_feedback = str(user_feedback.get("plan_reflection_user_feedback", "")).strip()
+        reflection_prompt = (
+            str(user_feedback.get("plan_reflection_prompt_override", "")).strip()
+            or design_strategy_reflection_prompt
+        )
+        plan_outputs = reflect_and_regenerate_design_strategy_plan(
+            user_inputs=user_inputs,
+            original_prompt_1_output=workflow_steps_json,
+            original_prompt_2_output=design_plan,
+            literature_context=literature_context,
+            user_feedback=reflection_user_feedback,
+            critique_prompt=reflection_prompt,
+        )
+        design_plan = str(plan_outputs["strategy_writeup"])
+        workflow_steps_json = list(plan_outputs["workflow_steps_json"])
+        out_design_plan = save_design_strategy_plan(design_plan, step_processed_dir)
+        out_workflow_steps = save_design_strategy_workflow_steps(workflow_steps_json, step_processed_dir)
+
+    if persist:
+        persist_thread_update(
+            root_key=root_key,
+            thread_id=thread_id,
+            user_inputs=user_inputs,
+            design_plan_path=out_design_plan,
+            design_plan_text=design_plan,
+            workflow_steps_path=out_workflow_steps,
+            workflow_steps_json=workflow_steps_json,
+            literature_context_thread_key=literature_context_thread_key,
+        )
+
+    print_run_summary(
+        {
+            "root_key": root_key,
+            "thread_id": thread_id,
+            "data_root": data_root,
+            "step_processed_dir": step_processed_dir,
+            "literature_context_thread_key": literature_context_thread_key,
+            "design_plan_path": out_design_plan,
+            "workflow_steps_path": out_workflow_steps,
+            "workflow_step_count": len(workflow_steps_json),
+            "reflection_applied": run_reflection,
+        }
+    )

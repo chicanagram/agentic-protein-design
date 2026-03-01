@@ -1,7 +1,13 @@
 """Core helpers shared by step and workflow modules."""
 
 from agentic_protein_design.core import chat_store
-from agentic_protein_design.core.paths import apply_optional_text_inputs, resolve_input_path
+from agentic_protein_design.core.paths import (
+    apply_optional_text_inputs,
+    join_data_path,
+    resolve_input_path,
+    resolve_project_root,
+    setup_data_root,
+)
 from agentic_protein_design.core.llm_display import (
     apply_notebook_markdown_style,
     display_llm_output_bundle,
@@ -29,7 +35,10 @@ from agentic_protein_design.core.thread_context import (
 
 __all__ = [
     "apply_optional_text_inputs",
+    "join_data_path",
     "resolve_input_path",
+    "resolve_project_root",
+    "setup_data_root",
     "apply_notebook_markdown_style",
     "display_llm_output_bundle",
     "show_llm_exchange",

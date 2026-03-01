@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+if __name__ == "__main__" and __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[3]
+    _src_root = _repo_root / "src"
+    for _path in (str(_repo_root), str(_src_root)):
+        if _path not in sys.path:
+            sys.path.insert(0, _path)
+
 from pathlib import Path
 from typing import Any, Dict
 
@@ -143,3 +153,23 @@ def run_ddg_stability_predictions(
         "runtime_hints": result.get("runtime_hints", []),
         "predictions": result["predictions"],
     }
+
+
+if __name__ == "__main__":
+    from agentic_protein_design.core.ide_runner import print_run_summary
+
+    user_inputs = default_user_inputs()
+    result = run_ddg_stability_predictions(user_inputs)
+    print_run_summary(
+        result,
+        keys=[
+            "status",
+            "backend",
+            "output_csv",
+            "n_structures_input",
+            "n_structures_scored",
+            "n_rows",
+            "errors",
+            "runtime_hints",
+        ],
+    )

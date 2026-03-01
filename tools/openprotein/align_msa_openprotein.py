@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from tools.openprotein.openprotein_utils import connect_openprotein_session
+from tools.utils.seq_utils import write_sequence_to_fasta
 
 
 def create_openprotein_msa(
     *,
     seed_sequence: Optional[str] = None,
+    seed_sequence_name: Optional[str] = None,
     sequences: Optional[Sequence[str]] = None,
     session: Optional[Any] = None,
-    wait: bool = True,
+    seq_fasta_path: Path
 ) -> Dict[str, Any]:
     """
     Create an MSA job via OpenProtein API from a seed sequence or sequence set.
@@ -40,38 +43,25 @@ def create_openprotein_msa(
     else:
         query = ":".join(seqs)
 
+    # start session and create MSA
     sess = session or connect_openprotein_session()
-    msa_job = sess.align.create_msa(query.encode())
-    out: Dict[str, Any] = {
-        "msa_id": str(getattr(msa_job, "id", "")),
-        "status": "submitted",
-        "job": msa_job,
-        "msa_text": "",
-    }
-    if not wait:
-        return out
+    msa = sess.align.create_msa(query.encode())
 
-    msa_job.wait()
-    msa_text = msa_job.get_msa()
-    if isinstance(msa_text, bytes):
-        msa_text = msa_text.decode("utf-8", errors="replace")
-    out["status"] = "completed"
-    out["msa_text"] = str(msa_text or "")
-    return out
+    # parse MSA
+    r = msa.wait()
+    msa_iterator = msa.get()
+    sequences = []
+    seq_names = []
+    sequences_degapped = []
+    for (seq_name, seq) in msa_iterator:
+        seq_name = seq_name.split('\t')[0]
+        sequences.append(seq)
+        seq_names.append(seq_name)
+        seq_degapped = seq.replace('-','')
+        sequences_degapped.append(seq_degapped)
+    seq_names[0] = seed_sequence_name
 
+    # save MSA and degapped sequences
+    write_sequence_to_fasta(sequences_degapped, seq_names, os.path.basename(seq_fasta_path), os.path.dirname(seq_fasta_path)+'/')
 
-def save_openprotein_msa(msa_text: str, out_fasta_path: Path) -> Path:
-    """
-    Save OpenProtein MSA text output to FASTA/alignment file.
-
-    Args:
-        msa_text: Alignment text returned by OpenProtein MSA API.
-        out_fasta_path: Destination file path.
-
-    Returns:
-        Path to the saved MSA file.
-    """
-    out_fasta_path.parent.mkdir(parents=True, exist_ok=True)
-    out_fasta_path.write_text(msa_text, encoding="utf-8")
-    return out_fasta_path
-
+    return msa

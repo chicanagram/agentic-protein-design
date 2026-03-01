@@ -18,6 +18,7 @@ esm
 openprotein-python
 pymol-open-source
 nglview
+consurfDB-client-API
 
 # Retrieval and lightweight app plumbing
 requests

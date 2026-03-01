@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from tools.openprotein.openprotein_utils import connect_openprotein_session
-from tools.struct.struct_utils import align_structures, convert_cif_to_pdb_pymol
+from tools.utils.struct_utils import align_structures, convert_cif_to_pdb_pymol
 
 def _chain_ids(n: int, *, used: Optional[set[str]] = None, start_index: int = 0) -> List[str]:
     alphabet = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")

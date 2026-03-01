@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, MutableMapping, Sequence
 
+from project_config.variables import address_dict, subfolders
+
 
 def resolve_input_path(data_root: Path, path_value: str) -> Path:
     """Resolve an input path relative to a selected data root."""
@@ -14,6 +16,71 @@ def resolve_input_path(data_root: Path, path_value: str) -> Path:
 
 def _read_nonempty_lines(path: Path) -> Sequence[str]:
     return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def resolve_project_root() -> Path:
+    """
+    Resolve the repository root when called from repo root or the notebooks subdir.
+
+    Returns:
+        Absolute path to the project root directory.
+    """
+    root = Path.cwd().resolve()
+    if root.name == "notebooks":
+        return root.parent
+    return root
+
+
+def setup_data_root(
+    root_key: str,
+    required_subfolders: Sequence[str],
+    project_root: Path | None = None,
+) -> tuple[Path, Dict[str, Path]]:
+    """
+    Resolve and create a selected data root plus a standard set of subfolders.
+
+    Args:
+        root_key: Key in `project_config.variables.address_dict`.
+        required_subfolders: Iterable of keys from `subfolders` to resolve/create.
+        project_root: Optional explicit project-root override.
+
+    Returns:
+        Tuple `(data_root, resolved_subfolder_paths)`.
+    """
+    if root_key not in address_dict:
+        raise KeyError(f"Unknown root_key: {root_key}")
+    base = project_root or resolve_project_root()
+    data_root = (base / address_dict[root_key]).resolve()
+    resolved: Dict[str, Path] = {}
+    for key in required_subfolders:
+        folder = data_root / subfolders[key]
+        folder.mkdir(parents=True, exist_ok=True)
+        resolved[key] = folder
+    return data_root, resolved
+
+
+def join_data_path(data_root: Path, subdir: str, data_subfolder: str, filename: str) -> Path:
+    """
+    Join a selected data root with a standard subdir, optional nested subfolder, and filename.
+
+    Args:
+        data_root: Resolved data root.
+        subdir: Relative subdirectory path under the data root.
+        data_subfolder: Optional nested project-specific subfolder.
+        filename: Filename or trailing relative path.
+
+    Returns:
+        Resolved filesystem path.
+    """
+    sub = str(subdir).strip().strip("/")
+    ds = str(data_subfolder or "").strip().strip("/")
+    name = str(filename).strip().lstrip("/")
+    p = data_root
+    if sub:
+        p = p / sub
+    if ds:
+        p = p / ds
+    return p / name
 
 
 def apply_optional_text_inputs(

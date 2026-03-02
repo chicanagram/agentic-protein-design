@@ -22,7 +22,10 @@ consurfDB-client-API
 
 # Retrieval and lightweight app plumbing
 requests
+selenium
+webdriver_manager
 httpx
+lxml
 pydantic
 python-dotenv
 pypdf

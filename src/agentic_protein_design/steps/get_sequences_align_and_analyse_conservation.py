@@ -23,11 +23,12 @@ from tools.align.seq_align import _default_mafft_executable, run_msa
 from tools.align.visualize_alignment import visualize_msa
 from tools.openprotein.align_msa_openprotein import create_openprotein_msa
 from tools.search.run_search_and_align import run_seqsearch_api
-from tools.utils.seq_utils import fetch_sequences_from_fasta, write_sequence_to_fasta
+from tools.conservation_analysis.run_conservation_analysis import compute_conservation
+from tools.utils.seq_utils import fetch_sequences_from_fasta
 from tools.yasara.align_struct_yasara import AlignStruct
 
 
-REQUIRED_SUBFOLDERS = ["sequences", "msa", "seqsearch", "pdb", "sce", "processed"]
+REQUIRED_SUBFOLDERS = ["sequences", "msa", "conservation_analysis", "seqsearch", "pdb", "sce"]
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -52,7 +53,6 @@ def default_user_inputs() -> Dict[str, Any]:
         "seqsearch_output_filename": "homologs_openprotein.fasta",
         "struct_alignment_sce_filename": "aligned_structures.sce",
         "plot_output_filename": "msa_visualization.png",
-        "conservation_output_filename": "msa_conservation.csv",
         "homolog_search_backend": "blastp",  # blastp | phmmer | jackhmmer | openprotein
         "search_db_name": "uniprot_trembl",
         "search_db_root_key": "databases",
@@ -193,20 +193,6 @@ def plot_msa(msa_fpath, savefig, num_sequences, filter_by_refseq_or_idx=None, wr
                   filter_by_refseq_or_idx=filter_by_refseq_or_idx, savefig=savefig, figsize=figsize)
 
 
-def compute_conservation(msa_fasta_path: Path) -> pd.DataFrame:
-    """
-    Compute simple per-position conservation_analysis metrics for an MSA.
-
-    Args:
-        msa_fasta_path: Input aligned FASTA path.
-
-    Returns:
-        DataFrame with per-position metrics:
-        `position`, `consensus_residue`, `consensus_fraction`, `n_non_gap`.
-    """
-    conservation_df = None
-    return conservation_df
-
 
 def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -232,6 +218,7 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
     sequence_dir = resolved["sequences"]
     msa_dir = resolved["msa"]
     seqsearch_dir = resolved["seqsearch"]
+    conservation_analysis_dir = resolved["conservation_analysis"]
     sce_dir = resolved["sce"]
     pdb_dir = resolved["pdb"]
     if data_subfolder:
@@ -256,7 +243,6 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
         struct_sce_name = f"{struct_sce_name}.sce"
     struct_sce_out = sce_dir / struct_sce_name
     plot_out = msa_dir / str(inputs.get("plot_output_filename", "msa_visualization.png"))
-    cons_out = msa_dir / str(inputs.get("conservation_output_filename", "msa_conservation.csv"))
 
     sequence_subdirectory = 'sequences/'
     structure_subdirectory = 'pdb/'
@@ -293,6 +279,9 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
             # --- Run sequence search using seed sequence --- #
             ###################################################
             if parsed_sequence_input["input_kind"] in {"raw_sequence", "fasta_single"}:
+                msa_out = Path(str(msa_out).replace('_aligned', '_homologs_aligned'))
+                msa_df_out = Path(str(msa_df_out).replace('_aligned', '_homologs_aligned'))
+                plot_out = Path(str(plot_out).replace('_aligned', '_homologs_aligned'))
                 seed_sequence = parsed_sequence_input["sequences"][0]
                 # run sequence search + align with OpenProtein
                 if homolog_search_backend == "openprotein":
@@ -372,9 +361,20 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
     # --- Run conservation_analysis analysis ---
     cons_df = pd.DataFrame()
+    csv_fpath_list = None
     if bool(inputs.get("run_conservation_analysis", True)):
-        cons_df = compute_conservation(msa_out)
-        cons_df.to_csv(cons_out, index=False)
+        csv_fpath_list = compute_conservation(
+            msa_fname=msa_out.name,
+            analyses_to_run=['sift'],
+            data_folder=data_root,
+            msa_subfolder=str(msa_dir).replace(str(data_root),""),
+            conservation_analysis_subfolder=str(conservation_analysis_dir).replace(str(data_root),""),
+            save_csv=True,
+            ref_seq_name_list=[seq_names[0]],
+            ref_seq_idxs_list=None,
+            ref_seq_list=[seqs[0].replace('-','')],
+            seq_offset=0
+        )
 
 
     return {
@@ -393,10 +393,8 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "seqsearch_path": str(seqsearch_out) if seqsearch_out.exists() else "",
         "struct_scene_path": str(struct_sce_out) if struct_sce_out.exists() else "",
         "plot_path": str(plot_out) if plot_out.exists() else "",
-        "conservation_path": str(cons_out) if not cons_df.empty else "",
-        "conservation_df": cons_df,
+        "conservation_path": csv_fpath_list
     }
-
 
 
 if __name__ == "__main__":

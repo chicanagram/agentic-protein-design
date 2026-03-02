@@ -142,7 +142,7 @@ def heatmap(array, c='viridis', ax=None, cbar_kw={}, cbarlabel="", datamin=None,
 
     return im, cbar, ax
 
-def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None, savefig=None, figtitle=None, width_per_res=4):
+def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None, savefig=None, figtitle=None, width_per_res=4):
     import matplotlib.pyplot as plt
     # Visualize the heatmaps
     seq_len = len(seq)
@@ -150,7 +150,7 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None,
     num_heatmaps = int(np.ceil(seq_len / N_res_per_heatmap_row))
     heatmap_min = np.min(arr)
     heatmap_max = np.max(arr)
-    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aaList) * width_per_res, num_heatmaps * 4))
+    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aa_list) * width_per_res, num_heatmaps * 4))
     for k in range(num_heatmaps):
         if num_heatmaps == 1:
             ax_k = ax
@@ -160,10 +160,10 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None,
         start_idx = k * N_res_per_heatmap_row
         end_idx = min((k + 1) * N_res_per_heatmap_row, seq_len)
         heatmap_k = arr[:, start_idx:end_idx]
-        wt_idxs_k = np.array([[aaList.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq[start_idx:end_idx])])
+        wt_idxs_k = np.array([[aa_list.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq[start_idx:end_idx])])
         im = ax_k.imshow(heatmap_k, cmap="viridis", aspect="auto", vmin=heatmap_min, vmax=heatmap_max)
         ax_k.scatter(wt_idxs_k[:,1], wt_idxs_k[:,0], c='r', s=4)
-        ax_k.set_yticks(range(20), aaList)
+        ax_k.set_yticks(range(20), aa_list)
         ax_k.set_xticks(range(len(residue_num_k)), residue_num_k, fontsize=7, rotation=45)
     fig.colorbar(im, orientation='vertical')
     if figtitle is not None:

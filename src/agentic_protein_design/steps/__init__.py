@@ -6,7 +6,8 @@ pull optional heavy dependencies (for example PyMOL).
 
 __all__ = [
     "analyze_mutants",
-    "binding_pocket",
+    "get_binding_pocket_properties",
+    "analyze_binding_pocket",
     "calculate_ddgstability_mutants",
     "literature_review",
     "design_strategy_planning",

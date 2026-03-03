@@ -20,7 +20,7 @@ import pandas as pd
 from agentic_protein_design.core import resolve_input_path
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import setup_data_root
+from agentic_protein_design.core.paths import setup_data_root as core_setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -38,6 +38,13 @@ BASE_REQUIRED_COLS = [
     "struct_name",
 ]
 STEP_OUTPUT_SUBDIR = "09_binding_pocket_analysis"
+
+
+def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
+    """
+    Resolve the selected data root using this step's default subfolder set.
+    """
+    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 prompt_1 = """
 Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
@@ -882,7 +889,7 @@ def run_binding_pocket_step(
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import (
+    from agentic_protein_design.core.pipeline_utils import (
         load_openai_api_key_from_project_config,
         print_run_summary,
     )

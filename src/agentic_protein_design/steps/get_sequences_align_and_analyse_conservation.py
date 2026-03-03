@@ -398,7 +398,7 @@ def run_alignment_and_conservation(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import print_run_summary
+    from agentic_protein_design.core.pipeline_utils import print_run_summary
 
     user_inputs = default_user_inputs()
     result = run_alignment_and_conservation(user_inputs)

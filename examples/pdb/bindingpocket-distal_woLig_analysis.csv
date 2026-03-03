@@ -1,0 +1,6 @@
+,struct_name,mean_min_dist_to_centroid,mean_dist_to_centroid,mean_dist_backbone_to_centroid,mean_volume,weighted_mean_volume,volume_variance,small_residue_frac,small_residue_frac_weighted,bulky_residue_frac,bulky_residue_frac_weighted,kd_mean,kd_weighted,hw_mean,hw_weighted,charged_fraction,polar_fraction
+0,ET096_S82,8.57,10.247,10.067,99.763,98.634,800.51,0.368,0.386,0.368,0.351,0.876,0.967,-0.466,-0.464,0.132,0.368
+1,CviUPO_S82,8.079,9.906,9.817,105.308,104.435,669.271,0.179,0.193,0.41,0.41,0.41,0.387,-0.546,-0.475,0.128,0.513
+2,DcaUPO_S82,8.201,10.004,10.022,103.8,103.675,672.779,0.15,0.166,0.4,0.412,0.787,0.823,-0.452,-0.465,0.2,0.4
+3,TE314_S82,7.81,9.675,9.553,103.412,101.859,636.189,0.206,0.222,0.382,0.36,1.506,1.49,-0.726,-0.661,0.118,0.353
+4,OA167_S82,8.075,9.74,9.8,100.971,101.141,638.323,0.257,0.255,0.371,0.376,1.074,1.03,-0.671,-0.67,0.114,0.4

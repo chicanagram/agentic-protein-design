@@ -2,6 +2,7 @@
 jupyter
 notebook
 ipywidgets
+tabulate
 
 # Core data/scientific stack
 numpy

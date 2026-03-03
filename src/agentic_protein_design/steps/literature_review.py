@@ -24,7 +24,7 @@ import requests
 from agentic_protein_design.core import apply_optional_text_inputs
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import resolve_project_root, setup_data_root
+from agentic_protein_design.core.paths import resolve_project_root, setup_data_root as core_setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -40,6 +40,13 @@ REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "literature_review"
 REQUEST_TIMEOUT = 30
 STEP_OUTPUT_SUBDIR = "00_literature_review"
+
+
+def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
+    """
+    Resolve the selected data root using this step's default subfolder set.
+    """
+    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 literature_review_agent_prompt = """
 You are an AI research agent supporting an enzyme engineering project.
@@ -1343,7 +1350,7 @@ def run_literature_review_step(
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import (
+    from agentic_protein_design.core.pipeline_utils import (
         load_openai_api_key_from_project_config,
         print_run_summary,
     )

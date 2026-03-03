@@ -70,7 +70,7 @@ def run_structure_prediction(inputs: Dict[str, Any], out_cif_path: Path, out_sum
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import print_run_summary, resolve_repo_root
+    from agentic_protein_design.core.pipeline_utils import print_run_summary, resolve_repo_root
     from project_config.variables import address_dict, subfolders
 
     root_key = "examples"

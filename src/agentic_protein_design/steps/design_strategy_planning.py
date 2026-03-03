@@ -19,7 +19,7 @@ import pandas as pd
 
 from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import setup_data_root
+from agentic_protein_design.core.paths import setup_data_root as core_setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
     persist_thread_message,
@@ -31,6 +31,13 @@ from agentic_protein_design.core.thread_context import build_thread_context_text
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "design_strategy_planning"
 STEP_OUTPUT_SUBDIR = "01_design_strategy_planning"
+
+
+def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
+    """
+    Resolve the selected data root using this step's default subfolder set.
+    """
+    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 design_strategy_base_prompt = """
 You are an expert computational protein engineer and workflow architect.
@@ -750,7 +757,7 @@ def run_design_strategy_planning_step(
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import (
+    from agentic_protein_design.core.pipeline_utils import (
         load_openai_api_key_from_project_config,
         print_run_summary,
     )

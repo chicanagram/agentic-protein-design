@@ -347,7 +347,7 @@ def render_overlay_views(
 
 
 if __name__ == "__main__":
-    from agentic_protein_design.core.ide_runner import print_run_summary, resolve_repo_root
+    from agentic_protein_design.core.pipeline_utils import print_run_summary, resolve_repo_root
     from project_config.variables import address_dict, subfolders
     from tools.openprotein import validate_design_with_boltzgen_kwargs
 

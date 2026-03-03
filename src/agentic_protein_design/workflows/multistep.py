@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from agentic_protein_design.steps.binding_pocket import run_binding_pocket_step
+from agentic_protein_design.steps.analyze_binding_pocket import run_binding_pocket_step
 from agentic_protein_design.steps.literature_review import run_literature_review_step
 
 

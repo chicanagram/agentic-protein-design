@@ -55,10 +55,11 @@ def parse_pdb_atom_line(line: str) -> Dict[str, Optional[object]]:
     return row_dict
 
 
-def pdb_to_dataframe(pdb_path: Path) -> pd.DataFrame:
+def pdb_to_dataframe(pdb_path: Path | str) -> pd.DataFrame:
     """
     Parse ATOM and HETATM records from a PDB file into a DataFrame.
     """
+    pdb_path = Path(pdb_path)
     rows: List[Dict[str, Optional[object]]] = []
 
     with pdb_path.open("r", encoding="utf-8", errors="replace") as f:

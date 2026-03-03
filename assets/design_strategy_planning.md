@@ -1,125 +1,171 @@
 ## Overall strategy (5–8 bullets)
 
-- Use a **backbone-focused mutant design** campaign on **CviUPO** to tune **heme access-channel geometry and heme-proximal positioning** that govern aromatic **mono-oxidation selectivity** vs **sequential over-oxidation/peroxidation**.
-- Build a **sequence/structure prior** (UPO homolog MSA + conservation + structure model) to (i) **protect catalytic/heme-thiolate machinery**, (ii) prioritize **mutable pocket/channel residues**, and (iii) reduce the risk of expression/activity collapse.
-- Run an explicit **binding_pocket_analysis** module to enumerate **pocket + tunnel residues**, then use **multi-substrate docking** (naphthalene, veratryl alcohol; plus probes) to generate **productive-pose geometry metrics** that translate into mutation hypotheses.
-- Execute **3 experimental rounds** with increasing data leverage and decreasing library size:  
-  **Round 1 targeted set** (single + limited double mutants) → **Round 2 SSM** at empirically validated hotspots → **Round 3 small combinatorial** library guided by a **supervised surrogate** trained on Round 2 screening data.
-- Keep experimental burden tractable by using early **PLM zero-shot** + **Pythia stability** filters and by capping Round 1 to ~48 constructs; Round 3 to ~12 constructs.
-- Track the key tradeoff explicitly: **peroxygenation vs peroxidation** using **NBD (peroxygenation proxy)** and **ABTS (peroxidase proxy)** plus **product analytics** (e.g., naphthalene → naphthol vs naphthoquinone) to compute **selectivity_mono_over**.
-- Include **process co-optimization hooks** (controlled H₂O₂ feed; ±ascorbate) as a defined pivot when radical-chain over-oxidation dominates apparent selectivity (supported by UPO literature).
+- Use **backbone-focused mutant design on CviUPO** (primary mode) to tune **access-channel geometry, pocket polarity, and product egress**, which are the dominant levers for **aromatic mono-oxidation selectivity vs overoxidation** in UPOs, while preserving the heme-thiolate catalytic core.
+- Run a **dual selectivity screen** each round to explicitly separate desired **peroxygenation (2e⁻ oxygen transfer)** from undesired **peroxidation/1e⁻ radical chemistry**:
+  - **NBD** as a peroxygenation proxy (positive selection)
+  - **ABTS** as a peroxidation proxy (negative selection)
+  - plus **product selectivity** on aromatics (e.g., **naphthalene: 1‑naphthol vs 1,4‑naphthoquinone** by LC/GC).
+- Front-load **evolutionary priors** (homolog mining + MSA conservation) to (i) protect catalytic/structural residues and (ii) highlight mutable tunnel residues; combine with **structure-derived pocket/channel residue lists**.
+- Build a **structure + binding_pocket_analysis module** (Boltz‑2 structure prediction + pocket/channel mapping + docking) to generate actionable residue sets and pose hypotheses for aromatic substrates (naphthalene, veratryl alcohol, NBD).
+- Execute **3 rounds** with increasing information content and controlled experimental burden:  
+  **Round 1** targeted single mutants (~48) → **Round 2** SSM at validated hotspots + capped combinatorials (~192) → **Round 3** model-guided recombinants (~48).
+- Maintain feasibility with explicit **decision gates** and library caps (**~48 → ~192 → ~48**) compatible with microtiter expression and analytical follow-up.
+- Keep **hybrid/de novo** methods strictly as a **contingency**: if CviUPO backbone mutagenesis cannot satisfy selectivity + activity + stability + H₂O₂ tolerance + expression, trigger **hybrid channel-loop redesign** (RFdiffusion2/BoltzGen) or **backbone switch** to a better-expressing homolog mined in Step 2.
 
 ---
 
 ## Design choices and assumptions (short)
 
-- **Design mode (explicit):** **mutants_of_backbone** (CviUPO). Justification: the scaffold is already functional; the objective is **selectivity reprogramming** (orientation + access control) while preserving **activity, stability, H₂O₂ tolerance, and expression compatibility**. De novo generation (BoltzGen/RFdiffusion2) is kept as a *non-primary fallback* only if the backbone proves non-expressing or structurally unreliable.
-- **Library strategy (explicit):**
-  1) **Targeted mutation set** (Round 1): information-rich singles + a few doubles to probe epistasis.  
-  2) **SSM** (Round 2): saturate 6–8 sites chosen from Round 1 winners + pocket ranking.  
-  3) **Combinatorial library** (Round 3): 4 sites × top 3 AAs/site (~81 in silico), downselected to ~12 constructs for synthesis.
-- Assumes you can provide **CviUPO FASTA locally** and can run a screening stack that yields: expression proxy, NBD activity, ABTS activity, product ratio/selectivity, H₂O₂ tolerance, and a stability readout (Tm/thermal shift).
+- **Design mode chosen:** **backbone-focused mutant design** (explicitly recorded in `state_step1.json`).  
+  **Justification:** user preference is mutants_of_backbone; UPO aromatic selectivity is repeatedly driven by **access-channel/pocket mutations** (literature precedent), and this mode best preserves catalytic machinery and expression/stability risk profile.  
+  **Fallback mode:** **hybrid** (loop/channel redesign or backbone switch) only if the campaign stalls after Round 2/3.
+- **Key assumptions / hard dependencies:**
+  - You can provide a **CviUPO FASTA/accession** (Gate 0 hard stop if missing).
+  - You can measure at least: **NBD rate**, **ABTS rate**, and **one aromatic product ratio** (naphthol vs quinone or analogous overoxidation marker), plus basic **activity/expression** and at least one **stability/H₂O₂ tolerance** readout.
 
 ---
 
 ## Step-by-step execution summary
 
-### Step 1 — Ingest inputs, resolve backbone, define objectives
-- **Tools/models:** sequence DB search/alignment (optional fetch); local FASTA validation.
-- **Inputs:** `INPUT_DATA_JSON.json`, `data/CviUPO.fasta` (or `data/seed.fasta`).
-- **Outputs:**  
-  - `artifacts/seed.fasta`, `artifacts/seed.sequence.txt`  
-  - `artifacts/config.normalized.json` (objectives + assay readouts placeholders)
-- **Gate / failure mode:** if FASTA not found/invalid → provide `data/CviUPO.fasta` and rerun.
+### Step 1 — Initialize project state + hard gate on seed sequence (Gate 0)
+**Goal:** create a single source of truth and prevent downstream work without the actual CviUPO sequence.  
+- **Tools/models:** none (state initialization + file checks).  
+- **Inputs:** `input_data.json`; expected `CviUPO.fasta` (or it writes a stub).  
+- **Outputs:** `workflow_out/state_step1.json`, `workflow_out/CviUPO.fasta` (stub if missing).  
+- **Decision gate (hard):** `seed_sequence_available == True` (sequence length sanity check).  
+- **If fails (fallback):** provide FASTA/accession in `workflow_out/CviUPO.fasta` and rerun.
 
-### Step 2 — Homolog retrieval, MSA, conservation, and motif safety mask
-- **Tools/models:** sequence database search + alignment; conservation analysis.
-- **Inputs:** `artifacts/seed.fasta`
-- **Outputs:**  
-  - `artifacts/upo_msa.a3m`, `artifacts/conservation.csv`  
-  - `artifacts/mutable_positions_initial.csv` (non-protected, moderately conserved positions)  
-  - `artifacts/upo_hits.json` (traceability)
-- **Implementation note:** the workflow encodes a **protected-position mask** (high conservation) to avoid mutating core catalytic machinery; refine later with curated UPO motifs if available.
-- **Fallback:** if <100 homologs → relax thresholds / switch db (UniRef50) per step logic.
+---
 
-### Step 3 — Structure prediction, heme annotation, and binding_pocket_analysis
-- **Tools/models:** Boltz-2 structure prediction; conservation merge; **binding_pocket_analysis** module.
-- **Inputs:** `artifacts/seed.fasta`, `artifacts/conservation.csv`
-- **Outputs:**  
-  - `artifacts/cviupo_model.pdb`, `artifacts/structure_metrics.json`  
-  - `artifacts/active_site_annotation.json` (heme + key residues)  
-  - `artifacts/pocket_map.json`, `artifacts/pocket_positions_ranked.csv`
-- **Gate:** if model confidence low (e.g., pLDDT_mean < 70) → restrict mutations to high-confidence regions and emphasize conservation-safe sites; optionally generate an alternative model (same step, different settings) before proceeding.
-- **Fallback:** if heme annotation fails/missing heme naming → fix heme placement/naming before docking (do not proceed with docking on a heme-less model).
+### Step 2 — Homolog mining + MSA + conservation (UPObase-scale triage)
+**Goal:** derive evolutionary priors to protect essential residues and focus mutagenesis on permissive sites.  
+- **Tools/models:** sequence DB search + alignment; `conservation_analysis`.  
+- **Inputs:** seed FASTA from Step 1.  
+- **Process:**
+  - Mine homologs (e.g., UniRef/UPObase-like diversity), filter for coverage and identity to avoid near-duplicates.
+  - Build MSA (A3M) and compute per-position conservation/entropy.
+  - Create an initial **protected list** (e.g., entropy < 0.3) to be refined after structure mapping.
+- **Outputs:** `homologs.fasta`, `upo_alignment.a3m`, `conservation.json`, `state_step2.json`.  
+- **If search fails/empty (fallback):** proceed with seed-only alignment; mark lower confidence but continue.
 
-### Step 4 — Multi-substrate docking and productive-pose geometry metrics
-- **Tools/models:** Boltz-2 docking/pose assessment.
-- **Inputs:** `artifacts/cviupo_model.pdb`, `artifacts/active_site_annotation.json`
-- **Outputs:**  
-  - `artifacts/docking_pose_table.csv`, `artifacts/docking_pose_summary.csv`  
-  - `artifacts/docking_warning.txt` if key aromatics have zero productive poses
-- **Decision use:** identify which channel/pocket residues likely control (i) aromatic approach distance/angle to the oxo, (ii) binding modes that enable **sequential oxidation**.
-- **Fallback/pivot:** if no productive poses for naphthalene/veratryl alcohol → broaden hypotheses toward channel entrance opening and/or rely more heavily on Round 1 empirical mapping; also consider process levers (controlled H₂O₂ feed) during screening to reduce confounding overoxidation.
+---
 
-### Step 5 — Round 1 targeted mutation set (single + limited double mutants), scoring, selection
-- **Library type:** **targeted_mutation_set**
-- **Planned size:** score ~96 in silico → **select ~48** for synthesis/testing (with a warning gate if <24 pass filters).
-- **Tools/models:** PLM zero-shot scoring; Pythia stability; quick docking proxy.
-- **Inputs:** `artifacts/pocket_positions_ranked.csv`, `artifacts/seed.sequence.txt`, `artifacts/cviupo_model.pdb`
-- **Outputs:**  
-  - `artifacts/round1_all_scored.csv` (full table)  
-  - `artifacts/round1_targeted_variants.csv` (selected set)  
-  - `artifacts/round1_gate_warning.txt` if selection collapses
-- **Selection logic (encoded):** prioritize variants with improved productive-pose proxies across aromatics, while filtering for stability/expression plausibility (Pythia ddG, PLM delta).
-- **Fallback:** if too few pass → relax thresholds (e.g., ddG<3.0), expand candidate positions beyond top 18, or switch to a smarter reduced alphabet at fewer sites.
+### Step 3 — Structure prediction + heme-site sanity + binding_pocket_analysis + docking
+**Goal:** convert sequence priors into structure-mapped, actionable mutation sites (channel/pocket) and substrate pose hypotheses.  
+- **Tools/models:** **Boltz‑2** (structure prediction + docking/pose assessment); **binding_pocket_analysis** module.  
+- **Inputs:** seed FASTA; substrate list (Veratryl alcohol, Naphthalene, NBD; ABTS often skipped for docking due to size/charge).  
+- **Process:**
+  - Predict CviUPO structure (`CviUPO_boltz2.pdb`).
+  - Run `binding_pocket_analysis` to enumerate:
+    - **channel residues**
+    - **pocket residues**
+    - **distal pocket residues**
+    - **heme-proximal cysteine** and other catalytic candidates (to protect)
+  - Dock small aromatic probes where SMILES are available (NBD, naphthalene, veratryl alcohol) to sanity-check access/orientation.
+- **Outputs:** `CviUPO_boltz2.pdb`, `binding_pocket.json`, `docking_results.json`, `state_step3.json`.  
+- **If docking is noisy/uninformative (fallback):** rely on pocket/channel residue lists + conservation to choose SSM sites; do not block the campaign.
 
-### Step 6 — Round 1 results ingestion, parent selection, and Round 2 SSM site plan
-- **Library type:** **SSM** (site-saturation mutagenesis)
-- **Planned size:** **6–8 sites**; practical screening size depends on codon scheme (NNK vs smart alphabets). Start with NNK in the plan, but be ready to reduce degeneracy if burden is high.
-- **Tools/models:** conservation context; PLM/Pythia available for optional prefiltering of SSM amino-acid sets.
-- **Inputs:**  
-  - `artifacts/round1_targeted_variants.csv`  
-  - Wet-lab filled: `artifacts/round1_experimental_results.csv`
-- **Outputs:**  
-  - `artifacts/round2_selected_parents.json` (top ~4 parents)  
-  - `artifacts/round2_ssm_sites.csv` (sites + codon plan)  
-  - `artifacts/round2_pivot_note.txt` if selectivity gains are weak
-- **Gate:** if best `selectivity_mono_over` < ~1.5× after Round 1 → pivot Round 2 toward **P:p ratio control hotspots** (alignment-mapped equivalents of known loop positions) and enforce controlled H₂O₂ dosing during screens to decouple intrinsic selectivity from peroxide-driven artifacts.
+---
 
-### Step 7 — Round 2 results → surrogate training → Round 3 small combinatorial design + ddG_bind sanity check
-- **Library type:** **combinatorial_library** (small, model-guided)
-- **Planned size:** generate **~81** combinations in silico (4 sites × 3 AAs) → filter → **simulate top ~24** with ddG_bind if available → **select ~12** constructs for synthesis/testing.
-- **Tools/models:** supervised surrogate (PLM/OHE embeddings); PLM zero-shot optional; Pythia stability; OpenMM/YASARA ddG_bind (optional sanity check).
-- **Inputs:**  
-  - Wet-lab filled: `artifacts/round2_ssm_results.csv`  
-  - `artifacts/seed.fasta`, `artifacts/seed.sequence.txt`, `artifacts/cviupo_model.pdb`
-- **Outputs:**  
-  - `artifacts/round3_combinatorial_ranked_top200.csv`  
-  - `artifacts/round3_combinatorial_selected.csv` (final ~12)  
-  - `artifacts/round3_ddgbind_fallback.txt` if ddG_bind fails/unavailable
-- **Fallback:** if ddG_bind is unstable or too sparse → select by surrogate acquisition + stability filters only (explicitly encoded).
+### Step 4 — Round 1: targeted single-mutant library (~48) scored by PLM + stability
+**Goal:** maximize information gain per variant by probing a small set of channel/pocket positions with conservative chemistry.  
+- **Library strategy:** **targeted_mutation_set** (single mutants).  
+- **Tools/models:** **PLM zero-shot scoring** (ΔlogP plausibility), **Pythia** stability prediction (ΔΔG).  
+- **Inputs:** WT sequence; `binding_pocket.json`; `conservation.json`.  
+- **Design logic:**
+  - Start from structure-derived **channel/pocket residues**; exclude highly conserved positions (and later exclude catalytic/heme-binding residues).
+  - Cap to **≤8 positions** for Round 1 feasibility.
+  - Use a **restricted AA set** initially (sterics/polarity tuning without extreme charges) to reduce expression/stability failures.
+  - Filter out strongly destabilizing variants (e.g., Pythia ΔΔG > ~3 kcal/mol).
+  - Select **~48 variants** (96-well friendly with WT + controls).
+- **Outputs:** `round1_targeted_variants.json`, `state_step4.json` (includes Round 1 gate definition).  
+- **If pocket mapping is empty (fallback):** seed known CviUPO channel hotspots (e.g., **F88/T158 region**) and proceed with the same scoring/filters.
 
-### Step 8 — Cross-round decision gates, reporting, and failure-mode pivots
-- **Tools/models:** conservation analysis (contextual); reporting logic.
-- **Inputs:** `artifacts/round1_experimental_results.csv` and/or `artifacts/round2_ssm_results.csv` (if present)
-- **Outputs:** `artifacts/decision_gates_report.json` with:
-  - Gate summaries (coverage, best selectivity, best H₂O₂ tolerance)
-  - Pivot triggers (low coverage, no selectivity, few hits)
-  - Recommended next actions (UPO-specific process levers)
-- **Core progression criteria (edit to match assay scaling):**
-  - **After Round 1:** proceed if ≥1 variant reaches ~**1.5×** selectivity with acceptable activity and H₂O₂ tolerance; otherwise pivot to P:p hotspots + process controls.
-  - **After Round 2:** proceed if multiple hits reach **≥2×** selectivity and improved tolerance; otherwise refine sites and reduce degeneracy (smart alphabets), add second-shell/channel-entrance residues.
-  - **After Round 3:** target **≥3×** selectivity with stability floor (e.g., Tm ≥45 °C) and no catastrophic activity loss.
+**Round 1 experimental readouts (expected):**
+- NBD rate (↑ desired)
+- ABTS rate (↓ desired at fixed NBD)
+- Naphthalene product ratio (↑ 1‑naphthol, ↓ quinone)
+- Expression proxy (e.g., activity in lysate/supernatant) + basic stability/H₂O₂ tolerance screen
+
+---
+
+### Step 5 — Round 1 results ingestion + hotspot selection for Round 2 (Gate 1)
+**Goal:** make Round 2 contingent on real selectivity data; choose the smallest set of positions that actually move the objective.  
+- **Library strategy:** decision step (no library built here).  
+- **Tools/models:** optional **supervised surrogate** scaffolding (OHE/PLM embeddings) for later; primarily a scoring/triage gate.  
+- **Inputs:** `round1_experimental_results.csv` (user-provided; expected columns include mutations, NBD_rate, ABTS_rate, naphthol_fraction, quinone_fraction, activity, Tm, H₂O₂_tolerance, expression).  
+- **Decision gate (Gate 1):**
+  - Identify **3–4 hotspot positions** from top-performing single mutants that improve:
+    - **peroxygenation:peroxidation** (NBD↑ and/or ABTS↓)
+    - and/or **mono-oxidation selectivity** (naphthol↑ vs quinone↓)
+  - while maintaining minimum thresholds for activity/expression/stability/H₂O₂ tolerance.
+- **Outputs:** `state_step5.json` with `round2_hotspots.selected_positions_for_ssm`.  
+- **If Round 1 data missing (fallback):** advance conservatively using the Round 1 site list (top 4) to avoid stalling.
+
+---
+
+### Step 6 — Round 2: SSM at hotspots + capped combinatorial set with stability + optional ddG_bind triage (~192) (Gate 2)
+**Goal:** (i) fully explore amino-acid identity at validated positions (SSM) and (ii) test epistasis/product-release effects via limited recombination.  
+- **Library strategy:** **site_saturation_mutagenesis (SSM)** + **combinatorial_library** (capped).  
+- **Tools/models:** **Pythia** stability; optional **OpenMM/YASARA ddG_bind** (probe ligand) for combinatorial prioritization.  
+- **Inputs:** WT sequence; hotspot positions from Step 5; structure PDB from Step 3 (if available).  
+- **Design logic:**
+  - **SSM** at up to **4 hotspots** (20 AAs), but **downselect** with stability filter to keep total manageable.
+  - Build a **capped combinatorial** set:
+    - pairwise combinations of top single mutants
+    - a small number of triples (randomized but position-deduplicated)
+  - Optional ddG_bind triage against a representative aromatic probe (e.g., **naphthalene**) to prioritize variants likely to maintain productive binding/orientation (used as a *ranking aid*, not a hard gate).
+  - Target total size **~192 variants** (≈2×96 plates).
+- **Outputs:** `round2_library.json`, `state_step6.json` (Round 2 composition, filters, and Gate 2 criteria).  
+- **If ddG_bind is too slow/unreliable (fallback):** skip ddG_bind and rank using stability + empirical single-mutant performance + PLM plausibility.
+
+**Round 2 experimental readouts (expected):**
+- Same as Round 1, but add stronger emphasis on:
+  - **overoxidation suppression** (product ratio time-course if possible)
+  - **H₂O₂ tolerance** (residual activity after peroxide challenge)
+  - stability (Tm or thermal/solvent half-life) if feasible
+
+---
+
+### Step 7 — Round 3: model-guided recombinant panel (~48) balancing selectivity, activity, stability, H₂O₂ tolerance (Gate 3)
+**Goal:** produce a small, high-value final panel by exploiting accumulated labeled data and/or physics/priors.  
+- **Library strategy:** **targeted recombinant panel** (2–4 mutations) derived from Round 2 winners.  
+- **Tools/models:** supervised surrogate (OHE/PLM embeddings) **if enough labeled data**; otherwise **PLM + Pythia + optional ddG_bind** ranking.  
+- **Inputs:** `round2_experimental_results.csv` (if available), WT sequence, structure PDB (optional).  
+- **Selection logic:**
+  - Generate many candidate recombinants from top Round 2 performers.
+  - Filter by:
+    - stability (Pythia ΔΔG threshold)
+    - PLM plausibility (avoid low-likelihood sequences)
+    - optional ddG_bind (avoid obvious binding collapse)
+  - **If ≥ ~30 labeled Round 2 variants:** train a surrogate on the composite objective (selectivity + activity + stability + H₂O₂ tolerance + expression) and select top ~48 by predicted score.
+  - **Else:** rank by priors (ddG_bind, stability, PLM) and select top ~48.
+- **Outputs:** `round3_final_panel.json`, `state_step7.json` (includes finalization criteria).  
+
+**Gate 3 (finalize leads):**
+- Select **3–5 leads** that meet:
+  - improved aromatic mono-oxidation selectivity (e.g., naphthol/quinone ↑)
+  - reduced peroxidation signature (ABTS ↓ at fixed NBD)
+  - maintained catalytic activity and expression
+  - acceptable or improved stability and **H₂O₂ tolerance**
+  - compatibility with the chosen expression host/workflow
+
+---
+
+### Step 8 — Optional contingency: hybrid channel-loop redesign or backbone switch (only if triggered)
+**Goal:** unblock the program if backbone mutagenesis cannot reach the objective frontier.  
+- **Design mode:** **hybrid** (contingency only).  
+- **Tools/models:** **RFdiffusion2/BoltzGen** for loop/channel redesign; **PLM** + **Pythia** for filtering.  
+- **Trigger condition:** user sets `state["user_trigger_hybrid_fallback"]=true` after reviewing Round 2/3 outcomes (e.g., no variants beat WT on selectivity while maintaining activity/stability/expression).  
+- **Inputs:** structure PDB; defined loop regions (from pocket/channel analysis).  
+- **Outputs:** `hybrid_redesign_candidates.json` (e.g., top 24 designs), `state_step8.json`.  
+- **Fallback:** if no reliable structure/loop definition exists, switch strategy to **backbone selection**: choose a better-expressing homolog from Step 2 and restart Round 1 on that backbone.
 
 ---
 
 ## Decision gates and immediate next actions (short)
 
-- **Immediate next actions to execute Step 1–4 cleanly:**
-  1) Provide `data/CviUPO.fasta` (exact sequence used experimentally).  
-  2) Confirm **expression host** and secretion format (important for interpreting “expression proxy” and for library feasibility).  
-  3) Define how **selectivity_mono_over** is computed for naphthalene/veratryl alcohol (HPLC/GC product ratio; include overoxidation products like naphthoquinone).
-- **Operational controls to run alongside all rounds (high leverage for UPOs):**
-  - Screen under **controlled H₂O₂ feed** (avoid bolus) to reduce inactivation and radical-chain artifacts.
-  - Screen **±ascorbate (or another radical scavenger)** to distinguish intrinsically less-peroxidative variants from process-suppressed outcomes.
-  - Track **NBD vs ABTS** concurrently to quantify the **peroxygenation/peroxidation balance** while maintaining catalytic activity and stability constraints.
+- **Gate 0 (now, hard):** Provide **CviUPO FASTA/accession** (must pass Step 1). Confirm **expression host** and confirm you can run **NBD + ABTS** plus at least one **aromatic product ratio** assay (naphthalene preferred).
+- **Gate 1 (post-Round 1):** Advance positions/variants that improve **NBD/ABTS** and/or **naphthol/quinone** without major losses in activity/expression/stability/H₂O₂ tolerance; select **3–4 hotspots** for Round 2 SSM.
+- **Gate 2 (post-Round 2):** Advance variants that improve **mono-oxidation selectivity** and suppress overoxidation/peroxidation while meeting stability + H₂O₂ tolerance + expression constraints; decide whether enough labeled data exist to justify a surrogate for Round 3.
+- **Gate 3 (post-Round 3):** Finalize **3–5 leads**. If none meet the full objective, trigger **Step 8 hybrid fallback** (loop/channel redesign or backbone switch).

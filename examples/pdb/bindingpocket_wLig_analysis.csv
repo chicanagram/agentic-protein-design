@@ -1,0 +1,6 @@
+,struct_name,num_pocket_res_ali,num_pocket_res<6,reactive_center_distance,median_dist_res_to_ligand_reactive_center,median_min_dist_res_to_ligand
+0,ET096_S82,38,12,7.095,7.921,4.33
+1,CviUPO_S82,39,13,7.72,6.683,3.575
+2,DcaUPO_S82,40,15,4.931,7.314,4.669
+3,TE314_S82,34,12,4.084,8.205,4.489
+4,OA167_S82,35,10,4.554,7.354,3.601

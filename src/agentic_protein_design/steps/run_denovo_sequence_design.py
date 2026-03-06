@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from unittest import result
 
 from agentic_protein_design.core import resolve_input_path
+from agentic_protein_design.core.pipeline_utils import safe_read_csv
 from tools.openprotein import (
     assert_valid_design_with_boltzgen_kwargs,
     boltzgen_yaml_to_design_kwargs,
@@ -211,8 +212,6 @@ def run_or_load_postdesign_pipeline(
     Returns:
         Dict with status, artifact paths, and parsed summary metrics.
     """
-    import pandas as pd
-
     postdesign_out_dir = (out_dir / "postdesign").resolve()
     postdesign_out_dir.mkdir(parents=True, exist_ok=True)
     tag = str(user_inputs.get("output_tag", "")).strip()
@@ -249,13 +248,13 @@ def run_or_load_postdesign_pipeline(
         refold_summaries_df = postdesign.get("refold_summaries_df")
 
     if mpnn_df is None and paths["mpnn_csv_path"].exists():
-        mpnn_df = pd.read_csv(paths["mpnn_csv_path"])
+        mpnn_df = safe_read_csv(paths["mpnn_csv_path"])
     if metrics_df is None and paths["metrics_csv_path"].exists():
-        metrics_df = pd.read_csv(paths["metrics_csv_path"])
+        metrics_df = safe_read_csv(paths["metrics_csv_path"])
         if {"structure_idx", "sequence_idx"}.issubset(metrics_df.columns):
             metrics_df = metrics_df.set_index(["structure_idx", "sequence_idx"])
     if refold_summaries_df is None and paths["refold_summary_csv_path"].exists():
-        refold_summaries_df = pd.read_csv(paths["refold_summary_csv_path"])
+        refold_summaries_df = safe_read_csv(paths["refold_summary_csv_path"])
 
     return {
         "postdesign": postdesign,

@@ -17,27 +17,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import setup_data_root as core_setup_data_root
+from agentic_protein_design.core.paths import get_step_processed_dir as core_get_step_processed_dir, setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
-    persist_thread_message,
+    init_step_thread,
+    persist_step_thread_update,
     save_text_output,
     save_text_output_with_assets_copy,
     summarize_compact_text,
 )
-from agentic_protein_design.core.thread_context import build_thread_context_text
+from agentic_protein_design.core.thread_context import load_optional_thread_context
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "design_strategy_planning"
 STEP_OUTPUT_SUBDIR = "01_design_strategy_planning"
-
-
-def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
-    """
-    Resolve the selected data root using this step's default subfolder set.
-    """
-    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 design_strategy_base_prompt = """
 You are an expert computational protein engineer and workflow architect.
@@ -182,28 +175,17 @@ def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
     Return/create processed output directory for this notebook step.
     """
-    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
-    step_dir.mkdir(parents=True, exist_ok=True)
-    return step_dir
+    return core_get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
 
 
 def init_thread(root_key: str, existing_thread_key: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    thread_ref = str(existing_thread_key or "").strip()
-    if thread_ref:
-        if thread_ref.endswith(".json"):
-            thread_ref = thread_ref[:-5]
-        m = re.match(r"^(?P<tag>[A-Za-z0-9_]+)_(?P<tid>[0-9a-fA-F]{32})$", thread_ref)
-        resolved_thread_id = m.group("tid").lower() if m else thread_ref
-        thread = load_thread(root_key, resolved_thread_id, llm_process_tag=LLM_PROCESS_TAG)
-    else:
-        thread = create_thread(
-            root_key=root_key,
-            title="Design strategy planning",
-            metadata={"notebook": "01_design_strategy_planning"},
-            llm_process_tag=LLM_PROCESS_TAG,
-        )
-    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
-    return thread, preview
+    return init_step_thread(
+        root_key=root_key,
+        llm_process_tag=LLM_PROCESS_TAG,
+        title="Design strategy planning",
+        source_notebook="01_design_strategy_planning",
+        existing_thread_key=existing_thread_key,
+    )
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -347,9 +329,8 @@ def load_literature_context(literature_context_thread_key: Optional[str], max_ch
     Returns:
         Context bundle dictionary containing assembled text and diagnostics.
     """
-    return build_thread_context_text(
+    return load_optional_thread_context(
         literature_context_thread_key,
-        include_referenced_files=True,
         max_chars_per_file=max_chars_per_file,
         on_missing="warn",
     )
@@ -661,21 +642,22 @@ def persist_thread_update(
         Updated thread timestamp string.
     """
     prompt_text = build_design_strategy_prompt(user_inputs)
-    return persist_thread_message(
+    metadata = {
+        "user_inputs": user_inputs,
+        "design_plan_path": design_plan_path,
+        "design_plan_summary": summarize_plan_text(design_plan_text),
+        "workflow_steps_path": workflow_steps_path,
+        "workflow_steps_count": 0 if not workflow_steps_json else len(workflow_steps_json),
+        "literature_context_thread_key": literature_context_thread_key,
+        "llm_model": str(user_inputs.get("llm_model", "")),
+    }
+    return persist_step_thread_update(
         root_key=root_key,
         thread_id=thread_id,
         llm_process_tag=LLM_PROCESS_TAG,
         source_notebook="01_design_strategy_planning",
         content=prompt_text,
-        metadata={
-            "user_inputs": user_inputs,
-            "design_plan_path": str(design_plan_path),
-            "design_plan_summary": summarize_plan_text(design_plan_text),
-            "workflow_steps_path": "" if workflow_steps_path is None else str(workflow_steps_path),
-            "workflow_steps_count": 0 if not workflow_steps_json else len(workflow_steps_json),
-            "literature_context_thread_key": "" if not literature_context_thread_key else str(literature_context_thread_key),
-            "llm_model": str(user_inputs.get("llm_model", "")),
-        },
+        metadata=metadata,
     )
 
 

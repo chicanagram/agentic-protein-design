@@ -1,3 +1,9 @@
+import os
+import platform
+opsys = platform.system()
+import numpy as np
+from project_config.variables import aaList
+
 def sort_list(lst):
     lst.sort()
     return lst
@@ -97,3 +103,20 @@ def combine_csv_files(log_fpath_list, output_dir, output_fname, remove_combined_
         for log_fpath in log_fpath_list:
             os.remove(log_fpath)
     return txt_all
+
+
+def flatten_2D_arr(arr2D, seq, MT_aa=aaList):
+    """
+    arr2D is a 2-dimensional matrix
+        axis 0 (vertical): 20 amino acids along axis 0
+        axis 1 (horizontal): sequence positions
+    """
+    if not isinstance(arr2D, np.ndarray):
+        WT_res = [seq[pos-1]+str(pos) for pos in arr2D.columns.tolist()]
+        arr2D = arr2D.to_numpy()
+    else:
+        WT_res = [seq[pos - 1] + str(pos) for pos in list(range(1, arr2D.shape[1] + 1))]
+
+    arr1D = arr2D.flatten('F')
+    mutations = [wt + mt for wt in WT_res for mt in MT_aa]
+    return arr1D, mutations

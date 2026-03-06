@@ -59,6 +59,31 @@ def setup_data_root(
     return data_root, resolved
 
 
+def setup_step_data_root(
+    root_key: str,
+    default_required_subfolders: Sequence[str],
+    required_subfolders: Sequence[str] | None = None,
+    project_root: Path | None = None,
+) -> tuple[Path, Dict[str, Path]]:
+    """
+    Resolve a step data root using a step's default subfolder set unless overridden.
+    """
+    return setup_data_root(
+        root_key=root_key,
+        required_subfolders=required_subfolders or default_required_subfolders,
+        project_root=project_root,
+    )
+
+
+def get_step_processed_dir(resolved_dirs: Dict[str, Path], step_output_subdir: str) -> Path:
+    """
+    Create and return a step-specific processed output directory.
+    """
+    step_dir = (resolved_dirs["processed"] / str(step_output_subdir).strip()).resolve()
+    step_dir.mkdir(parents=True, exist_ok=True)
+    return step_dir
+
+
 def join_data_path(data_root: Path, subdir: str, data_subfolder: str, filename: str) -> Path:
     """
     Join a selected data root with a standard subdir, optional nested subfolder, and filename.

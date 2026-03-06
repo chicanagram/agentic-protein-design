@@ -316,3 +316,50 @@ def build_thread_context_text(
         ]
     ).strip()
     return {"context_text": context_text, "context_bundle": bundle, "context_error": ""}
+
+
+def filter_context_text_by_keyword(context_text: str, keyword: str, *, fallback_chars: int = 12000) -> str:
+    """
+    Filter a context block down to paragraphs/lines containing a keyword.
+    """
+    text = str(context_text or "").strip()
+    if not text:
+        return ""
+    needle = str(keyword or "").strip()
+    if not needle:
+        return text
+
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    matches = [block for block in blocks if needle.lower() in block.lower()]
+    if matches:
+        return "\n\n".join(matches)
+
+    lines = [line for line in text.splitlines() if needle.lower() in line.lower()]
+    if lines:
+        return "\n".join(lines)
+    return text[:fallback_chars]
+
+
+def load_optional_thread_context(
+    thread_ref: Optional[str],
+    *,
+    include_referenced_files: bool = True,
+    max_chars_per_file: int = 20000,
+    on_missing: str = "warn",
+    filter_keyword: str = "",
+) -> Dict[str, Any]:
+    """
+    Load optional prior-thread context and optionally add a keyword-filtered view.
+    """
+    result = build_thread_context_text(
+        thread_ref,
+        include_referenced_files=include_referenced_files,
+        max_chars_per_file=max_chars_per_file,
+        on_missing=on_missing,
+    )
+    if str(filter_keyword or "").strip():
+        result["filtered_context_text"] = filter_context_text_by_keyword(
+            str(result.get("context_text", "")),
+            str(filter_keyword),
+        )
+    return result

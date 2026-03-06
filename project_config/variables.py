@@ -83,9 +83,10 @@ mapping_rev = {
     'VAL': 'V'
 }
 
-aaList = list("ACDEFGHIKLMNPQRSTVWY")
-aaList_with_X = list("ACDEFGHIKLMNPQRSTVWYX")
-# aaList = ['A','H','Y','R','T','K','M','D','N','C','Q','E','G','I','L','F','P','S','W','V']
+# aaList = list("ACDEFGHIKLMNPQRSTVWY")
+# aaList_with_X = list("ACDEFGHIKLMNPQRSTVWYX")
+aaList = list('ARNDCQEGHILKMFPSTWYV')
+aaList_with_X = list('ARNDCQEGHILKMFPSTWYVX')
 aa2idx = {aa: i for i, aa in enumerate(aaList)}
 
 element_mapping = {

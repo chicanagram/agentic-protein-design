@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
-from agentic_protein_design.core.chat_store import append_message, load_thread
+from agentic_protein_design.core.chat_store import append_message, create_thread, list_threads, load_thread
 
 
 def resolve_repo_root(module_file: str) -> Path:
@@ -87,6 +88,86 @@ def table_records(df: pd.DataFrame, max_rows: int) -> List[Dict[str, Any]]:
     subset = df.head(max_rows).copy()
     subset = subset.where(pd.notnull(subset), None)
     return subset.to_dict(orient="records")
+
+
+def clean_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove import-artifact columns such as pandas `Unnamed:` CSV index columns.
+    """
+    clean = df.copy()
+    unnamed = [c for c in clean.columns if str(c).startswith("Unnamed:")]
+    if unnamed:
+        clean = clean.drop(columns=unnamed)
+    return clean
+
+
+def safe_read_csv(path: Path) -> pd.DataFrame:
+    """
+    Read a CSV, normalize import-artifact columns, and reject empty files.
+    """
+    df = pd.read_csv(path)
+    if df.empty:
+        raise ValueError(f"CSV is empty: {path}")
+    return clean_table(df)
+
+
+def coerce_jsonable(value: Any) -> Any:
+    """
+    Recursively convert pandas/numpy/scalar containers into JSON-safe Python objects.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {str(k): coerce_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [coerce_jsonable(v) for v in value]
+    if hasattr(value, "item") and callable(getattr(value, "item")):
+        try:
+            return coerce_jsonable(value.item())
+        except Exception:
+            pass
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return value
+
+
+def select_existing_columns(df: pd.DataFrame, preferred: List[str]) -> List[str]:
+    """
+    Return the subset of preferred columns present in a DataFrame.
+    """
+    return [col for col in preferred if col in df.columns]
+
+
+def init_step_thread(
+    *,
+    root_key: str,
+    llm_process_tag: str,
+    title: str,
+    source_notebook: str,
+    existing_thread_key: Optional[str] = None,
+) -> Tuple[Dict[str, Any], pd.DataFrame]:
+    """
+    Load an existing step thread or create a new one, plus a compact preview table.
+    """
+    thread_ref = str(existing_thread_key or "").strip()
+    if thread_ref:
+        if thread_ref.endswith(".json"):
+            thread_ref = thread_ref[:-5]
+        match = re.match(r"^(?P<tag>[A-Za-z0-9_]+)_(?P<tid>[0-9a-fA-F]{32})$", thread_ref)
+        resolved_thread_id = match.group("tid").lower() if match else thread_ref
+        thread = load_thread(root_key, resolved_thread_id, llm_process_tag=llm_process_tag)
+    else:
+        thread = create_thread(
+            root_key=root_key,
+            title=title,
+            metadata={"notebook": source_notebook},
+            llm_process_tag=llm_process_tag,
+        )
+    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=llm_process_tag)[:5])
+    return thread, preview
 
 
 def summarize_compact_text(text: str, max_chars: int = 1000) -> str:
@@ -175,6 +256,28 @@ def save_text_output_with_assets_copy(
     return out_path
 
 
+def normalize_metadata_value(value: Any) -> Any:
+    """
+    Normalize metadata payload values for thread persistence.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): normalize_metadata_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [normalize_metadata_value(v) for v in value]
+    return coerce_jsonable(value)
+
+
+def normalize_thread_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize a metadata dictionary for safe JSON persistence.
+    """
+    return {str(k): normalize_metadata_value(v) for k, v in (metadata or {}).items()}
+
+
 def persist_thread_message(
     *,
     root_key: str,
@@ -208,3 +311,25 @@ def persist_thread_message(
         metadata=metadata,
     )
     return load_thread(root_key, thread_id, llm_process_tag=llm_process_tag)["updated_at"]
+
+
+def persist_step_thread_update(
+    *,
+    root_key: str,
+    thread_id: str,
+    llm_process_tag: str,
+    source_notebook: str,
+    content: str,
+    metadata: Dict[str, Any],
+) -> str:
+    """
+    Persist a normalized step-update message into thread history.
+    """
+    return persist_thread_message(
+        root_key=root_key,
+        thread_id=thread_id,
+        llm_process_tag=llm_process_tag,
+        source_notebook=source_notebook,
+        content=content,
+        metadata=normalize_thread_metadata(metadata),
+    )

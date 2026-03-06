@@ -16,6 +16,7 @@ from typing import Any, Dict, Iterable
 import pandas as pd
 
 from agentic_protein_design.core.paths import setup_data_root
+from agentic_protein_design.core.pipeline_utils import safe_read_csv
 
 
 REQUIRED_SUBFOLDERS = ["pdb", "msa", "sce", "processed"]
@@ -90,7 +91,7 @@ def _load_pocket_residues_from_csv(csv_path: Path) -> Dict[str, list[int]]:
     Returns:
         Dict mapping structure name to list of residue numbers.
     """
-    df = pd.read_csv(csv_path)
+    df = safe_read_csv(csv_path)
     if not {"struct_name", "res_num"}.issubset(df.columns):
         raise ValueError(f"Pocket residue CSV must contain 'struct_name' and 'res_num' columns: {csv_path}")
     grouped = (
@@ -176,7 +177,7 @@ def run_binding_pocket_property_extraction(inputs: Dict[str, Any]) -> Dict[str, 
             "ligand_analysis_path": str(ligand_csv) if ligand_csv.exists() else "",
             "distal_analysis_path": str(distal_csv) if distal_csv.exists() else "",
             "proximal_analysis_path": str(proximal_csv) if proximal_csv.exists() else "",
-            "combined_analysis": pd.read_csv(combined_csv) if combined_csv.exists() else pd.DataFrame(),
+            "combined_analysis": safe_read_csv(combined_csv) if combined_csv.exists() else pd.DataFrame(),
         }
 
     pocket_residues_source = str(inputs.get("pocket_residues_source", "csv")).strip().lower()

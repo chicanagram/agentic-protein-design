@@ -142,29 +142,49 @@ def heatmap(array, c='viridis', ax=None, cbar_kw={}, cbarlabel="", datamin=None,
 
     return im, cbar, ax
 
-def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None, savefig=None, figtitle=None, width_per_res=4):
+def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None, savefig=None, figtitle=None, c='bwr'):
     import matplotlib.pyplot as plt
-    # Visualize the heatmaps
-    seq_len = len(seq)
-    residue_num = list(np.arange(1, seq_len + 1))
-    num_heatmaps = int(np.ceil(seq_len / N_res_per_heatmap_row))
+    import matplotlib.colors as colors
+
+    # convert arr to numpy
+    num_pos = len(seq)
+    pos_list = list(np.arange(1, len(seq) + 1))
+    if not isinstance(arr, np.ndarray):
+        pos_list = arr.columns.tolist()
+        num_pos = len(pos_list)
+        arr = arr.to_numpy()
+
+    # obtain heatmap parameters
+    num_heatmaps = int(np.ceil(num_pos / N_res_per_heatmap_row))
     heatmap_min = np.min(arr)
     heatmap_max = np.max(arr)
-    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aa_list) * width_per_res, num_heatmaps * 4))
+    # define norm for colormap
+    if c == 'bwr':
+        norm = colors.TwoSlopeNorm(vmin=heatmap_min, vcenter=0, vmax=heatmap_max)
+    else:
+        norm = None
+    # define color for NaN elements
+    cmap = getattr(plt.cm, c)
+    cmap.set_bad('lime')
+    # plot heatmap
+    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aa_list) * 4, num_heatmaps * 4))
     for k in range(num_heatmaps):
         if num_heatmaps == 1:
             ax_k = ax
         else:
             ax_k = ax[k]
-        residue_num_k = residue_num[k * N_res_per_heatmap_row:min((k + 1) * N_res_per_heatmap_row, seq_len)]
+        pos_list_k = pos_list[k * N_res_per_heatmap_row:min((k + 1) * N_res_per_heatmap_row, num_pos)]
+        seq_k = [seq[pos-1] for pos in pos_list_k]
         start_idx = k * N_res_per_heatmap_row
-        end_idx = min((k + 1) * N_res_per_heatmap_row, seq_len)
+        end_idx = min((k + 1) * N_res_per_heatmap_row, num_pos)
         heatmap_k = arr[:, start_idx:end_idx]
-        wt_idxs_k = np.array([[aa_list.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq[start_idx:end_idx])])
-        im = ax_k.imshow(heatmap_k, cmap="viridis", aspect="auto", vmin=heatmap_min, vmax=heatmap_max)
+        wt_idxs_k = np.array([[aa_list.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq_k)])
+        im = ax_k.imshow(heatmap_k, norm=norm, cmap=cmap, aspect="auto")
+        # annotate WT amino acid with red dot
         ax_k.scatter(wt_idxs_k[:,1], wt_idxs_k[:,0], c='r', s=4)
-        ax_k.set_yticks(range(20), aa_list)
-        ax_k.set_xticks(range(len(residue_num_k)), residue_num_k, fontsize=7, rotation=45)
+        ax_k.set_yticks(range(len(aa_list)), aa_list)
+        ax_k.set_xticks(range(len(pos_list_k)), pos_list_k, fontsize=7, rotation=45)
+
     fig.colorbar(im, orientation='vertical')
     if figtitle is not None:
         if seq_name is not None:
@@ -173,3 +193,4 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None
     if savefig is not None:
         plt.savefig(savefig, dpi=300, bbox_inches='tight')
     plt.show()
+    plt.close()

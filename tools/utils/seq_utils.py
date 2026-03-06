@@ -17,8 +17,27 @@ import subprocess
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio import Align
+from typing import List, Sequence, Union
 opsys = platform.system()
-from project_config.variables import mapping
+from project_config.variables import mapping, aaList_with_X, aaList
+
+
+def normalize_sequence(sequence: str) -> str:
+    """
+    Upper-case a protein sequence and replace unsupported residues with `X`.
+    """
+    cleaned = "".join(str(sequence or "").upper().split())
+    return "".join(res if res in set(aaList_with_X) else "X" for res in cleaned)
+
+
+def normalize_sequences(sequences: Union[str, Sequence[str]]) -> List[str]:
+    """
+    Normalize one or more protein sequences into a clean non-empty list.
+    """
+    if isinstance(sequences, str):
+        sequences = [sequences]
+    normalized = [normalize_sequence(seq) for seq in sequences]
+    return [seq for seq in normalized if seq]
 
 
 def get_mutstr(mutation):

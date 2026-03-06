@@ -18,17 +18,19 @@ import re
 import pandas as pd
 
 from agentic_protein_design.core import resolve_input_path
-from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import setup_data_root as core_setup_data_root
+from agentic_protein_design.core.paths import get_step_processed_dir as core_get_step_processed_dir, setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
-    persist_thread_message,
+    init_step_thread,
+    persist_step_thread_update,
+    safe_read_csv,
     save_text_output,
     save_text_output_with_assets_copy,
     summarize_compact_text,
     table_records,
 )
+from agentic_protein_design.core.thread_context import load_optional_thread_context
 from project_config.variables import subfolders
 
 
@@ -38,13 +40,6 @@ BASE_REQUIRED_COLS = [
     "struct_name",
 ]
 STEP_OUTPUT_SUBDIR = "09_binding_pocket_analysis"
-
-
-def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
-    """
-    Resolve the selected data root using this step's default subfolder set.
-    """
-    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 prompt_1 = """
 Analyse the uploaded inputs for a set of proteins to interpret how binding-pocket structure relates to catalytic activity and selectivity. 
@@ -209,29 +204,17 @@ def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
     Return/create processed output directory for this notebook step.
     """
-    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
-    step_dir.mkdir(parents=True, exist_ok=True)
-    return step_dir
+    return core_get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
 
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    thread_ref = str(existing_thread_id or "").strip()
-    if thread_ref:
-        # Allow passing '{tag}_{thread_id}' key from chats filename stem.
-        if thread_ref.endswith(".json"):
-            thread_ref = thread_ref[:-5]
-        m = re.match(r"^(?P<tag>[A-Za-z0-9_]+)_(?P<tid>[0-9a-fA-F]{32})$", thread_ref)
-        resolved_thread_id = m.group("tid").lower() if m else thread_ref
-        thread = load_thread(root_key, resolved_thread_id, llm_process_tag=LLM_PROCESS_TAG)
-    else:
-        thread = create_thread(
-            root_key=root_key,
-            title="UPO binding pocket analysis",
-            metadata={"notebook": "09_binding_pocket_analysis"},
-            llm_process_tag=LLM_PROCESS_TAG,
-        )
-    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
-    return thread, preview
+    return init_step_thread(
+        root_key=root_key,
+        llm_process_tag=LLM_PROCESS_TAG,
+        title="UPO binding pocket analysis",
+        source_notebook="09_binding_pocket_analysis",
+        existing_thread_key=existing_thread_id,
+    )
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -302,13 +285,14 @@ def load_input_tables(
     if not alignment_csv.exists():
         raise FileNotFoundError(f"Missing alignment file: {alignment_csv}")
 
-    pocket = pd.read_csv(binding_csv)
-    ali = pd.read_csv(alignment_csv)
+    # Load the core analysis tables with consistent CSV normalization.
+    pocket = safe_read_csv(binding_csv)
+    ali = safe_read_csv(alignment_csv)
     reaction_df: Optional[pd.DataFrame] = None
     if reaction_data_csv is not None:
         if not reaction_data_csv.exists():
             raise FileNotFoundError(f"Missing reaction data file: {reaction_data_csv}")
-        reaction_df = pd.read_csv(reaction_data_csv)
+        reaction_df = safe_read_csv(reaction_data_csv)
     return pocket, ali, reaction_df
 
 
@@ -778,27 +762,28 @@ def persist_thread_update(
     prompt_text = build_prompt_with_context(reaction_df, user_inputs)
     llm_summary = "" if not llm_analysis_text else summarize_llm_analysis(llm_analysis_text)
     mutation_design_summary = "" if not mutation_design_text else summarize_llm_analysis(mutation_design_text)
-    return persist_thread_message(
+    metadata = {
+        "user_inputs": user_inputs,
+        "input_paths": input_paths,
+        "selected_positions": selected_positions,
+        "reaction_data_provided": reaction_df is not None,
+        "reaction_data_rows": 0 if reaction_df is None else int(len(reaction_df)),
+        "out_interp": out_interp,
+        "out_patterns": out_patterns,
+        "llm_analysis_path": llm_analysis_path,
+        "llm_analysis_summary": llm_summary,
+        "mutation_design_path": mutation_design_path,
+        "mutation_design_summary": mutation_design_summary,
+        "literature_context_thread_key": literature_context_thread_key,
+        "llm_model": llm_model or "",
+    }
+    return persist_step_thread_update(
         root_key=root_key,
         thread_id=thread_id,
         llm_process_tag=LLM_PROCESS_TAG,
         source_notebook="09_binding_pocket_analysis",
         content=prompt_text,
-        metadata={
-            "user_inputs": user_inputs,
-            "input_paths": input_paths,
-            "selected_positions": selected_positions,
-            "reaction_data_provided": reaction_df is not None,
-            "reaction_data_rows": 0 if reaction_df is None else int(len(reaction_df)),
-            "out_interp": str(out_interp),
-            "out_patterns": str(out_patterns),
-            "llm_analysis_path": "" if llm_analysis_path is None else str(llm_analysis_path),
-            "llm_analysis_summary": llm_summary,
-            "mutation_design_path": "" if mutation_design_path is None else str(mutation_design_path),
-            "mutation_design_summary": mutation_design_summary,
-            "literature_context_thread_key": "" if not literature_context_thread_key else str(literature_context_thread_key),
-            "llm_model": "" if llm_model is None else llm_model,
-        },
+        metadata=metadata,
     )
 
 
@@ -893,7 +878,6 @@ if __name__ == "__main__":
         load_openai_api_key_from_project_config,
         print_run_summary,
     )
-    from agentic_protein_design.core.thread_context import build_thread_context_text
 
     load_openai_api_key_from_project_config()
 
@@ -941,9 +925,8 @@ if __name__ == "__main__":
     literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
     if run_mutation_design and run_llm:
         design_requirements = str(user_inputs.get("design_requirements", "")).strip()
-        context_result = build_thread_context_text(
+        context_result = load_optional_thread_context(
             literature_context_thread_key,
-            include_referenced_files=True,
             max_chars_per_file=20000,
             on_missing="warn",
         )

@@ -22,12 +22,16 @@ import pandas as pd
 import requests
 
 from agentic_protein_design.core import apply_optional_text_inputs
-from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import resolve_project_root, setup_data_root as core_setup_data_root
+from agentic_protein_design.core.paths import (
+    get_step_processed_dir as core_get_step_processed_dir,
+    resolve_project_root,
+    setup_data_root,
+)
 from agentic_protein_design.core.pipeline_utils import (
     get_openai_client,
-    persist_thread_message,
+    init_step_thread,
+    persist_step_thread_update,
     save_text_output,
     save_text_output_with_assets_copy,
     summarize_compact_text,
@@ -40,13 +44,6 @@ REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
 LLM_PROCESS_TAG = "literature_review"
 REQUEST_TIMEOUT = 30
 STEP_OUTPUT_SUBDIR = "00_literature_review"
-
-
-def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
-    """
-    Resolve the selected data root using this step's default subfolder set.
-    """
-    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
 
 literature_review_agent_prompt = """
 You are an AI research agent supporting an enzyme engineering project.
@@ -166,23 +163,17 @@ def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
     """
     Return/create processed output directory for this notebook step.
     """
-    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
-    step_dir.mkdir(parents=True, exist_ok=True)
-    return step_dir
+    return core_get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
 
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    if existing_thread_id:
-        thread = load_thread(root_key, existing_thread_id, llm_process_tag=LLM_PROCESS_TAG)
-    else:
-        thread = create_thread(
-            root_key=root_key,
-            title="UPO literature review",
-            metadata={"notebook": "00_literature_review"},
-            llm_process_tag=LLM_PROCESS_TAG,
-        )
-    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
-    return thread, preview
+    return init_step_thread(
+        root_key=root_key,
+        llm_process_tag=LLM_PROCESS_TAG,
+        title="UPO literature review",
+        source_notebook="00_literature_review",
+        existing_thread_key=existing_thread_id,
+    )
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -1264,19 +1255,20 @@ def persist_thread_update(
     llm_review_path: Optional[Path] = None,
     llm_review_text: Optional[str] = None,
 ) -> str:
-    return persist_thread_message(
+    metadata = {
+        "inputs": inputs,
+        "outputs": out_paths,
+        "llm_review_path": llm_review_path,
+        "llm_review_summary": "" if not llm_review_text else summarize_text(llm_review_text),
+        "llm_model": str(inputs.get("llm_model", "")),
+    }
+    return persist_step_thread_update(
         root_key=root_key,
         thread_id=thread_id,
         llm_process_tag=LLM_PROCESS_TAG,
         source_notebook="00_literature_review",
         content=build_literature_agent_prompt(inputs),
-        metadata={
-            "inputs": inputs,
-            "outputs": {k: str(v) for k, v in out_paths.items()},
-            "llm_review_path": "" if llm_review_path is None else str(llm_review_path),
-            "llm_review_summary": "" if not llm_review_text else summarize_text(llm_review_text),
-            "llm_model": str(inputs.get("llm_model", "")),
-        },
+        metadata=metadata,
     )
 
 

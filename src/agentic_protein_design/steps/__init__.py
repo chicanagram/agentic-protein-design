@@ -13,6 +13,7 @@ __all__ = [
     "design_strategy_planning",
     "run_denovo_sequence_design",
     "run_next_round_design",
+    "get_sequence_encodings",
     "get_sequences_align_and_analyse_conservation",
     "get_structures_apo_holo",
     "run_md_calculate_ddgbind",

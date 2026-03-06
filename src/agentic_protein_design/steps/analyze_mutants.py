@@ -18,17 +18,21 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from agentic_protein_design.core import resolve_input_path
-from agentic_protein_design.core.chat_store import create_thread, list_threads, load_thread
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
-from agentic_protein_design.core.paths import setup_data_root as core_setup_data_root
+from agentic_protein_design.core.paths import get_step_processed_dir as core_get_step_processed_dir, setup_data_root
 from agentic_protein_design.core.pipeline_utils import (
+    clean_table,
+    coerce_jsonable,
     get_openai_client,
-    persist_thread_message,
+    init_step_thread,
+    persist_step_thread_update,
     save_text_output_with_assets_copy,
+    safe_read_csv,
+    select_existing_columns,
     summarize_compact_text,
     table_records,
 )
-from agentic_protein_design.core.thread_context import build_thread_context_text
+from agentic_protein_design.core.thread_context import load_optional_thread_context
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "pdb", "sce", "expdata", "processed"]
@@ -137,37 +141,18 @@ Rules:
 - Mention uncertainty briefly when the evidence is weak or conflicting.
 """.strip()
 
-
-def setup_data_root(root_key: str, required_subfolders: Optional[List[str]] = None) -> Tuple[Path, Dict[str, Path]]:
-    """
-    Resolve the selected data root using this step's default subfolder set.
-    """
-    return core_setup_data_root(root_key, required_subfolders or REQUIRED_SUBFOLDERS)
-
-
 def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
-    step_dir = (resolved_dirs["processed"] / STEP_OUTPUT_SUBDIR).resolve()
-    step_dir.mkdir(parents=True, exist_ok=True)
-    return step_dir
+    return core_get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
 
 
 def init_thread(root_key: str, existing_thread_key: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    thread_ref = str(existing_thread_key or "").strip()
-    if thread_ref:
-        if thread_ref.endswith(".json"):
-            thread_ref = thread_ref[:-5]
-        match = re.match(r"^(?P<tag>[A-Za-z0-9_]+)_(?P<tid>[0-9a-fA-F]{32})$", thread_ref)
-        resolved_thread_id = match.group("tid").lower() if match else thread_ref
-        thread = load_thread(root_key, resolved_thread_id, llm_process_tag=LLM_PROCESS_TAG)
-    else:
-        thread = create_thread(
-            root_key=root_key,
-            title="Analyze mutants",
-            metadata={"notebook": "15_analyze_mutants"},
-            llm_process_tag=LLM_PROCESS_TAG,
-        )
-    preview = pd.DataFrame(list_threads(root_key, llm_process_tag=LLM_PROCESS_TAG)[:5])
-    return thread, preview
+    return init_step_thread(
+        root_key=root_key,
+        llm_process_tag=LLM_PROCESS_TAG,
+        title="Analyze mutants",
+        source_notebook="15_analyze_mutants",
+        existing_thread_key=existing_thread_key,
+    )
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -199,21 +184,7 @@ def default_input_paths(data_root: Path) -> Dict[str, str]:
     }
 
 
-def _clean_table(df: pd.DataFrame) -> pd.DataFrame:
-    clean = df.copy()
-    unnamed = [c for c in clean.columns if str(c).startswith("Unnamed:")]
-    if unnamed:
-        clean = clean.drop(columns=unnamed)
-    return clean
-
-
-def _safe_read_csv(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    if df.empty:
-        raise ValueError(f"CSV is empty: {path}")
-    return _clean_table(df)
-
-
+# Input loading and normalization.
 def _split_mutation_tokens(value: str) -> List[str]:
     raw = str(value or "").strip()
     if not raw:
@@ -241,7 +212,7 @@ def parse_mutation_tokens(value: str) -> List[Dict[str, Any]]:
 
 
 def load_selected_mutations(path: Path) -> pd.DataFrame:
-    df = _safe_read_csv(path)
+    df = safe_read_csv(path)
     if "mutations" not in df.columns:
         raise KeyError(f"Expected a 'mutations' column in {path}")
 
@@ -259,11 +230,11 @@ def load_selected_mutations(path: Path) -> pd.DataFrame:
 
 
 def load_residue_structure_context(path: Path) -> pd.DataFrame:
-    return _safe_read_csv(path)
+    return safe_read_csv(path)
 
 
 def load_binding_residue_context(path: Path) -> pd.DataFrame:
-    return _safe_read_csv(path)
+    return safe_read_csv(path)
 
 
 def _match_binding_summary_row(summary_df: pd.DataFrame, enzyme_name: str, ligand_name: str) -> pd.Series:
@@ -287,7 +258,7 @@ def _match_binding_summary_row(summary_df: pd.DataFrame, enzyme_name: str, ligan
 
 
 def load_binding_summary_context(path: Path, enzyme_name: str, ligand_name: str) -> Tuple[pd.DataFrame, pd.Series]:
-    df = _safe_read_csv(path)
+    df = safe_read_csv(path)
     row = _match_binding_summary_row(df, enzyme_name, ligand_name)
     return df, row
 
@@ -332,33 +303,10 @@ def _build_residue_context_map(structure_df: pd.DataFrame, binding_df: pd.DataFr
     return structure_map
 
 
-def _coerce_jsonable(value: Any) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        return {str(k): _coerce_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [_coerce_jsonable(v) for v in value]
-    if hasattr(value, "item") and callable(getattr(value, "item")):
-        try:
-            return _coerce_jsonable(value.item())
-        except Exception:
-            pass
-    try:
-        if pd.isna(value):
-            return None
-    except Exception:
-        pass
-    return value
-
-
-def _select_existing_columns(df: pd.DataFrame, preferred: List[str]) -> List[str]:
-    return [col for col in preferred if col in df.columns]
-
-
+# Analysis-unit construction.
 def _metric_summary(df: pd.DataFrame) -> Dict[str, Any]:
     metrics: Dict[str, Any] = {}
-    for col in _select_existing_columns(df, PREFERRED_MUTANT_METRIC_COLUMNS):
+    for col in select_existing_columns(df, PREFERRED_MUTANT_METRIC_COLUMNS):
         series = pd.to_numeric(df[col], errors="coerce").dropna()
         if series.empty:
             continue
@@ -427,7 +375,7 @@ def _residue_context_for_positions(positions: List[int], residue_map: Dict[int, 
     context_rows: List[Dict[str, Any]] = []
     for pos in sorted({int(p) for p in positions}):
         base = residue_map.get(pos, {"res_num": pos, "in_binding_pocket": False})
-        context_rows.append({k: _coerce_jsonable(v) for k, v in base.items() if k in PREFERRED_RESIDUE_CONTEXT_COLUMNS or k == "in_binding_pocket"})
+        context_rows.append({k: coerce_jsonable(v) for k, v in base.items() if k in PREFERRED_RESIDUE_CONTEXT_COLUMNS or k == "in_binding_pocket"})
     return context_rows
 
 
@@ -576,49 +524,20 @@ def prepare_analysis_units(mutant_df: pd.DataFrame, residue_map: Dict[int, Dict[
     return prepared
 
 
-def _filter_context_for_enzyme(context_text: str, enzyme_name: str) -> str:
-    text = str(context_text or "").strip()
-    if not text:
-        return ""
-    enzyme = str(enzyme_name or "").strip()
-    if not enzyme:
-        return text
-
-    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
-    matches = [block for block in blocks if enzyme.lower() in block.lower()]
-    if matches:
-        return "\n\n".join(matches)
-    lines = [line for line in text.splitlines() if enzyme.lower() in line.lower()]
-    if lines:
-        return "\n".join(lines)
-    return text[:12000]
-
-
 def load_optional_binding_pocket_context(binding_pocket_context_thread_key: Optional[str], enzyme_name: str) -> Dict[str, Any]:
-    if not str(binding_pocket_context_thread_key or "").strip():
-        return {"context_text": "", "filtered_context_text": ""}
-    result = build_thread_context_text(
+    return load_optional_thread_context(
         binding_pocket_context_thread_key,
-        include_referenced_files=True,
-        max_chars_per_file=20000,
-        on_missing="warn",
+        filter_keyword=enzyme_name,
     )
-    raw = str(result.get("context_text", ""))
-    result["filtered_context_text"] = _filter_context_for_enzyme(raw, enzyme_name)
-    return result
 
 
 def load_optional_literature_context(literature_context_thread_key: Optional[str]) -> Dict[str, Any]:
-    if not str(literature_context_thread_key or "").strip():
-        return {"context_text": ""}
-    return build_thread_context_text(
+    return load_optional_thread_context(
         literature_context_thread_key,
-        include_referenced_files=True,
-        max_chars_per_file=20000,
-        on_missing="warn",
     )
 
 
+# Prompt assembly and LLM calls.
 def build_mutant_analysis_prompt(
     user_inputs: Dict[str, Any],
     analysis_units_df: pd.DataFrame,
@@ -628,7 +547,7 @@ def build_mutant_analysis_prompt(
     enzyme_name = str(user_inputs.get("enzyme_name", "")).strip() or "selected backbone enzyme"
     ligand_name = str(user_inputs.get("ligand_name", "")).strip() or "selected ligand"
     focus_question = str(user_inputs.get("focus_question", "")).strip()
-    mutant_metric_cols = _select_existing_columns(mutant_df, PREFERRED_MUTANT_METRIC_COLUMNS)
+    mutant_metric_cols = select_existing_columns(mutant_df, PREFERRED_MUTANT_METRIC_COLUMNS)
     residue_cols_present = [c for c in PREFERRED_RESIDUE_CONTEXT_COLUMNS if c in analysis_units_df.iloc[0].get("_residue_context", [{}])[0]] if not analysis_units_df.empty and analysis_units_df.iloc[0].get("_residue_context") else []
     binding_cols = [col for col in PREFERRED_BINDING_SUMMARY_COLUMNS if col in binding_summary_row.index]
 
@@ -668,32 +587,32 @@ def _build_llm_payload(
         payload_units.append(
             {
                 "row_index": int(row["row_index"]),
-                "analysis_kind": _coerce_jsonable(row["_analysis_kind"]),
-                "Type of mutant": _coerce_jsonable(row["Type of mutant"]),
-                "Residue(s) mutated": _coerce_jsonable(row["Residue(s) mutated"]),
-                "Mutant(s)": _coerce_jsonable(row["Mutant(s)"]),
-                "source_rows": _coerce_jsonable(row["_source_rows"]),
-                "metric_summary": _coerce_jsonable(row["_metric_summary"]),
-                "residue_context": _coerce_jsonable(row["_residue_context"]),
+                "analysis_kind": coerce_jsonable(row["_analysis_kind"]),
+                "Type of mutant": coerce_jsonable(row["Type of mutant"]),
+                "Residue(s) mutated": coerce_jsonable(row["Residue(s) mutated"]),
+                "Mutant(s)": coerce_jsonable(row["Mutant(s)"]),
+                "source_rows": coerce_jsonable(row["_source_rows"]),
+                "metric_summary": coerce_jsonable(row["_metric_summary"]),
+                "residue_context": coerce_jsonable(row["_residue_context"]),
             }
         )
 
     binding_summary = {
-        str(col): _coerce_jsonable(binding_summary_row[col])
+        str(col): coerce_jsonable(binding_summary_row[col])
         for col in PREFERRED_BINDING_SUMMARY_COLUMNS
         if col in binding_summary_row.index
     }
 
     return {
         "analysis_units": payload_units[:max_rows],
-        "selected_mutation_rows_preview": _coerce_jsonable(
+        "selected_mutation_rows_preview": coerce_jsonable(
             table_records(
-                _clean_table(mutant_df.drop(columns=[c for c in mutant_df.columns if c.startswith("_")], errors="ignore")),
+                clean_table(mutant_df.drop(columns=[c for c in mutant_df.columns if c.startswith("_")], errors="ignore")),
                 min(max_rows, 50),
             )
         ),
         "selected_backbone_binding_summary": binding_summary,
-        "optional_md_context": _coerce_jsonable(supplemental_context.strip() or "Not provided."),
+        "optional_md_context": coerce_jsonable(supplemental_context.strip() or "Not provided."),
     }
 
 
@@ -864,11 +783,11 @@ def reflect_and_regenerate_mutant_explanations(
         supplemental_context,
         max_rows=max_rows,
     )
-    payload["current_explanation_rows"] = _coerce_jsonable(table_records(current_explanations_df, max_rows))
-    payload["user_feedback"] = _coerce_jsonable(user_feedback.strip() or "")
-    payload["original_prompt_text"] = _coerce_jsonable(str(original_prompt_text or "").strip())
-    payload["reflection_prompt_text"] = _coerce_jsonable(str(prompt_text).strip())
-    payload["original_unit_level_output_json"] = _coerce_jsonable(str(original_unit_level_output_json or "").strip())
+    payload["current_explanation_rows"] = coerce_jsonable(table_records(current_explanations_df, max_rows))
+    payload["user_feedback"] = coerce_jsonable(user_feedback.strip() or "")
+    payload["original_prompt_text"] = coerce_jsonable(str(original_prompt_text or "").strip())
+    payload["reflection_prompt_text"] = coerce_jsonable(str(prompt_text).strip())
+    payload["original_unit_level_output_json"] = coerce_jsonable(str(original_unit_level_output_json or "").strip())
 
     client = get_openai_client(
         missing_package_message="The `openai` package is required for mutant analysis reflection.",
@@ -896,9 +815,9 @@ def reflect_and_regenerate_mutant_explanations(
             "Return 5-6 concise bullet points only."
         )
         summary_payload = {
-            "original_rows": _coerce_jsonable(table_records(current_explanations_df, max_rows)),
-            "improved_rows": _coerce_jsonable(table_records(refined_df, max_rows)),
-            "user_feedback": _coerce_jsonable(user_feedback.strip() or ""),
+            "original_rows": coerce_jsonable(table_records(current_explanations_df, max_rows)),
+            "improved_rows": coerce_jsonable(table_records(refined_df, max_rows)),
+            "user_feedback": coerce_jsonable(user_feedback.strip() or ""),
         }
         summary_response = client.chat.completions.create(
             model=model,
@@ -945,7 +864,7 @@ def reflect_and_regenerate_mutant_explanations(
 
 def save_mutant_inputs_snapshot(mutant_df: pd.DataFrame, processed_dir: Path) -> Path:
     out_path = processed_dir / "selected_mutations_input_snapshot.csv"
-    _clean_table(mutant_df.drop(columns=[c for c in mutant_df.columns if c.startswith("_")], errors="ignore")).to_csv(out_path, index=False)
+    clean_table(mutant_df.drop(columns=[c for c in mutant_df.columns if c.startswith("_")], errors="ignore")).to_csv(out_path, index=False)
     return out_path
 
 
@@ -954,7 +873,7 @@ def save_analysis_units_snapshot(analysis_units_df: pd.DataFrame, processed_dir:
     export_df = analysis_units_df.copy()
     for col in ["_source_rows", "_metric_summary", "_residue_context"]:
         if col in export_df.columns:
-            export_df[col] = export_df[col].apply(lambda v: json.dumps(_coerce_jsonable(v), ensure_ascii=True))
+            export_df[col] = export_df[col].apply(lambda v: json.dumps(coerce_jsonable(v), ensure_ascii=True))
     export_df.to_csv(out_path, index=False)
     return out_path
 
@@ -974,6 +893,7 @@ def save_llm_analysis(analysis_text: str, processed_dir: Path) -> Path:
     )
 
 
+# End-to-end execution.
 def persist_thread_update(
     root_key: str,
     thread_id: str,
@@ -988,24 +908,25 @@ def persist_thread_update(
     literature_context_thread_key: Optional[str] = None,
 ) -> str:
     prompt_text = str(user_inputs.get("focus_question", "")).strip() or "Analyze prioritized mutants"
-    return persist_thread_message(
+    metadata = {
+        "user_inputs": user_inputs,
+        "input_paths": input_paths,
+        "input_snapshot_path": input_snapshot_path,
+        "analysis_units_path": analysis_units_path,
+        "explanations_csv_path": explanations_csv_path,
+        "llm_analysis_path": llm_analysis_path,
+        "llm_analysis_summary": "" if not llm_analysis_text else summarize_compact_text(llm_analysis_text),
+        "binding_pocket_context_thread_key": binding_pocket_context_thread_key,
+        "literature_context_thread_key": literature_context_thread_key,
+        "llm_model": str(user_inputs.get("llm_model", "")),
+    }
+    return persist_step_thread_update(
         root_key=root_key,
         thread_id=thread_id,
         llm_process_tag=LLM_PROCESS_TAG,
         source_notebook="15_analyze_mutants",
         content=prompt_text,
-        metadata={
-            "user_inputs": user_inputs,
-            "input_paths": input_paths,
-            "input_snapshot_path": "" if input_snapshot_path is None else str(input_snapshot_path),
-            "analysis_units_path": "" if analysis_units_path is None else str(analysis_units_path),
-            "explanations_csv_path": "" if explanations_csv_path is None else str(explanations_csv_path),
-            "llm_analysis_path": "" if llm_analysis_path is None else str(llm_analysis_path),
-            "llm_analysis_summary": "" if not llm_analysis_text else summarize_compact_text(llm_analysis_text),
-            "binding_pocket_context_thread_key": "" if not binding_pocket_context_thread_key else str(binding_pocket_context_thread_key),
-            "literature_context_thread_key": "" if not literature_context_thread_key else str(literature_context_thread_key),
-            "llm_model": str(user_inputs.get("llm_model", "")),
-        },
+        metadata=metadata,
     )
 
 
@@ -1020,7 +941,7 @@ def run_analyze_mutants_step(
     """
     Execute the end-to-end mutant-analysis step.
     """
-    data_root, resolved_dirs = setup_data_root(root_key)
+    data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
     step_processed_dir = get_step_processed_dir(resolved_dirs)
     thread, _ = init_thread(root_key, existing_thread_key)
     thread_id = str(thread["thread_id"])
@@ -1131,7 +1052,7 @@ if __name__ == "__main__":
     existing_thread_key = None
     persist = True
 
-    data_root, _ = setup_data_root(root_key)
+    data_root, _ = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
     user_inputs = default_user_inputs()
     input_paths = default_input_paths(data_root)
 

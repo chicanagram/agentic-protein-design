@@ -73,7 +73,7 @@ Steps executable in the workflow include:
 - [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)  
   Stability-ddG prediction notebook using **Pythia** via an isolated Python environment.
 
-- [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_obtain_sequence_encodings.ipynb)  
+- [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_get_sequence_encodings.ipynb)  
   (Placeholder - implementation pending). Compose feature matrices and training/evaluation datasets for supervised ML.
 
 - [`notebooks/14_train_evaluate_supervised_ML_models.ipynb`](notebooks/14_train_evaluate_supervised_ML_models.ipynb)  

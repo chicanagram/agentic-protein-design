@@ -7,6 +7,7 @@ import pandas as pd
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 from project_config.variables import aaList, aaList_with_X
 from tools.utils.plot_utils import plot_variant_heatmap
+from tools.utils.general_utils import flatten_2D_arr
 
 def extract_sequence_token_spans(attention_mask: np.ndarray) -> List[slice]:
     """
@@ -140,3 +141,130 @@ def compute_pooled_embeddings(
             pooled_rows.append(emb_arr[pos, :].mean(axis=0))
         out[int(layer)] = np.asarray(pooled_rows)
     return out
+
+
+def save_llr_vect_and_heatmap(
+    llr_all: np.ndarray,
+    seq_base: str,
+    *,
+    vect_cache_path: Union[str, Path],
+    map_png_cache_path: Union[str, Path],
+) -> None:
+    """Save flattened LLR vector CSV and heatmap PNG for a single base sequence."""
+    # Section 1: prepare output paths and remove X-row before export.
+    vect_path = Path(vect_cache_path)
+    png_path = Path(map_png_cache_path)
+    vect_path.parent.mkdir(parents=True, exist_ok=True)
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    llr_no_x = np.asarray(llr_all)[:-1, :]
+
+    # Section 2: write flattened mutation-level LLR vector CSV.
+    llr_flattened, mutations_all = flatten_2D_arr(llr_no_x, seq_base, MT_aa=aaList)
+    llr_flattened_df = pd.DataFrame({"mutations": mutations_all, "LLR": llr_flattened})
+    llr_flattened_df["is_WT"] = [(mut[0] == mut[-1]) * 1 for mut in mutations_all]
+    llr_flattened_df = (
+        llr_flattened_df
+        .loc[llr_flattened_df["is_WT"] == 0, ["mutations", "LLR"]]
+        .reset_index(drop=True)
+        .round(4)
+    )
+    llr_flattened_df.to_csv(vect_path)
+
+    # Section 3: write mutation heatmap PNG.
+    plot_variant_heatmap(
+        -llr_no_x,
+        seq_base,
+        N_res_per_heatmap_row=100,
+        aa_list=aaList,
+        savefig=png_path,
+        figtitle="Predicted Effects of Mutations on Protein Sequence (LLR)",
+    )
+
+
+def resolve_llr_cache_paths(
+    output_path: Union[str, Path],
+    *,
+    llr_cache_vect_filename_prefix: str = "",
+) -> Dict[str, Union[Path, bool]]:
+    """Resolve vect-cache and heatmap paths under `encodings/LLR` for a given output stem."""
+    # Section 1: locate cache directory parallel to data subfolder under encodings.
+    output_stem = Path(str(output_path))
+    llr_cache_dir = None
+    for parent in [output_stem.parent, *output_stem.parents]:
+        if parent.name == "encodings":
+            llr_cache_dir = parent / "LLR"
+            break
+    if llr_cache_dir is None:
+        llr_cache_dir = output_stem.parent / "LLR"
+    llr_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Section 2: derive vect and map-png cache paths.
+    vect_prefix = str(llr_cache_vect_filename_prefix or "").strip()
+    vect_filename = f"{vect_prefix}{output_stem.name}_vect.csv"
+    vect_cache_path = llr_cache_dir / vect_filename
+    map_base = vect_filename[:-4] if vect_filename.lower().endswith(".csv") else vect_filename
+    if map_base.endswith("_vect"):
+        map_base = map_base[:-5]
+    map_png_cache_path = llr_cache_dir / f"{map_base}_map.png"
+    vect_exists = bool(vect_cache_path.exists())
+    status = "FOUND" if vect_exists else "NOT FOUND"
+    print(f"[resolve_llr_cache_paths] vect cache {status}: {vect_cache_path}")
+    return {
+        "llr_cache_dir": llr_cache_dir,
+        "vect_cache_path": vect_cache_path,
+        "map_png_cache_path": map_png_cache_path,
+        "vect_exists": vect_exists,
+    }
+
+
+def score_mutants_from_llr_map(
+    llr_vect_csv_path: Union[str, Path],
+    sequences_base: Sequence[str],
+    sequences: Optional[Sequence[str]] = None,
+) -> Optional[np.ndarray]:
+    """
+    Compute sequence-level zero-shot scores by summing single-mutation LLR values from a cached vect CSV.
+
+    The CSV is expected to contain at least `mutations` (or `mutation`) and `LLR` columns.
+    """
+    # Section 1: no sequence list means no sequence-level scores to compute.
+    if sequences is None:
+        return None
+    if len(sequences) != len(sequences_base):
+        raise ValueError("sequences and sequences_base must have the same length.")
+
+    # Section 2: load mutation->LLR lookup from cached vect CSV.
+    vect_path = Path(llr_vect_csv_path)
+    if not vect_path.exists():
+        raise FileNotFoundError(f"LLR vect CSV not found: {vect_path}")
+    df = pd.read_csv(vect_path)
+    cols_lower = {str(c).strip().lower(): c for c in df.columns}
+    mut_col = cols_lower.get("mutations", cols_lower.get("mutation"))
+    llr_col = cols_lower.get("llr")
+    if mut_col is None or llr_col is None:
+        raise ValueError(
+            f"Expected columns ['mutations' or 'mutation', 'LLR'] in {vect_path}. "
+            f"Found: {list(df.columns)}"
+        )
+    llr_lookup = {
+        str(mut).strip(): float(score)
+        for mut, score in zip(df[mut_col].tolist(), df[llr_col].tolist())
+    }
+
+    # Section 3: sum mutation LLRs per sequence by diffing against each base sequence.
+    llr_sum_seq: List[float] = []
+    for seq, seq_base in zip(sequences, sequences_base):
+        if len(seq) != len(seq_base):
+            raise ValueError("Each sequence must have same length as its sequence_base.")
+        total = 0.0
+        for pos_idx, (mut_aa, wt_aa) in enumerate(zip(seq, seq_base)):
+            if mut_aa == wt_aa:
+                continue
+            mut_label = f"{wt_aa}{pos_idx + 1}{mut_aa}"
+            if mut_label not in llr_lookup:
+                raise KeyError(
+                    f"Mutation '{mut_label}' not found in cached LLR map: {vect_path}"
+                )
+            total += float(llr_lookup[mut_label])
+        llr_sum_seq.append(total)
+    return np.asarray(llr_sum_seq, dtype=np.float32)

@@ -172,6 +172,7 @@ def get_classical_encodings(
     sequence_base_list=None,
     *,
     encodings_dir: str,
+    filename_prefix: str = "",
     get_embeddings_for_seq_base: bool = False,
     max_length=None,
 ):
@@ -182,6 +183,7 @@ def get_classical_encodings(
     One-hot outputs are saved as sparse matrices (`.npz`).
     """
     out_dir = Path(encodings_dir)
+    file_prefix = str(filename_prefix or "")
     results = {}
     # Section 3: compute each encoding and build flattened matrices.
     for feature_name in classical_feature_sets:
@@ -192,7 +194,7 @@ def get_classical_encodings(
                 f"Unknown encoder '{encoder_name}'. Available: {sorted(CLASSICAL_ENCODER_REGISTRY.keys())}"
             )
         use_sparse = encoder_name == "one_hot"
-        stem = _sanitize_name(encoder_name)
+        stem = f"{file_prefix}{_sanitize_name(encoder_name)}"
         ext = ".npz" if use_sparse else ".npy"
 
         # Get sequence encodings and save

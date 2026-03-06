@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+os.environ["HF_HUB_OFFLINE"] = "1"
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+import time
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -9,17 +12,17 @@ import torch
 from scipy.special import softmax
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-from project_config.variables import aaList
 from tools.encodings.common import (
     _resolve_model_name,
     _resolve_layers,
     compute_pooled_embeddings,
     extract_sequence_token_spans,
+    resolve_llr_cache_paths,
     save_layerwise_embeddings,
+    save_llr_vect_and_heatmap,
+    score_mutants_from_llr_map,
 )
 from tools.utils.model_utils import get_device, iter_batches
-from tools.utils.plot_utils import plot_variant_heatmap
-from tools.utils.general_utils import flatten_2D_arr
 from project_config.variables import aaList_with_X
 
 # Common shorthand names mapped to Hugging Face model ids.
@@ -39,6 +42,29 @@ MODEL_NAME_ALIASES: Dict[str, str] = {
 DEFAULT_MODEL_NAME = "esm2-650M"
 _MODEL_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
 DEFAULT_MARGINAL_TYPE = "wt"
+
+
+def _coerce_sequence_list(
+    value: Optional[Union[str, Sequence[str]]],
+    *,
+    name: str,
+    required: bool = False,
+) -> Optional[List[str]]:
+    """Normalize an optional sequence input into a list of strings."""
+    # Section 1: enforce required inputs.
+    if value is None:
+        if required:
+            raise ValueError(f"{name} requires non-empty sequences.")
+        return None
+    # Section 2: coerce str/list-like into list[str].
+    if isinstance(value, str):
+        out = [value]
+    else:
+        out = [str(x) for x in value]
+    # Section 3: validate non-empty list when required.
+    if required and not out:
+        raise ValueError(f"{name} requires non-empty sequences.")
+    return out
 
 
 def _prepare_tokenizer_inputs(sequences: Sequence[str]) -> List[str]:
@@ -147,74 +173,154 @@ def forward_pass(
         return mdl(**seq_tokens["batch"], output_hidden_states=output_hidden_states)
 
 
-def get_zeroshot_scores(
+def get_LLR_scores(
     sequences_base: Optional[Union[str, Sequence[str]]] = None,
     sequences: Optional[Union[str, Sequence[str]]] = None,
     mutations: Optional[Union[str, Sequence[str]]] = None,
     marginal_type: str = DEFAULT_MARGINAL_TYPE,
     output_path: Optional[Union[str, Path]] = None,
+    llr_cache_vect_filename_prefix: str = "",
+    resave_llr_cache_if_found: bool = False,
     model_name: str = DEFAULT_MODEL_NAME,
     batch_size: int = 4,
     device: Optional[str] = None,
 ):
-    """Compute zero-shot scores/LLR using WT or masked marginal scoring."""
-    if sequences_base is None:
-        raise ValueError("Zero-shot scores requires sequences_base to be set.")
+    """Compute sequence-level LLR scores using WT or masked marginal scoring."""
+    # Section 1: normalize sequence inputs and scoring backend.
+    base_list = _coerce_sequence_list(sequences_base, name="get_LLR_scores(sequences_base)", required=True)
+    seq_list = _coerce_sequence_list(sequences, name="get_LLR_scores(sequences)", required=False)
+    unique_bases = list(dict.fromkeys(base_list))
+    if len(unique_bases) != 1:
+        raise ValueError(
+            "LLR cache/vector scoring currently supports exactly one unique sequence_base."
+        )
     if marginal_type == "wt":
-        score_fn = _compute_wt_marginal_scores
+        map_fn = _compute_wt_marginal_llr_map
     elif marginal_type == "masked":
-        score_fn = _compute_masked_marginal_scores
+        map_fn = _compute_masked_marginal_llr_map
+    else:
+        raise ValueError("marginal_type must be either 'wt' or 'masked'.")
 
-    sequences = sequences if sequences not in [None, ""] else None
+    # Section 2: resolve output/cache paths.
+    output_path = str(output_path) if output_path is not None else f"{model_name}_LLR"
     output_path = output_path.replace('LLR', f'LLR-{marginal_type}')
+    output_stem = Path(str(output_path))
+    cache_stem = output_stem.with_name(f"{str(model_name)}_LLR-{marginal_type}")
+    cache_info = resolve_llr_cache_paths(
+        cache_stem,
+        llr_cache_vect_filename_prefix=llr_cache_vect_filename_prefix,
+    )
+    vect_cache_path = Path(cache_info["vect_cache_path"])
+    map_png_cache_path = Path(cache_info["map_png_cache_path"])
 
-    # get LLR for sequences and all single-site mutations of unique sequence_base
-    LLRsum_seq, llr_by_base = score_fn(sequences_base, sequences, model_name, batch_size, device)
+    # Section 1: cache resolution for vect CSV.
+    cache_hit = bool(cache_info["vect_exists"])
+    if cache_hit:
+        print(f"[zeroshot/{marginal_type}-marginal] Loaded LLR cache: {vect_cache_path}")
 
-    # save LLR for sequences
+    # Section 3: compute and persist full marginal map only on cache miss (or explicit refresh).
+    if (not cache_hit) or bool(resave_llr_cache_if_found):
+        seq_base = unique_bases[0]
+        map_fn(
+            [seq_base],
+            model_name,
+            batch_size,
+            device,
+            save_artifacts=True,
+            vect_cache_path=vect_cache_path,
+            map_png_cache_path=map_png_cache_path,
+        )
+        action = "Refreshed" if cache_hit else "Saved"
+        print(f"[zeroshot/{marginal_type}-marginal] {action} LLR cache: {vect_cache_path}")
+
+    # Section 4: score provided sequences by summing cached mutation LLRs.
+    LLRsum_seq = score_mutants_from_llr_map(
+        llr_vect_csv_path=vect_cache_path,
+        sequences_base=base_list,
+        sequences=seq_list,
+    )
+
+    # Section 5: save LLR for provided sequences.
     if LLRsum_seq is not None:
-        # save as numpy
         np.save(f'{output_path}.npy', np.array(LLRsum_seq).astype(np.float32))
-        # save as csv
-        pd.DataFrame({'mutations':mutations, 'LLR':LLRsum_seq}).round(4).to_csv(f'{output_path}.csv')
+        pd.DataFrame({'mutations': mutations, 'LLR': LLRsum_seq}).round(4).to_csv(f'{output_path}.csv')
         print(f"[zeroshot/{marginal_type}-marginal] Saved raw scores: {output_path}.csv")
-
-    # save LLR for all mutations
-    for seq_base, LLR_all in llr_by_base.items():
-        LLR_all_noX = LLR_all[:-1, :]
-        LLR_all_df = pd.DataFrame(LLR_all_noX, index=aaList, columns=[f'{i+1}{aa}' for i, aa in enumerate(seq_base)]).round(4)
-        LLR_all_df.to_csv(f'{output_path}_map.csv')
-        LLR_all_flattened, mutations_all = flatten_2D_arr(LLR_all_noX, seq_base, MT_aa=aaList)
-        LLR_all_flattened_df = pd.DataFrame({'mutations':mutations_all,'LLR':LLR_all_flattened})
-        LLR_all_flattened_df['is_WT'] = [(mut[0]==mut[-1])*1 for mut in mutations_all]
-        LLR_all_flattened_df = LLR_all_flattened_df.loc[LLR_all_flattened_df['is_WT']==0, ['mutations', 'LLR']].reset_index(drop=True).round(4)
-        LLR_all_flattened_df.to_csv(f'{output_path}_vect.csv')
-        plot_variant_heatmap(
-            -LLR_all_noX,
-            seq_base,
-            N_res_per_heatmap_row=100,
-            aa_list=aaList,
-            savefig=f'{output_path}_map.png',
-            figtitle='Predicted Effects of Mutations on Protein Sequence (LLR)')
     return LLRsum_seq
 
 
-def _compute_wt_marginal_scores(
+def get_mean_PLL_scores(
+    sequences: Optional[Union[str, Sequence[str]]] = None,
+    marginal_type: str = DEFAULT_MARGINAL_TYPE,
+    output_path: Optional[Union[str, Path]] = None,
+    model_name: str = DEFAULT_MODEL_NAME,
+    batch_size: int = 4,
+    device: Optional[str] = None,
+) -> np.ndarray:
+    """Compute mean pseudo-log-likelihood (mean PLL) scores for sequences without a shared base."""
+    # Section 1: validate/normalize sequence input and select marginal backend.
+    seq_list = _coerce_sequence_list(sequences, name="get_mean_PLL_scores", required=True)
+
+    if marginal_type == "wt":
+        map_fn = _compute_wt_marginal_llr_map
+    elif marginal_type == "masked":
+        map_fn = _compute_masked_marginal_llr_map
+    else:
+        raise ValueError("marginal_type must be either 'wt' or 'masked'.")
+
+    # Section 2: resolve output naming.
+    output_str: Optional[str] = None
+    if output_path is not None:
+        output_str = str(output_path)
+        if "LLR" in output_str:
+            output_str = output_str.replace("LLR", f"meanPLL-{marginal_type}")
+        elif "meanPLL-" not in output_str and output_str.endswith("meanPLL"):
+            output_str = f"{output_str}-{marginal_type}"
+        elif "meanPLL" not in output_str:
+            output_str = f"{output_str}_meanPLL-{marginal_type}"
+
+    # Section 3: compute per-position WT log-probabilities.
+    _, wt_logp_by_base = map_fn(
+        seq_list,
+        model_name=model_name,
+        batch_size=batch_size,
+        device=device,
+        return_wt_logp=True,
+    )
+    mean_pll_scores = np.asarray(
+        [float(np.mean(wt_logp_by_base[seq])) for seq in seq_list],
+        dtype=np.float32,
+    )
+
+    # Section 4: save outputs to .npy/.csv.
+    if output_str is not None:
+        np.save(f"{output_str}.npy", mean_pll_scores)
+        pd.DataFrame({"sequence": seq_list, "meanPLL": mean_pll_scores}).round(6).to_csv(
+            f"{output_str}.csv",
+            index=False,
+        )
+        print(f"[meanPLL/{marginal_type}-marginal] Saved scores: {output_str}.csv")
+    return mean_pll_scores
+
+
+def _compute_wt_marginal_llr_map(
     sequences_base: Sequence[str],
-    sequences: Optional[Sequence[str]] = None,
     model_name: Optional[str] = DEFAULT_MODEL_NAME,
     batch_size: Optional[int] = 4,
     device: Optional[str] = "cpu",
-) -> Tuple[Optional[np.ndarray], Dict[str, np.ndarray]]:
+    return_wt_logp: bool = False,
+    save_artifacts: bool = False,
+    vect_cache_path: Optional[Union[str, Path]] = None,
+    map_png_cache_path: Optional[Union[str, Path]] = None,
+) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]]:
     """
     Compute WT-marginal LLR matrices from one WT forward pass per unique base sequence.
 
     Returns:
-      - llr_sum_per_sequence: shape (n_sequences,) or None if sequences is None
       - llr_by_base: dict {base_seq: matrix shape (len(aaList_with_X), len(base_seq))}
     """
     bundle = load_model(model_name=model_name, device=device)
     llr_by_base: Dict[str, np.ndarray] = {}
+    wt_logp_by_base: Dict[str, np.ndarray] = {}
 
     # Section 1: one forward pass per unique WT base sequence.
     unique_bases = list(dict.fromkeys(sequences_base))
@@ -235,11 +341,13 @@ def _compute_wt_marginal_scores(
 
         n = len(seq_base)
         llr_mat = np.zeros((len(aaList_with_X), n), dtype=np.float32)
+        wt_logp_vec = np.zeros((n,), dtype=np.float32)
 
         for pos_idx, wt_aa in enumerate(seq_base):
             token_pos = pos_idx + 1  # ESM BOS offset
             wt_id = bundle["tokenizer"].convert_tokens_to_ids(wt_aa)
             wt_probs = probs[token_pos, wt_id]
+            wt_logp_vec[pos_idx] = np.log(wt_probs)
 
             for i, aa in enumerate(aaList_with_X):
                 aa_id = bundle["tokenizer"].convert_tokens_to_ids(aa)
@@ -247,36 +355,36 @@ def _compute_wt_marginal_scores(
                 llr_mat[i, pos_idx] = np.round(np.log(aa_probs) - np.log(wt_probs), 4)
 
         llr_by_base[seq_base] = llr_mat
+        wt_logp_by_base[seq_base] = wt_logp_vec
+        if save_artifacts:
+            if vect_cache_path is None or map_png_cache_path is None:
+                raise ValueError("save_artifacts=True requires vect_cache_path and map_png_cache_path.")
+            save_llr_vect_and_heatmap(
+                llr_mat,
+                seq_base,
+                vect_cache_path=vect_cache_path,
+                map_png_cache_path=map_png_cache_path,
+            )
 
-    # Section 2: optionally sum mutation LLR for provided mutant sequences.
-    llr_sum_seq = None
-    if sequences is not None:
-        llr_sum_seq: List[float] = []
-        for seq, seq_base in zip(sequences, sequences_base):
-            total = 0.0
-            mat = llr_by_base[seq_base]
-            for pos_idx, (mut_aa, wt_aa) in enumerate(zip(seq, seq_base)):
-                if mut_aa != wt_aa:
-                    aa_row = aaList_with_X.index(mut_aa)
-                    total += float(mat[aa_row, pos_idx])
-            llr_sum_seq.append(total)
-        llr_sum_seq = np.asarray(llr_sum_seq, dtype=np.float32)
-
-    return llr_sum_seq, llr_by_base
+    if return_wt_logp:
+        return llr_by_base, wt_logp_by_base
+    return llr_by_base
 
 
-def _compute_masked_marginal_scores(
+def _compute_masked_marginal_llr_map(
     sequences_base: Sequence[str],
-    sequences: Optional[Sequence[str]] = None,
     model_name: Optional[str] = DEFAULT_MODEL_NAME,
     batch_size: Optional[int] = 4,  # kept for interface parity
     device: Optional[str] = "cpu",
-) -> Tuple[Optional[np.ndarray], Dict[str, np.ndarray]]:
+    return_wt_logp: bool = False,
+    save_artifacts: bool = False,
+    vect_cache_path: Optional[Union[str, Path]] = None,
+    map_png_cache_path: Optional[Union[str, Path]] = None,
+) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]]:
     """
     Compute masked-marginal LLR matrices from one masked sweep per unique base sequence.
 
     Returns:
-      - llr_sum_per_sequence: shape (n_sequences,) or None if sequences is None
       - llr_by_base: dict {base_seq: matrix shape (len(aaList_with_X), len(base_seq))}
     """
     bundle = load_model(model_name=model_name, device=device)
@@ -286,7 +394,9 @@ def _compute_masked_marginal_scores(
 
     # Section 1: one masked sweep per unique WT base sequence.
     llr_by_base: Dict[str, np.ndarray] = {}
+    wt_logp_by_base: Dict[str, np.ndarray] = {}
     unique_bases = list(dict.fromkeys(sequences_base))
+    masked_batch_size = max(int(batch_size or 4), 1)
     for seq_base in unique_bases:
         n = len(seq_base)
 
@@ -299,19 +409,46 @@ def _compute_masked_marginal_scores(
         res_pos = torch.arange(1, 1 + n, device=input_ids.device)  # [n]
         wt_ids = input_ids[res_pos]                                # [n]
 
-        # Build n masked copies (one masked residue per row)
-        masked_ids = input_ids.unsqueeze(0).repeat(n, 1)           # [n, T]
-        masked_attn = attn.unsqueeze(0).repeat(n, 1)               # [n, T]
-        rows = torch.arange(n, device=input_ids.device)
-        masked_ids[rows, res_pos] = mask_id
+        # Build masked variants in chunks to control memory and improve throughput.
+        pos_token_llr_chunks: List[torch.Tensor] = []
+        wt_logp_chunks: List[torch.Tensor] = []
+        start_time = time.time()
+        print(
+            f"[masked-marginal] Processing base sequence (len={n}) "
+            f"with masked_batch_size={masked_batch_size}..."
+        )
+        for start in range(0, n, masked_batch_size):
+            end = min(start + masked_batch_size, n)
+            chunk_len = end - start
 
-        with torch.no_grad():
-            out = model(input_ids=masked_ids, attention_mask=masked_attn)
-        log_probs = torch.log_softmax(out.logits, dim=-1)          # [n, T, V]
+            chunk_masked_ids = input_ids.unsqueeze(0).repeat(chunk_len, 1)   # [chunk, T]
+            chunk_masked_attn = attn.unsqueeze(0).repeat(chunk_len, 1)       # [chunk, T]
+            chunk_rows = torch.arange(chunk_len, device=input_ids.device)
+            chunk_res_pos = res_pos[start:end]
+            chunk_wt_ids = wt_ids[start:end]
+            chunk_masked_ids[chunk_rows, chunk_res_pos] = mask_id
 
-        # Position-specific WT log-probability and full residue-position table
-        wt_logp = log_probs[rows, res_pos, wt_ids]                 # [n]
-        pos_token_llr = log_probs[rows, res_pos, :] - wt_logp[:, None]  # [n, V]
+            with torch.inference_mode():
+                out = model(input_ids=chunk_masked_ids, attention_mask=chunk_masked_attn)
+            log_probs = torch.log_softmax(out.logits, dim=-1)                # [chunk, T, V]
+
+            # Position-specific WT log-probability and full residue-position table for chunk.
+            chunk_wt_logp = log_probs[chunk_rows, chunk_res_pos, chunk_wt_ids]           # [chunk]
+            chunk_pos_token_llr = log_probs[chunk_rows, chunk_res_pos, :] - chunk_wt_logp[:, None]  # [chunk, V]
+            pos_token_llr_chunks.append(chunk_pos_token_llr)
+            wt_logp_chunks.append(chunk_wt_logp)
+
+            done = end
+            elapsed = max(time.time() - start_time, 1e-9)
+            rate = done / elapsed
+            eta = (n - done) / rate if rate > 0 else float("inf")
+            print(
+                f"[masked-marginal] {done}/{n} ({100.0 * done / n:.1f}%) "
+                f"| {rate:.2f} pos/s | ETA {eta:.1f}s"
+            )
+
+        pos_token_llr = torch.cat(pos_token_llr_chunks, dim=0)  # [n, V]
+        wt_logp_vec = torch.cat(wt_logp_chunks, dim=0).detach().cpu().numpy().astype(np.float32)
 
         # Convert to shape [aa, pos]
         llr_mat = np.zeros((len(aaList_with_X), n), dtype=np.float32)
@@ -320,24 +457,20 @@ def _compute_masked_marginal_scores(
             llr_mat[i, :] = pos_token_llr[:, aa_id].detach().cpu().numpy()
 
         llr_by_base[seq_base] = llr_mat
+        wt_logp_by_base[seq_base] = wt_logp_vec
+        if save_artifacts:
+            if vect_cache_path is None or map_png_cache_path is None:
+                raise ValueError("save_artifacts=True requires vect_cache_path and map_png_cache_path.")
+            save_llr_vect_and_heatmap(
+                llr_mat,
+                seq_base,
+                vect_cache_path=vect_cache_path,
+                map_png_cache_path=map_png_cache_path,
+            )
 
-    # Section 2: optionally sum mutation LLR for provided mutant sequences.
-    llr_sum_seq = None
-    if sequences is not None:
-        llr_sum_seq: List[float] = []
-        for seq, seq_base in zip(sequences, sequences_base):
-            if len(seq) != len(seq_base):
-                raise ValueError("Each sequence must have same length as its sequence_base.")
-            mat = llr_by_base[seq_base]
-            total = 0.0
-            for pos_idx, (mut_aa, wt_aa) in enumerate(zip(seq, seq_base)):
-                if mut_aa != wt_aa:
-                    aa_row = aaList_with_X.index(mut_aa)
-                    total += float(mat[aa_row, pos_idx])
-            llr_sum_seq.append(total)
-        llr_sum_seq = np.asarray(llr_sum_seq, dtype=np.float32)
-
-    return llr_sum_seq, llr_by_base
+    if return_wt_logp:
+        return llr_by_base, wt_logp_by_base
+    return llr_by_base
 
 
 def get_embeddings(
@@ -439,7 +572,7 @@ def _compute_per_residue_embeddings(
     *,
     model_name: str = DEFAULT_MODEL_NAME,
     layers: Optional[Sequence[int]] = None,
-    batch_size: int = 2,
+    batch_size: int = 1,
     device: Optional[str] = None,
 ) -> Dict[int, np.ndarray]:
     """
@@ -489,7 +622,8 @@ def _compute_per_residue_embeddings(
             continue
         lengths = {int(np.asarray(a).shape[0]) for a in arrays}
         if len(lengths) != 1:
-            raise ValueError(
+            out = collected
+            print(
                 f"Layer {int(layer)} embeddings have variable sequence lengths {sorted(lengths)}; "
                 "cannot return a single dense matrix."
             )

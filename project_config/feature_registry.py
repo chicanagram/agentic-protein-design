@@ -24,11 +24,22 @@ FEATURE_SETS_DEFAULT = [
     "one_hot",
     "esm2-650m_LLR",
     "esmc-600m_LLR",
+    "esm2-650m_meanPLL",
+    "esmc-600m_meanPLL",
     "esm2-650m_mean_pooled",
     "esmc-600m_mean_pooled",
 ]
 
 # combi feature sets
 COMBI_ML_FEATURE_SETS = {
-
+    'onehot': ['one_hot'],
+    'georgiev': ['georgiev'],
+    'onehot_esm2_LLR': ['one_hot', 'esm2-650m_LLR-masked'],
+    'onehot_esmc_LLR': ['one_hot', 'esmc-600m_LLR-masked'],
+    'georgiev_esm2_LLR': ['georgiev', 'esm2-650m_LLR-masked'],
+    'georgiev_esmc_LLR': ['georgiev', 'esmc-600m_LLR-masked'],
+    'esm2_seq_embeddings': ['esm2-650m_mean_pooled-33'],
+    'esmc_seq_embeddings': ['esmc-600m_mean_pooled-36'],
+    'esm2_seq_embeddings_LLR': ['esm2-650m_mean_pooled-33', 'esm2-650m_LLR-masked'],
+    'esmc_seq_embeddings_LLR': ['esmc-600m_mean_pooled-36', 'esmc-600m_LLR-masked'],
 }

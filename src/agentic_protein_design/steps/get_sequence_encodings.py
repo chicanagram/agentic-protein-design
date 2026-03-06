@@ -38,6 +38,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "root_key": "examples",
         "data_subfolder": "",
         "encodings_subfolder": "encodings/",
+        "filename_prefix": "",
         "sequence_input": "",
         "sequence_col": "sequence",
         "sequence_base_col": "sequence_base",
@@ -47,6 +48,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "get_embeddings_for_seq_base": False,
         "classical_max_length": None,
         "marginal_type": "wt",
+        "llr_cache_vect_filename_prefix": "",
+        "resave_llr_cache_if_found": False,
         "mutations_sep": "+",
         "layers": {k: list(v) for k, v in PLM_MODELS_DICT.items()},
         "batch_size": 4,
@@ -282,11 +285,11 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
     if split_sets["classical"] and parsed["sequence_list"] is None:
         raise ValueError("Classical encodings require sequence inputs from CSV/FASTA; base-only mode is unsupported.")
     if split_sets["plm"] and parsed["sequence_list"] is None:
-        non_zeroshot = [f for f in split_sets["plm"] if not str(f).endswith("_LLR")]
-        if non_zeroshot:
+        non_llr = [f for f in split_sets["plm"] if not str(f).endswith("_LLR")]
+        if non_llr:
             raise ValueError(
-                "Base-only mode supports only PLM zeroshot feature sets. "
-                f"Unsupported in this mode: {non_zeroshot}"
+                "Base-only mode supports only PLM *_LLR feature sets. "
+                f"Unsupported in this mode: {non_llr}"
             )
 
     # Section 5: resolve output directory from root_key + subfolder settings.
@@ -313,6 +316,7 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
             sequence_list=parsed["sequence_list"],
             sequence_base_list=parsed["sequence_base_list"],
             encodings_dir=encodings_dir,
+            filename_prefix=str(inputs.get("filename_prefix", "") or ""),
             get_embeddings_for_seq_base=bool(inputs.get("get_embeddings_for_seq_base", False)),
             max_length=inputs.get("classical_max_length"),
         )
@@ -323,7 +327,10 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
             sequence_list=parsed["sequence_list"],
             sequence_base_list=parsed["sequence_base_list"],
             encodings_dir=encodings_dir,
+            filename_prefix=str(inputs.get("filename_prefix", "") or ""),
             marginal_type=str(inputs.get("marginal_type", "wt")),
+            llr_cache_vect_filename_prefix=str(inputs.get("llr_cache_vect_filename_prefix", "") or "").strip(),
+            resave_llr_cache_if_found=bool(inputs.get("resave_llr_cache_if_found", False)),
             mutations=parsed["mutations_list"],
             sep=str(inputs.get("mutations_sep", "+")),
             layers=inputs.get("layers"),

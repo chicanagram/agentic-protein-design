@@ -8,8 +8,11 @@ tabulate
 numpy
 pandas
 scipy
+scikit-learn
 matplotlib
 seaborn
+xgboost
+lightgbm
 
 # Bioinformatics modules (keep)
 biopython

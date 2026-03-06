@@ -1,6 +1,6 @@
 from tools.openprotein.openprotein_utils import connect_openprotein_session
 
-def get_zeroshot_scores():
+def get_LLR_scores():
     return None
 
 

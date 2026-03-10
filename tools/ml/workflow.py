@@ -15,6 +15,13 @@ from tools.ml.feature_matrix import (
     load_dataset_table,
     prepare_dataset_bundle,
 )
+from tools.ml.feature_coefficients import (
+    extract_coefficients,
+    normalize_feature_model_pairs,
+    resolve_sequence_base,
+    save_coefficients_csv,
+    should_extract_coefficients,
+)
 from tools.ml.splits import generate_splits
 
 
@@ -100,7 +107,7 @@ def _summary_progress_row(task_type: str, test_metrics: Dict[str, Any]) -> pd.Da
         cols = ["test_spearman", "test_pearson", "test_r2", "test_rmse", "n_test_pooled", "n_folds"]
     else:
         cols = ["test_mcc", "test_accuracy", "test_f1_weighted", "n_test_pooled", "n_folds"]
-    row = {k: test_metrics.get(k, np.nan) for k in cols if k.startswith("test_")}
+    row = {k: test_metrics.get(k, np.nan) for k in cols}
     return pd.DataFrame([row])
 
 
@@ -195,6 +202,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     custom_test_data_subfolder = custom_test_data_subfolder_raw or data_subfolder
     input_filename_prefix = str(inputs.get("input_filename_prefix", "") or "").strip()
     custom_input_filename_prefix = str(inputs.get("custom_input_filename_prefix", "") or "").strip()
+    sequence_base_input = inputs.get("sequence_base")
 
     settings_repo_dir = Path(str(inputs.get("model_settings_repo_dir", "tools/ml/model_settings"))).expanduser().resolve()
     model_params_override = inputs.get("model_params")
@@ -203,6 +211,10 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     train_full_data_model = bool(inputs.get("train_full_data_model", False))
     save_predictions = bool(inputs.get("save_predictions", True))
     show_progress = bool(inputs.get("show_progress", True))
+    feature_model_pairs = normalize_feature_model_pairs(
+        inputs.get("featurecombi_model_pair_to_extract_coefficients_for", [])
+    )
+    extract_feature_coefficients = bool(feature_model_pairs)
 
     run_label = str(inputs.get("run_label", _utc_now_label())).strip() or _utc_now_label()
     csv_suffix = str(inputs.get("csv_suffix", "")).strip()
@@ -226,6 +238,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     summary_csv_path = out_dir / _build_summary_csv_name(task_type=task_type, suffix=csv_suffix)
     run_rows: List[Dict[str, Any]] = []
     pooled_test_cache: Dict[Tuple[str, str, str, str], Dict[str, List[np.ndarray]]] = {}
+    matched_coeff_pairs: set[tuple[str, str]] = set()
 
     for target_col in target_col_list:
         for split_type in split_type_list:
@@ -406,32 +419,78 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             pred_path.parent.mkdir(parents=True, exist_ok=True)
                             pred_df.to_csv(pred_path, index=False)
 
-                    if train_full_data_model:
-                        for model_name in model_list:
-                            params = load_model_params(
-                                model_name=model_name,
-                                task_type=task_type,
-                                settings_repo_dir=settings_repo_dir,
-                                model_params_override=model_params_override,
-                            )
-                            model = build_model(model_name=model_name, task_type=task_type, params=params)
-                            model.fit(X_all, y_all)
-                            if save_trained_models:
-                                model_path = model_dir / f"{run_label}__{feature_label}__{target_col}__full__{model_name}.pkl"
-                                payload = {
-                                    "model": model,
-                                    "metadata": {
-                                        "feature_label": feature_label,
-                                        "feature_files": list(feature_files),
-                                        "split_type": "full",
-                                        "split_id": "full",
-                                        "model_name": model_name,
-                                        "task_type": task_type,
-                                        "params": params,
-                                        "target_col": target_col,
-                                    },
-                                }
-                                _write_pickle(model_path, payload)
+                if train_full_data_model or extract_feature_coefficients:
+                    resolved_sequence_base = resolve_sequence_base(
+                        sequence_base_input=sequence_base_input,
+                        dataset_df=dataset_df,
+                        data_root=data_root,
+                        data_subfolder=data_subfolder,
+                    )
+                    for model_name in model_list:
+                        want_coefficients = should_extract_coefficients(
+                            feature_label=feature_label,
+                            model_name=model_name,
+                            feature_files=feature_files,
+                            feature_model_pairs=feature_model_pairs,
+                        )
+                        if not train_full_data_model and not want_coefficients:
+                            continue
+
+                        params = load_model_params(
+                            model_name=model_name,
+                            task_type=task_type,
+                            settings_repo_dir=settings_repo_dir,
+                            model_params_override=model_params_override,
+                        )
+                        model = build_model(model_name=model_name, task_type=task_type, params=params)
+                        model.fit(X_all, y_all)
+
+                        if train_full_data_model and save_trained_models:
+                            model_path = model_dir / f"{run_label}__{feature_label}__{target_col}__full__{model_name}.pkl"
+                            payload = {
+                                "model": model,
+                                "metadata": {
+                                    "feature_label": feature_label,
+                                    "feature_files": list(feature_files),
+                                    "split_type": "full",
+                                    "split_id": "full",
+                                    "model_name": model_name,
+                                    "task_type": task_type,
+                                    "params": params,
+                                    "target_col": target_col,
+                                },
+                            }
+                            _write_pickle(model_path, payload)
+
+                        if want_coefficients:
+                            matched_coeff_pairs.add((str(feature_label).strip().lower(), str(model_name).strip().lower()))
+                            if len(feature_files) == 1:
+                                matched_coeff_pairs.add((str(feature_files[0]).strip().lower(), str(model_name).strip().lower()))
+                            try:
+                                coefficients = extract_coefficients(model_name=model_name, model_obj=model)
+                                coeff_path = save_coefficients_csv(
+                                    coefficients=coefficients,
+                                    out_dir=out_dir,
+                                    feature_label=feature_label,
+                                    model_name=model_name,
+                                    feature_files=feature_files,
+                                    sequence_base=resolved_sequence_base,
+                                )
+                                if show_progress:
+                                    print(f"[coefficients-saved] {coeff_path}")
+                            except Exception as exc:
+                                if show_progress:
+                                    print(
+                                        "[coefficients-skipped] "
+                                        f"target_col={target_col} | feature_combi_name={feature_label} | "
+                                        f"model_name={model_name} | reason={exc}"
+                                    )
+
+    if feature_model_pairs and not matched_coeff_pairs and show_progress:
+        print(
+            "[coefficients-warning] No requested feature/model pairs matched this run. "
+            f"requested={sorted(feature_model_pairs)}"
+        )
 
     run_df = pd.DataFrame(run_rows)
 
@@ -462,9 +521,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                 f"target_col={target_col} | split_type={split_type} | "
                 f"feature_combi_name={feature_label} | model_name={model_name}"
             )
-            summary_progress = _summary_progress_row(task_type, {**summary_row})
-            summary_progress["n_test_pooled"] = summary_row["n_test_pooled"]
-            summary_progress["n_folds"] = summary_row["n_folds"]
+            summary_progress = _summary_progress_row(task_type, summary_row)
             print(summary_progress.to_string(index=False))
 
     summary_df = pd.DataFrame(summary_rows)

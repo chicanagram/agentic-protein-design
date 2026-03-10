@@ -11,6 +11,8 @@ import torch
 
 from tools.encodings.common import (
     _resolve_model_name,
+    _coerce_sequence_list,
+    _print_progress,
     compute_pooled_embeddings,
     resolve_llr_cache_paths,
     save_layerwise_embeddings,
@@ -31,29 +33,6 @@ MODEL_NAME_ALIASES: Dict[str, str] = {
 DEFAULT_MODEL_NAME = "esmc-600m"
 DEFAULT_MARGINAL_TYPE = "wt"
 _MODEL_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
-
-
-def _coerce_sequence_list(
-    value: Optional[Union[str, Sequence[str]]],
-    *,
-    name: str,
-    required: bool = False,
-) -> Optional[List[str]]:
-    """Normalize an optional sequence input into a list of strings."""
-    # Section 1: enforce required inputs.
-    if value is None:
-        if required:
-            raise ValueError(f"{name} requires non-empty sequences.")
-        return None
-    # Section 2: coerce str/list-like into list[str].
-    if isinstance(value, str):
-        out = [value]
-    else:
-        out = [str(x) for x in value]
-    # Section 3: validate non-empty list when required.
-    if required and not out:
-        raise ValueError(f"{name} requires non-empty sequences.")
-    return out
 
 
 def load_model(
@@ -96,6 +75,8 @@ def forward_pass(
     device: Optional[str] = None,
     output_hidden_states: bool = True,
     layers: Optional[List[int]] = None,
+    show_progress: bool = False,
+    progress_tag: str = "esmc embeddings",
 ) -> Any:
 
     embedding_config = LogitsConfig(sequence=True, return_embeddings=output_hidden_states, return_hidden_states=output_hidden_states)
@@ -107,7 +88,8 @@ def forward_pass(
     # Section 2: run per-sequence forward passes and collect outputs.
     logits = []
     representations = {layer: [] for layer in layers} if layers is not None else None
-    for seq in sequences:
+    total = len(sequences)
+    for idx, seq in enumerate(sequences):
         protein = ESMProtein(sequence=seq)
         protein_tensor = model.encode(protein)
         output_seq = model.logits(protein_tensor, embedding_config)
@@ -118,6 +100,8 @@ def forward_pass(
             hidden_states_seq = output_seq.hidden_states[:, 0, :, :]
             for layer in layers:
                 representations[layer].append(hidden_states_seq[layer - 1, :, :])
+        if show_progress:
+            _print_progress(progress_tag, idx + 1, total)
     return logits, representations
 
 
@@ -161,7 +145,7 @@ def get_LLR_scores(
     vect_cache_path = Path(cache_info["vect_cache_path"])
     map_png_cache_path = Path(cache_info["map_png_cache_path"])
 
-    # Section 1: cache resolution for vect CSV.
+    # Cache resolution for vect CSV.
     cache_hit = bool(cache_info["vect_exists"])
     if cache_hit:
         print(f"[zeroshot/{marginal_type}-marginal] Loaded LLR cache: {vect_cache_path}")
@@ -427,6 +411,7 @@ def get_embeddings(
         layers=layers,
         batch_size=batch_size,
         device=device,
+        progress_tag="esmc embeddings",
     )
 
     # Section 2: optionally persist per-residue embeddings for input sequences.
@@ -464,6 +449,7 @@ def get_embeddings(
             layers=layers,
             batch_size=batch_size,
             device=device,
+            progress_tag="esmc base embeddings",
         )
         if save_per_residue_embeddings:
             result["base_per_residue_paths"] = save_layerwise_embeddings(
@@ -498,6 +484,7 @@ def _compute_per_residue_embeddings(
     layers: Optional[Sequence[int]] = None,
     batch_size: int = 2,
     device: Optional[str] = None,
+    progress_tag: Optional[str] = None,
 ) -> Dict[int, np.ndarray]:
     """
     Extract per-residue hidden-state embeddings for one or more ESM layers.
@@ -515,19 +502,22 @@ def _compute_per_residue_embeddings(
     """
     # Section 1: Load model
     bundle = load_model(model_name=model_name, device=device)
+    seq_list = [sequences] if isinstance(sequences, str) else list(sequences)
     collected: Dict[int, List[np.ndarray]] = {layer: [] for layer in layers}
 
     # Section 2: run batched forward passes and collect residue spans per layer.
     _, representations = forward_pass(
-        sequences,
+        seq_list,
         model=bundle["model"],
         output_hidden_states=True,
-        layers=layers
+        layers=layers,
+        show_progress=bool(progress_tag),
+        progress_tag=str(progress_tag or "esmc embeddings"),
     )
 
     collected = {layer:[] for layer in layers}
     for layer in layers:
-        for i, seq in enumerate(sequences):
+        for i, seq in enumerate(seq_list):
             collected[layer].append(representations[layer][i][1:1+len(seq), :].detach().cpu().numpy())
 
     # Section 3: convert per-layer list outputs to dense matrices.

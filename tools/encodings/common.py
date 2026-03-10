@@ -268,3 +268,41 @@ def score_mutants_from_llr_map(
             total += float(llr_lookup[mut_label])
         llr_sum_seq.append(total)
     return np.asarray(llr_sum_seq, dtype=np.float32)
+
+
+def _print_progress(progress_tag: str, done: int, total: int) -> None:
+    """Render a minimal in-place progress bar."""
+    # Section 1: compute bounded progress ratio.
+    total_safe = max(int(total), 1)
+    done_safe = min(max(int(done), 0), total_safe)
+    ratio = done_safe / total_safe
+    # Section 2: draw compact bar and flush in-place.
+    bar_len = 20
+    filled = int(round(ratio * bar_len))
+    bar = "#" * filled + "-" * (bar_len - filled)
+    print(f"\r[{progress_tag}] [{bar}] {done_safe}/{total_safe}", end="", flush=True)
+    if done_safe >= total_safe:
+        print("")
+
+
+def _coerce_sequence_list(
+    value: Optional[Union[str, Sequence[str]]],
+    *,
+    name: str,
+    required: bool = False,
+) -> Optional[List[str]]:
+    """Normalize an optional sequence input into a list of strings."""
+    # Section 1: enforce required inputs.
+    if value is None:
+        if required:
+            raise ValueError(f"{name} requires non-empty sequences.")
+        return None
+    # Section 2: coerce str/list-like into list[str].
+    if isinstance(value, str):
+        out = [value]
+    else:
+        out = [str(x) for x in value]
+    # Section 3: validate non-empty list when required.
+    if required and not out:
+        raise ValueError(f"{name} requires non-empty sequences.")
+    return out

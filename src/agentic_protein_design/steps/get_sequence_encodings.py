@@ -256,6 +256,7 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Section 1: resolve high-level inputs.
     sequence_input = str(inputs.get("sequence_input", "") or "").strip()
+    print('sequence_input:', sequence_input)
     # Section 2: split requested feature sets by encoding backend.
     split_sets = split_feature_sets(inputs.get("feature_sets", FEATURE_SETS_DEFAULT))
 

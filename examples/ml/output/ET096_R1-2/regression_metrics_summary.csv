@@ -215,3 +215,6 @@ foldchange_ABTS_activity_25C,esm2_seq_embeddings_LLR,custom,xgboost,regression,5
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,rf,regression,52,1,0.5934,0.5788,-0.2738,0.7545,1.0374
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,ridge,regression,52,1,0.3959,0.3438,-4.6733,1.5222,2.1893
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,xgboost,regression,52,1,0.5644,0.499,-2.3899,1.1855,1.6923
+foldchange_NBD_activity_25C,onehot,random,ridge,regression,282,5,0.7197,0.6824,0.4628,0.3321,0.4697
+foldchange_NBD_activity_25C,one_hot,random,ridge,regression,282,5,0.7197,0.6824,0.4628,0.3321,0.4697
+foldchange_NBD_activity_25C,one_hot,random,ridge,regression,282,5,0.7197,0.6824,0.4628,0.3321,0.4697

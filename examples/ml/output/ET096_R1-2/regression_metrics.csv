@@ -707,3 +707,18 @@ foldchange_ABTS_activity_25C,esm2_seq_embeddings_LLR,custom,0,xgboost,regression
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,0,rf,regression,334,1153,282,52,"{'n_estimators': 300, 'random_state': 42, 'n_jobs': -1}",0.5934,0.5788,-0.2738,0.7545,1.0374,0.9544,0.9652,0.9037,0.1856,0.3367
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,0,ridge,regression,334,1153,282,52,{'alpha': 1.0},0.3959,0.3438,-4.6733,1.5222,2.1893,0.9567,0.9669,0.9336,0.1577,0.2795
 foldchange_ABTS_activity_25C,esmc_seq_embeddings_LLR,custom,0,xgboost,regression,334,1153,282,52,"{'n_estimators': 400, 'learning_rate': 0.05, 'max_depth': 6, 'random_state': 42}",0.5644,0.499,-2.3899,1.1855,1.6923,1.0,1.0,1.0,0.0003,0.0005
+foldchange_NBD_activity_25C,onehot,random,0,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.6751,0.6434,0.3557,0.3507,0.513,0.8822,0.8578,0.7296,0.2177,0.3324
+foldchange_NBD_activity_25C,onehot,random,1,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.7744,0.766,0.5778,0.2739,0.3779,0.8772,0.8668,0.7418,0.2259,0.3327
+foldchange_NBD_activity_25C,onehot,random,2,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.7246,0.6129,0.3619,0.3433,0.5001,0.8931,0.881,0.7688,0.2196,0.3099
+foldchange_NBD_activity_25C,onehot,random,3,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.6413,0.6777,0.4524,0.376,0.529,0.8949,0.8782,0.763,0.2097,0.3024
+foldchange_NBD_activity_25C,onehot,random,4,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.749,0.761,0.5559,0.3174,0.4098,0.8732,0.8602,0.7307,0.2235,0.3337
+foldchange_NBD_activity_25C,one_hot,random,0,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.6751,0.6434,0.3557,0.3507,0.513,0.8822,0.8578,0.7296,0.2177,0.3324
+foldchange_NBD_activity_25C,one_hot,random,1,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.7744,0.766,0.5778,0.2739,0.3779,0.8772,0.8668,0.7418,0.2259,0.3327
+foldchange_NBD_activity_25C,one_hot,random,2,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.7246,0.6129,0.3619,0.3433,0.5001,0.8931,0.881,0.7688,0.2196,0.3099
+foldchange_NBD_activity_25C,one_hot,random,3,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.6413,0.6777,0.4524,0.376,0.529,0.8949,0.8782,0.763,0.2097,0.3024
+foldchange_NBD_activity_25C,one_hot,random,4,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.749,0.761,0.5559,0.3174,0.4098,0.8732,0.8602,0.7307,0.2235,0.3337
+foldchange_NBD_activity_25C,one_hot,random,0,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.6751,0.6434,0.3557,0.3507,0.513,0.8822,0.8578,0.7296,0.2177,0.3324
+foldchange_NBD_activity_25C,one_hot,random,1,ridge,regression,282,4860,225,57,{'alpha': 1.0},0.7744,0.766,0.5778,0.2739,0.3779,0.8772,0.8668,0.7418,0.2259,0.3327
+foldchange_NBD_activity_25C,one_hot,random,2,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.7246,0.6129,0.3619,0.3433,0.5001,0.8931,0.881,0.7688,0.2196,0.3099
+foldchange_NBD_activity_25C,one_hot,random,3,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.6413,0.6777,0.4524,0.376,0.529,0.8949,0.8782,0.763,0.2097,0.3024
+foldchange_NBD_activity_25C,one_hot,random,4,ridge,regression,282,4860,226,56,{'alpha': 1.0},0.749,0.761,0.5559,0.3174,0.4098,0.8732,0.8602,0.7307,0.2235,0.3337

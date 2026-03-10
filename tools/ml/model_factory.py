@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 
+def _canonical_model_key(model_name: str) -> str:
+    key = str(model_name).strip().lower()
+    if key == "random_forest":
+        return "rf"
+    return key
+
+
 def _import_sklearn_models():
     from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
     from sklearn.linear_model import LogisticRegression, Ridge
@@ -31,12 +38,9 @@ def _import_lightgbm_models():
 
 
 def _default_params(model_name: str, task_type: str) -> Dict[str, Any]:
+    key = _canonical_model_key(model_name)
     defaults = {
         "rf": {
-            "classification": {"n_estimators": 300, "random_state": 42, "n_jobs": -1},
-            "regression": {"n_estimators": 300, "random_state": 42, "n_jobs": -1},
-        },
-        "random_forest": {
             "classification": {"n_estimators": 300, "random_state": 42, "n_jobs": -1},
             "regression": {"n_estimators": 300, "random_state": 42, "n_jobs": -1},
         },
@@ -103,7 +107,7 @@ def _default_params(model_name: str, task_type: str) -> Dict[str, Any]:
             "regression": {"n_estimators": 400, "learning_rate": 0.05, "max_depth": -1, "random_state": 42},
         },
     }
-    return dict(defaults.get(model_name, {}).get(task_type, {}))
+    return dict(defaults.get(key, {}).get(task_type, {}))
 
 
 def load_model_params(
@@ -113,10 +117,14 @@ def load_model_params(
     settings_repo_dir: Path,
     model_params_override: Dict[str, Any] | None,
 ) -> Dict[str, Any]:
-    if model_params_override and model_name in model_params_override:
-        return dict(model_params_override[model_name])
+    key = _canonical_model_key(model_name)
+    if model_params_override:
+        if model_name in model_params_override:
+            return dict(model_params_override[model_name])
+        if key in model_params_override:
+            return dict(model_params_override[key])
 
-    settings_path = settings_repo_dir / f"{model_name}.json"
+    settings_path = settings_repo_dir / f"{key}.json"
     if settings_path.exists():
         raw = json.loads(settings_path.read_text(encoding="utf-8"))
         if isinstance(raw, dict):
@@ -125,7 +133,7 @@ def load_model_params(
                 return dict(scoped)
             return dict(raw)
 
-    return _default_params(model_name=model_name, task_type=task_type)
+    return _default_params(model_name=key, task_type=task_type)
 
 
 def build_model(
@@ -134,7 +142,7 @@ def build_model(
     task_type: str,
     params: Dict[str, Any],
 ):
-    key = str(model_name).strip().lower()
+    key = _canonical_model_key(model_name)
     task = str(task_type).strip().lower()
     if task not in {"classification", "regression"}:
         raise ValueError("task_type must be 'classification' or 'regression'.")

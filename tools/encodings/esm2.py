@@ -15,6 +15,8 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 from tools.encodings.common import (
     _resolve_model_name,
     _resolve_layers,
+    _coerce_sequence_list,
+    _print_progress,
     compute_pooled_embeddings,
     extract_sequence_token_spans,
     resolve_llr_cache_paths,
@@ -42,29 +44,6 @@ MODEL_NAME_ALIASES: Dict[str, str] = {
 DEFAULT_MODEL_NAME = "esm2-650M"
 _MODEL_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
 DEFAULT_MARGINAL_TYPE = "wt"
-
-
-def _coerce_sequence_list(
-    value: Optional[Union[str, Sequence[str]]],
-    *,
-    name: str,
-    required: bool = False,
-) -> Optional[List[str]]:
-    """Normalize an optional sequence input into a list of strings."""
-    # Section 1: enforce required inputs.
-    if value is None:
-        if required:
-            raise ValueError(f"{name} requires non-empty sequences.")
-        return None
-    # Section 2: coerce str/list-like into list[str].
-    if isinstance(value, str):
-        out = [value]
-    else:
-        out = [str(x) for x in value]
-    # Section 3: validate non-empty list when required.
-    if required and not out:
-        raise ValueError(f"{name} requires non-empty sequences.")
-    return out
 
 
 def _prepare_tokenizer_inputs(sequences: Sequence[str]) -> List[str]:
@@ -213,7 +192,7 @@ def get_LLR_scores(
     vect_cache_path = Path(cache_info["vect_cache_path"])
     map_png_cache_path = Path(cache_info["map_png_cache_path"])
 
-    # Section 1: cache resolution for vect CSV.
+    # Cache resolution for vect CSV.
     cache_hit = bool(cache_info["vect_exists"])
     if cache_hit:
         print(f"[zeroshot/{marginal_type}-marginal] Loaded LLR cache: {vect_cache_path}")
@@ -503,6 +482,7 @@ def get_embeddings(
         layers=layers,
         batch_size=batch_size,
         device=device,
+        progress_tag="esm2 embeddings",
     )
 
     # Section 2: optionally persist per-residue embeddings for input sequences.
@@ -540,6 +520,7 @@ def get_embeddings(
             layers=layers,
             batch_size=batch_size,
             device=device,
+            progress_tag="esm2 base embeddings",
         )
         if save_per_residue_embeddings:
             result["base_per_residue_paths"] = save_layerwise_embeddings(
@@ -574,6 +555,7 @@ def _compute_per_residue_embeddings(
     layers: Optional[Sequence[int]] = None,
     batch_size: int = 1,
     device: Optional[str] = None,
+    progress_tag: Optional[str] = None,
 ) -> Dict[int, np.ndarray]:
     """
     Extract per-residue hidden-state embeddings for one or more ESM layers.
@@ -593,11 +575,15 @@ def _compute_per_residue_embeddings(
     bundle = load_model(model_name=model_name, device=device)
     resolved_layers = _resolve_layers(layers, bundle["model"])
     collected: Dict[int, List[np.ndarray]] = {layer: [] for layer in resolved_layers}
+    seq_list = [sequences] if isinstance(sequences, str) else list(sequences)
+    n_total = len(seq_list)
+    n_done = 0
 
     # Section 2: run batched forward passes and collect residue spans per layer.
-    for batch_sequences in iter_batches(sequences, batch_size):
+    for batch_sequences in iter_batches(seq_list, batch_size):
+        batch_list = list(batch_sequences)
         tokenized = tokenize_sequences(
-            list(batch_sequences),
+            batch_list,
             tokenizer=bundle["tokenizer"],
             device=bundle["device"],
         )
@@ -613,6 +599,9 @@ def _compute_per_residue_embeddings(
             hidden = outputs.hidden_states[layer].detach().cpu().numpy()
             for row_idx, span in enumerate(token_spans):
                 collected[layer].append(np.asarray(hidden[row_idx, span, :]))
+        n_done += len(batch_list)
+        if progress_tag:
+            _print_progress(progress_tag, n_done, n_total)
 
     # Section 3: convert per-layer list outputs to dense matrices.
     out: Dict[int, np.ndarray] = {}

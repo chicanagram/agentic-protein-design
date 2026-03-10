@@ -1,2 +1,0 @@
-target_col,feature_label,split_type,model_name,task_type,n_test_pooled,n_folds,test_spearman,test_pearson,test_r2,test_mae,test_rmse
-foldchange_NBD_activity_25C,one_hot,random,ridge,regression,282,5,0.7197,0.6824,0.4628,0.3321,0.4697

@@ -16,16 +16,16 @@ PLM_MODELS_DICT = {
     "poet2": [12],
 }
 
-PLM_ENCODING_FEATURE_SETS = [f for f_list in [[f'{plm}_LLR', f'{plm}_per_residue', f'{plm}_mean_pooled', f'{plm}_mut_pooled'] for plm in PLM_MODELS_DICT] for f in f_list]
+PLM_ENCODING_FEATURE_SETS = [f for f_list in [[f'{plm}_LLR', f'{plm}_per_residue', f'{plm}_mean_pooled', f'{plm}_mut_pooled', f'{plm}_svd_pooled'] for plm in PLM_MODELS_DICT] for f in f_list]
 
 # combination of classical and PLM
 FEATURE_SETS_ALL = CLASSICAL_ENCODING_FEATURE_SETS + PLM_ENCODING_FEATURE_SETS
 FEATURE_SETS_DEFAULT = [
     "one_hot",
-    "esm2-650m_LLR",
-    "esmc-600m_LLR",
-    "esm2-650m_meanPLL",
-    "esmc-600m_meanPLL",
+    "esm2-650m_LLR-masked",
+    "esmc-600m_LLR-masked",
+    "esm2-650m_meanPLL-masked",
+    "esmc-600m_meanPLL-masked",
     "esm2-650m_mean_pooled",
     "esmc-600m_mean_pooled",
 ]

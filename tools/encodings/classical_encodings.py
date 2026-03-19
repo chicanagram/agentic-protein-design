@@ -200,6 +200,9 @@ def get_classical_encodings(
         # Get sequence encodings and save
         seq_encoding = encode_sequences(sequence_list, encoder_name=encoder_name, max_length=max_length)
         seq_encoding_flat = seq_encoding.reshape(seq_encoding.shape[0], -1)
+        # Keep Georgiev artifacts explicitly in float32 on disk.
+        if encoder_name == "georgiev":
+            seq_encoding_flat = seq_encoding_flat.astype(np.float32, copy=False)
         seq_encoding_path = out_dir / f"{stem}{ext}"
         seq_encoding_saved = _save_output_matrix(seq_encoding_flat, seq_encoding_path, use_sparse=use_sparse)
 
@@ -208,6 +211,9 @@ def get_classical_encodings(
         if get_embeddings_for_seq_base and sequence_base_list is not None:
             seq_base_encoding = encode_sequences(sequence_base_list, encoder_name=encoder_name, max_length=max_length)
             seq_base_encoding_flat = seq_base_encoding.reshape(seq_base_encoding.shape[0], -1)
+            # Keep Georgiev base artifacts explicitly in float32 on disk.
+            if encoder_name == "georgiev":
+                seq_base_encoding_flat = seq_base_encoding_flat.astype(np.float32, copy=False)
             seq_base_encoding_path = out_dir / f"{stem}_base{ext}"
             seq_base_encoding_saved = _save_output_matrix(seq_base_encoding_flat, seq_base_encoding_path, use_sparse=use_sparse)
 

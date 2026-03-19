@@ -109,15 +109,18 @@ def get_LLR_scores(
     sequences_base: Optional[Union[str, Sequence[str]]] = None,
     sequences: Optional[Union[str, Sequence[str]]] = None,
     mutations: Optional[Union[str, Sequence[str]]] = None,
-    marginal_type: str = DEFAULT_MARGINAL_TYPE,
     output_path: Optional[Union[str, Path]] = None,
     llr_cache_vect_filename_prefix: str = "",
     resave_llr_cache_if_found: bool = False,
     model_name: str = DEFAULT_MODEL_NAME,
-    batch_size: int = 4,
-    device: Optional[str] = None,
+    **kwargs,
 ):
     """Compute sequence-level LLR scores using WT or masked marginal scoring."""
+    # get kwargs
+    marginal_type = kwargs.get('marginal_type', DEFAULT_MARGINAL_TYPE)
+    batch_size = kwargs.get('batch_size', 4)
+    device = kwargs.get('device', 'cpu')
+
     # Section 1: normalize sequence inputs and scoring backend.
     base_list = _coerce_sequence_list(sequences_base, name="get_LLR_scores(sequences_base)", required=True)
     seq_list = _coerce_sequence_list(sequences, name="get_LLR_scores(sequences)", required=False)
@@ -182,13 +185,16 @@ def get_LLR_scores(
 
 def get_mean_PLL_scores(
     sequences: Optional[Union[str, Sequence[str]]] = None,
-    marginal_type: str = DEFAULT_MARGINAL_TYPE,
     output_path: Optional[Union[str, Path]] = None,
     model_name: str = DEFAULT_MODEL_NAME,
-    batch_size: int = 4,
-    device: Optional[str] = None,
+    **kwargs,
 ) -> np.ndarray:
     """Compute mean pseudo-log-likelihood (mean PLL) scores for sequences without a shared base."""
+    # get kwargs
+    marginal_type = kwargs.get('marginal_type', DEFAULT_MARGINAL_TYPE)
+    batch_size = kwargs.get('batch_size', 4)
+    device = kwargs.get('device', 'cpu')
+
     # Section 1: validate/normalize sequence input and select marginal backend.
     seq_list = _coerce_sequence_list(sequences, name="get_mean_PLL_scores", required=True)
 
@@ -392,8 +398,7 @@ def get_embeddings(
     output_path: Optional[Union[str, Path]] = None,
     layers: Optional[Sequence[int]] = None,
     model_name: str = DEFAULT_MODEL_NAME,
-    batch_size: int = 4,
-    device: Optional[str] = None,
+    **kwargs,
 ):
     """
     Compute and save layer-wise embeddings for sequences (and optionally WT/base).
@@ -401,6 +406,9 @@ def get_embeddings(
     Per-residue embeddings are saved as `*.npy` arrays with suffix `-{layer_number}`.
     If `pool_method` is provided, pooled embeddings are also saved layer-wise.
     """
+    # get kwargs
+    batch_size = kwargs.get('batch_size', 4)
+    device = kwargs.get('device', 'cpu')
 
     # Section 1: prepare output stem and compute per-residue embeddings.
     out_base = Path(output_path) if output_path else Path("embeddings")

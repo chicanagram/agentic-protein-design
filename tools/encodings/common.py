@@ -68,7 +68,7 @@ def save_layerwise_embeddings(
             fpath = stem.parent / f"{stem_name}{str(file_suffix)}-{normalized_suffix}-{int(layer)}.npy"
         np.save(str(fpath), arr.astype(arr.dtype, copy=False))
         paths[str(int(layer))] = str(fpath)
-        print(f"[{log_tag}] Saved {suffix} layer {int(layer)}: {fpath}")
+        print(f"[{log_tag}] Saved {suffix} layer {int(layer)}: {fpath} (shape={arr.shape})")
     return paths
 
 

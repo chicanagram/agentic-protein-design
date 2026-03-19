@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from tools.encodings.common import _sanitize_name, compute_pooled_embeddings, save_layerwise_embeddings
+from tools.openprotein.openprotein_utils import connect_openprotein_session
 
 
 def _parse_plm_feature_name(feature_name: str) -> Tuple[str, str]:
@@ -20,19 +21,19 @@ def _parse_plm_feature_name(feature_name: str) -> Tuple[str, str]:
     - mut_pooled
     """
     name = str(feature_name).strip()
-    suffixes = ("mean_pooled", "mut_pooled", "per_residue", "meanPLL", "LLR")
+    suffixes = ("mean_pooled", "mut_pooled", "per_residue", "svd_pooled", "meanPLL", "LLR")
     for suffix in suffixes:
         marker = f"_{suffix}"
         if name.endswith(marker):
             return name[: -len(marker)], suffix
     raise ValueError(
         f"Unsupported PLM feature name '{feature_name}'. "
-        "Expected '<model>_(LLR|meanPLL|per_residue|mean_pooled|mut_pooled)'."
+        "Expected '<model>_(LLR|meanPLL|per_residue|mean_pooled|mut_pooled|svd_pooled)'."
     )
 
 
-def _resolve_backend_name(model_prefix: str) -> str:
-    """Route a model prefix to an available backend module."""
+def _resolve_plm_name(model_prefix: str) -> str:
+    """Route a model prefix to an available plm_name module."""
     lowered = str(model_prefix).strip().lower()
     if lowered.startswith("esmc"):
         return "esmc"
@@ -40,12 +41,12 @@ def _resolve_backend_name(model_prefix: str) -> str:
         return "esm2"
     if lowered.startswith("poet2"):
         return "poet2"
-    raise ValueError(f"Could not infer PLM backend from model prefix '{model_prefix}'.")
+    raise ValueError(f"Could not infer PLM plm_name from model prefix '{model_prefix}'.")
 
 
-def _load_backend_module(backend: str):
-    """Import a PLM backend module and return it."""
-    module_name = f"tools.encodings.{backend}"
+def _load_plm_module(plm_name: str):
+    """Import a PLM plm_name module and return it."""
+    module_name = f"tools.encodings.{plm_name}"
     return importlib.import_module(module_name)
 
 
@@ -57,12 +58,49 @@ def _load_layerwise_arrays(paths_by_layer: Dict[str, str]) -> Dict[int, np.ndarr
     return out
 
 
+def _load_layerwise_shapes(paths_by_layer: Dict[str, str]) -> Dict[int, List[int]]:
+    # Section 1: load only matrix shapes for trace metadata.
+    shapes: Dict[int, List[int]] = {}
+    for layer, path in paths_by_layer.items():
+        arr = np.load(str(path), allow_pickle=False)
+        shapes[int(layer)] = list(arr.shape)
+    return shapes
+
+
+def _unpack_optional_prompt(out: Any, prompt_id: Optional[str]) -> Tuple[Any, Optional[str]]:
+    # Section 1: support both `value` and `(value, prompt_id)` return signatures.
+    if isinstance(out, tuple):
+        if len(out) == 0:
+            return None, prompt_id
+        if len(out) == 1:
+            return out[0], prompt_id
+        return out[0], out[1]
+    return out, prompt_id
+
+
 def _delete_artifact_paths(paths_by_layer: Dict[str, str]) -> None:
     # Section 1: remove temporary files used only for intermediate pooling.
     for _, path in paths_by_layer.items():
         p = Path(path)
         if p.exists():
             p.unlink()
+
+
+def _rename_layerwise_paths(
+    paths_by_layer: Dict[str, str],
+    target_stem: Union[str, Path],
+) -> Dict[str, str]:
+    # Section 1: rename saved layerwise files to a target stem preserving layer suffix.
+    stem = Path(target_stem)
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    renamed: Dict[str, str] = {}
+    for layer, old_path in paths_by_layer.items():
+        old = Path(old_path)
+        new = stem.parent / f"{stem.name}-{int(layer)}.npy"
+        if old.resolve() != new.resolve():
+            old.replace(new)
+        renamed[str(int(layer))] = str(new)
+    return renamed
 
 
 def _resolve_layers_for_model(
@@ -73,7 +111,7 @@ def _resolve_layers_for_model(
     Resolve layer selection for a specific model.
 
     Supported inputs:
-    - `None`: backend default behavior
+    - `None`: plm_name default behavior
     - `List[int]`: shared layer list for all PLMs
     - `Dict[str, List[int]]`: per-model layer list keyed by PLM name
     """
@@ -111,13 +149,14 @@ def get_plm_encodings(
     mutations: Optional[Sequence[str]] = None,
     sep: str = "+",
     layers: Optional[Union[Sequence[int], Mapping[str, Sequence[int]]]] = None,
+    n_components: int = 256,
+    sample_mutants_for_svd: bool = False,
     batch_size: int = 4,
     device: Optional[str] = None,
     get_embeddings_for_seq_base: bool = False,
-    save_per_residue_embeddings: bool = True,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Generate PLM-derived encodings by parsing feature-set names and dispatching by backend.
+    Generate PLM-derived encodings by parsing feature-set names and dispatching by plm_name.
 
     All artifact paths are rooted under `encodings_dir`.
     """
@@ -132,10 +171,10 @@ def get_plm_encodings(
     ordered_features: List[str] = []
     for feature_name in plm_feature_sets:
         model_prefix, suffix = _parse_plm_feature_name(feature_name)
-        backend_name = _resolve_backend_name(model_prefix)
+        plm_name = _resolve_plm_name(model_prefix)
         if model_prefix not in grouped:
             grouped[model_prefix] = {
-                "backend": backend_name,
+                "plm_name": plm_name,
                 "suffixes": set(),
             }
         grouped[model_prefix]["suffixes"].add(suffix)
@@ -147,9 +186,14 @@ def get_plm_encodings(
         # Section 3.0: resolve model-specific layer selection.
         model_layers = _resolve_layers_for_model(model_prefix, layers)
 
-        backend_name = str(group_info["backend"])
-        module = _load_backend_module(backend_name)
+        plm_name = str(group_info["plm_name"])
+        module = _load_plm_module(plm_name)
         requested_suffixes = set(group_info["suffixes"])
+
+        session = None
+        prompt_id = None
+        if plm_name in ['poet2']:
+            session = connect_openprotein_session()
 
         # Section 3A: run LLR scoring once per model if requested.
         if "LLR" in requested_suffixes:
@@ -160,7 +204,7 @@ def get_plm_encodings(
                 )
             if not hasattr(module, "get_LLR_scores"):
                 raise NotImplementedError(
-                    f"Backend '{backend_name}' does not implement get_LLR_scores."
+                    f"Backend '{plm_name}' does not implement get_LLR_scores."
                 )
             llr_feature_name = f"{model_prefix}_LLR"
             llr_stem = f"{file_prefix}{_sanitize_name(llr_feature_name)}"
@@ -168,22 +212,25 @@ def get_plm_encodings(
             output_path = str(llr_base_path)
 
             print(f'Obtaining LLR scores for {model_prefix}...')
-            scores = module.get_LLR_scores(
+            llr_out = module.get_LLR_scores(
                 sequences_base=sequence_base_list,
                 sequences=sequence_list,
                 mutations=mutations,
-                marginal_type=marginal_type,
                 output_path=output_path,
                 llr_cache_vect_filename_prefix=llr_cache_vect_filename_prefix,
                 resave_llr_cache_if_found=resave_llr_cache_if_found,
                 model_name=model_prefix,
+                marginal_type=marginal_type,
                 batch_size=batch_size,
                 device=device,
+                session=session,
+                prompt_id=prompt_id,
             )
+            scores, prompt_id = _unpack_optional_prompt(llr_out, prompt_id)
             results[llr_feature_name] = {
                 "feature_name": llr_feature_name,
                 "model_prefix": model_prefix,
-                "backend": backend_name,
+                "plm_name": plm_name,
                 "output_path": output_path,
                 "shape": list(scores.shape) if isinstance(scores, np.ndarray) else None,
             }
@@ -196,7 +243,7 @@ def get_plm_encodings(
                 )
             if not hasattr(module, "get_mean_PLL_scores"):
                 raise NotImplementedError(
-                    f"Backend '{backend_name}' does not implement get_mean_PLL_scores."
+                    f"Backend '{plm_name}' does not implement get_mean_PLL_scores."
                 )
             pll_feature_name = f"{model_prefix}_meanPLL"
             pll_stem = f"{file_prefix}{_sanitize_name(pll_feature_name)}"
@@ -204,24 +251,28 @@ def get_plm_encodings(
             output_path = str(pll_base_path)
 
             print(f'Obtaining meanPLL scores for {model_prefix}...')
-            scores = module.get_mean_PLL_scores(
+            pll_out = module.get_mean_PLL_scores(
                 sequences=sequence_list,
-                marginal_type=marginal_type,
                 output_path=output_path,
                 model_name=model_prefix,
+                marginal_type=marginal_type,
                 batch_size=batch_size,
                 device=device,
+                session=session,
+                prompt_id=prompt_id,
             )
+            scores, prompt_id = _unpack_optional_prompt(pll_out, prompt_id)
             results[pll_feature_name] = {
                 "feature_name": pll_feature_name,
                 "model_prefix": model_prefix,
-                "backend": backend_name,
+                "plm_name": plm_name,
                 "output_path": output_path,
                 "shape": list(scores.shape) if isinstance(scores, np.ndarray) else None,
             }
 
+
         # Section 3B: run embeddings once per model, then derive requested artifacts.
-        embedding_suffixes = {"per_residue", "mean_pooled", "mut_pooled"} & requested_suffixes
+        embedding_suffixes = {"per_residue", "mean_pooled", "mut_pooled", "svd_pooled"} & requested_suffixes
         if not embedding_suffixes:
             continue
         if sequence_list is None:
@@ -229,122 +280,204 @@ def get_plm_encodings(
         if "mut_pooled" in embedding_suffixes and mutations is None:
             raise ValueError("mut_pooled feature requested but mutations is None.")
         if not hasattr(module, "get_embeddings"):
-            raise NotImplementedError(f"Backend '{backend_name}' does not implement get_embeddings.")
+            raise NotImplementedError(f"Backend '{plm_name}' does not implement get_embeddings.")
 
-        per_res_feature_name = f"{model_prefix}_per_residue"
-        per_res_stem = f"{file_prefix}{_sanitize_name(per_res_feature_name)}"
-        per_res_base_path = out_dir / per_res_stem
-        # Force one per-residue pass and disable backend pooling to avoid duplicate forward passes.
-        print(f'Obtaining embeddings for {model_prefix}...')
-        embed_result = module.get_embeddings(
-            sequences=sequence_list,
-            sequences_base=sequence_base_list,
-            save_per_residue_embeddings=True,
-            get_embeddings_for_seq_base=bool(get_embeddings_for_seq_base and sequence_base_list is not None),
-            pool_method=None,
-            mutations=None,
-            sep=sep,
+        # Section 3B.1: POET2 branch.
+        if plm_name == "poet2":
+            if "mut_pooled" in embedding_suffixes:
+                raise ValueError("poet2 does not support mut_pooled embeddings.")
+            if get_embeddings_for_seq_base:
+                raise ValueError("poet2 does not support base-sequence embedding outputs.")
+
+            save_per_residue_embeddings = "per_residue" in embedding_suffixes
+            if "mean_pooled" in embedding_suffixes:
+                pool_method = "mean"
+            elif "svd_pooled" in embedding_suffixes:
+                pool_method = "svd"
+            else:
+                pool_method = None
+
+            print(f"Obtaining embeddings for {model_prefix}...")
+            shared_stem = out_dir / f"{file_prefix}{_sanitize_name(model_prefix)}"
+            embed_out = module.get_embeddings(
+                sequences=sequence_list,
+                sequences_base=None,
+                save_per_residue_embeddings=save_per_residue_embeddings,
+                get_embeddings_for_seq_base=False,
+                pool_method=pool_method,
+                mutations=None,
+                sep=sep,
+                output_path=shared_stem,
+                layers=model_layers,
+                model_name=model_prefix,
+                n_components=int(n_components),
+                sample_mutants_for_svd=bool(sample_mutants_for_svd),
+                batch_size=batch_size,
+                device=device,
+                session=session,
+                prompt_id=prompt_id,
+            )
+            embed_result, prompt_id = _unpack_optional_prompt(embed_out, prompt_id)
+
+            for embedding_type in embedding_suffixes:
+                feature_name = f"{model_prefix}_{embedding_type}"
+                res_path_key = 'pooled_paths' if embedding_type.find('pooled')>-1 else 'per_residue_paths'
+                embedding_paths = embed_result.get(res_path_key, {})
+                if not embedding_paths:
+                    raise RuntimeError(f"Backend '{plm_name}' did not return {res_path_key} ({embedding_type}).")
+
+
+                target_stem = out_dir / f"{file_prefix}{_sanitize_name(feature_name)}"
+                embedding_paths = _rename_layerwise_paths(embedding_paths, target_stem)
+                results[feature_name] = {
+                    "feature_name": feature_name,
+                    "model_prefix": model_prefix,
+                    "plm_name": plm_name,
+                    "artifacts": {
+                        res_path_key: embedding_paths,
+                        f"base_{res_path_key}": None,
+                    },
+                    "shape_by_layer": _load_layerwise_shapes(embedding_paths),
+                }
+
+        else:
+            # Section 3B.2: non-POET branch (force per_residue first; derive pooled downstream).
+            print(f'Obtaining embeddings for {model_prefix}...')
+            per_res_feature_name = f"{model_prefix}_per_residue"
+            per_res_stem = f"{file_prefix}{_sanitize_name(per_res_feature_name)}"
+            per_res_base_path = out_dir / per_res_stem
+
+            embed_out = module.get_embeddings(
+                sequences=sequence_list,
+                sequences_base=sequence_base_list,
+                save_per_residue_embeddings=True,
+                get_embeddings_for_seq_base=bool(get_embeddings_for_seq_base and sequence_base_list is not None),
+                pool_method=None,
+                mutations=None,
+                sep=sep,
             output_path=per_res_base_path,
             layers=model_layers,
             model_name=model_prefix,
+            n_components=int(n_components),
+            sample_mutants_for_svd=bool(sample_mutants_for_svd),
             batch_size=batch_size,
             device=device,
-        )
-        per_res_paths = embed_result.get("per_residue_paths", {})
-        if not per_res_paths:
-            raise RuntimeError(f"Backend '{backend_name}' did not return per_residue_paths.")
-        per_res_arrays = _load_layerwise_arrays(per_res_paths)
-
-        base_per_res_paths = embed_result.get("base_per_residue_paths", {})
-        base_per_res_arrays: Optional[Dict[int, np.ndarray]] = None
-        if base_per_res_paths:
-            base_per_res_arrays = _load_layerwise_arrays(base_per_res_paths)
-
-        # Section 3C: persist per-residue feature if requested.
-        if "per_residue" in embedding_suffixes:
-            results[per_res_feature_name] = {
-                "feature_name": per_res_feature_name,
-                "model_prefix": model_prefix,
-                "backend": backend_name,
-                "artifacts": {
-                    "per_residue_paths": per_res_paths,
-                    "base_per_residue_paths": base_per_res_paths or None,
-                },
-            }
-
-        # Section 3D: derive and persist mean-pooled feature from cached per-residue arrays.
-        if "mean_pooled" in embedding_suffixes:
-            mean_feature_name = f"{model_prefix}_mean_pooled"
-            mean_base_path = out_dir / f"{file_prefix}{_sanitize_name(mean_feature_name)}"
-            mean_pooled = compute_pooled_embeddings(per_res_arrays, pool_method="mean", mutations=None, sep=sep)
-            mean_paths = save_layerwise_embeddings(
-                mean_pooled,
-                output_stem=mean_base_path,
-                suffix="mean_pooled",
-                log_tag="get_plm_encodings",
+            session=session,
+                prompt_id=prompt_id,
             )
-            base_mean_paths = None
-            if base_per_res_arrays is not None and get_embeddings_for_seq_base:
-                base_mean = compute_pooled_embeddings(base_per_res_arrays, pool_method="mean", mutations=None, sep=sep)
-                base_mean_paths = save_layerwise_embeddings(
-                    base_mean,
+            embed_result, prompt_id = _unpack_optional_prompt(embed_out, prompt_id)
+            per_res_paths = embed_result.get("per_residue_paths", {})
+            if not per_res_paths:
+                raise RuntimeError(f"Backend '{plm_name}' did not return per_residue_paths.")
+            per_res_arrays = _load_layerwise_arrays(per_res_paths)
+
+            base_per_res_paths = embed_result.get("base_per_residue_paths", {})
+            base_per_res_arrays: Optional[Dict[int, np.ndarray]] = None
+            if base_per_res_paths:
+                base_per_res_arrays = _load_layerwise_arrays(base_per_res_paths)
+
+            # Section 3C: persist per-residue feature if requested.
+            if "per_residue" in embedding_suffixes:
+                per_res_shape_by_layer = {int(layer): list(arr.shape) for layer, arr in per_res_arrays.items()}
+                base_per_res_shape_by_layer = (
+                    {int(layer): list(arr.shape) for layer, arr in base_per_res_arrays.items()}
+                    if base_per_res_arrays is not None
+                    else None
+                )
+                results[per_res_feature_name] = {
+                    "feature_name": per_res_feature_name,
+                    "model_prefix": model_prefix,
+                    "plm_name": plm_name,
+                    "artifacts": {
+                        "per_residue_paths": per_res_paths,
+                        "base_per_residue_paths": base_per_res_paths or None,
+                    },
+                    "shape_by_layer": per_res_shape_by_layer,
+                    "base_shape_by_layer": base_per_res_shape_by_layer,
+                }
+
+            # Section 3D: derive and persist mean-pooled feature from cached per-residue arrays.
+            if "mean_pooled" in embedding_suffixes:
+                mean_feature_name = f"{model_prefix}_mean_pooled"
+                mean_base_path = out_dir / f"{file_prefix}{_sanitize_name(mean_feature_name)}"
+                mean_pooled = compute_pooled_embeddings(per_res_arrays, pool_method="mean", mutations=None, sep=sep)
+                mean_paths = save_layerwise_embeddings(
+                    mean_pooled,
                     output_stem=mean_base_path,
                     suffix="mean_pooled",
-                    file_suffix="_base",
                     log_tag="get_plm_encodings",
                 )
-            results[mean_feature_name] = {
-                "feature_name": mean_feature_name,
-                "model_prefix": model_prefix,
-                "backend": backend_name,
-                "artifacts": {
-                    "pooled_paths": mean_paths,
-                    "base_pooled_paths": base_mean_paths,
-                },
-            }
+                base_mean_paths = None
+                if base_per_res_arrays is not None and get_embeddings_for_seq_base:
+                    base_mean = compute_pooled_embeddings(base_per_res_arrays, pool_method="mean", mutations=None, sep=sep)
+                    base_mean_paths = save_layerwise_embeddings(
+                        base_mean,
+                        output_stem=mean_base_path,
+                        suffix="mean_pooled",
+                        file_suffix="_base",
+                        log_tag="get_plm_encodings",
+                    )
+                mean_shape_by_layer = {int(layer): list(arr.shape) for layer, arr in mean_pooled.items()}
+                base_mean_shape_by_layer = (
+                    {int(layer): list(arr.shape) for layer, arr in base_mean.items()}
+                    if base_per_res_arrays is not None and get_embeddings_for_seq_base
+                    else None
+                )
+                results[mean_feature_name] = {
+                    "feature_name": mean_feature_name,
+                    "model_prefix": model_prefix,
+                    "plm_name": plm_name,
+                    "artifacts": {
+                        "pooled_paths": mean_paths,
+                        "base_pooled_paths": base_mean_paths,
+                    },
+                    "shape_by_layer": mean_shape_by_layer,
+                    "base_shape_by_layer": base_mean_shape_by_layer,
+                }
 
-        # Section 3E: derive and persist mutation-pooled feature from cached per-residue arrays.
-        if "mut_pooled" in embedding_suffixes:
-            mut_feature_name = f"{model_prefix}_mut_pooled"
-            mut_base_path = out_dir / f"{file_prefix}{_sanitize_name(mut_feature_name)}"
-            mut_pooled = compute_pooled_embeddings(
-                per_res_arrays,
-                pool_method="mut",
-                mutations=mutations,
-                sep=sep,
-            )
-            mut_paths = save_layerwise_embeddings(
-                mut_pooled,
-                output_stem=mut_base_path,
-                suffix="mut_pooled",
-                log_tag="get_plm_encodings",
-            )
-            base_mut_paths = None
-            if base_per_res_arrays is not None and get_embeddings_for_seq_base:
-                base_mut = compute_pooled_embeddings(base_per_res_arrays, pool_method="mean", mutations=None, sep=sep)
-                base_mut_paths = save_layerwise_embeddings(
-                    base_mut,
+            # Section 3E: derive and persist mutation-pooled feature from cached per-residue arrays.
+            if "mut_pooled" in embedding_suffixes:
+                mut_feature_name = f"{model_prefix}_mut_pooled"
+                mut_base_path = out_dir / f"{file_prefix}{_sanitize_name(mut_feature_name)}"
+                mut_pooled = compute_pooled_embeddings(
+                    per_res_arrays,
+                    pool_method="mut",
+                    mutations=mutations,
+                    sep=sep,
+                )
+                mut_paths = save_layerwise_embeddings(
+                    mut_pooled,
                     output_stem=mut_base_path,
                     suffix="mut_pooled",
-                    file_suffix="_base",
                     log_tag="get_plm_encodings",
                 )
-            results[mut_feature_name] = {
-                "feature_name": mut_feature_name,
-                "model_prefix": model_prefix,
-                "backend": backend_name,
-                "artifacts": {
-                    "pooled_paths": mut_paths,
-                    "base_pooled_paths": base_mut_paths,
-                },
-            }
-
-        # Section 3F: optionally delete intermediate per-residue files when not requested.
-        keep_per_res = "per_residue" in embedding_suffixes
-        if not keep_per_res:
-            _delete_artifact_paths(per_res_paths)
-            if base_per_res_paths:
-                _delete_artifact_paths(base_per_res_paths)
+                base_mut_paths = None
+                if base_per_res_arrays is not None and get_embeddings_for_seq_base:
+                    base_mut = compute_pooled_embeddings(base_per_res_arrays, pool_method="mut", mutations=mutations, sep=sep)
+                    base_mut_paths = save_layerwise_embeddings(
+                        base_mut,
+                        output_stem=mut_base_path,
+                        suffix="mut_pooled",
+                        file_suffix="_base",
+                        log_tag="get_plm_encodings",
+                    )
+                mut_shape_by_layer = {int(layer): list(arr.shape) for layer, arr in mut_pooled.items()}
+                base_mut_shape_by_layer = (
+                    {int(layer): list(arr.shape) for layer, arr in base_mut.items()}
+                    if base_per_res_arrays is not None and get_embeddings_for_seq_base
+                    else None
+                )
+                results[mut_feature_name] = {
+                    "feature_name": mut_feature_name,
+                    "model_prefix": model_prefix,
+                    "plm_name": plm_name,
+                    "artifacts": {
+                        "pooled_paths": mut_paths,
+                        "base_pooled_paths": base_mut_paths,
+                    },
+                    "shape_by_layer": mut_shape_by_layer,
+                    "base_shape_by_layer": base_mut_shape_by_layer,
+                }
 
     # Section 4: return only requested features, preserving the original request order.
     ordered_results: Dict[str, Dict[str, Any]] = {}

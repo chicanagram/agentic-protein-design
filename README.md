@@ -41,43 +41,43 @@ Steps executable in the workflow include:
   Strategy-planning notebook that uses project requirements plus optional prior literature-review thread context to produce a multi-round design workflow with tool choices, decision gates, and implementation details.
 
 - [`notebooks/02_run_denovo_sequence_design.ipynb`](notebooks/02_run_denovo_sequence_design.ipynb)
-  (Placeholder - implementation pending). Workflow to run de novo sequence design.
+  Workflow to run de novo sequence design. (TODO: update with further constraints for conditional generation; ligandmpnn refinement)
 
 - [`notebooks/03_run_zero_shot_mutant_design.ipynb`](notebooks/03_run_zero_shot_mutant_design.ipynb)  
-  (Placeholder - implementation pending). Workflow to design zero-shot mutant sequences in Round 1.
+  (Placeholder - implementation pending). Workflow to design zero-shot mutant sequences in Round 1 integrating tools in other notebooks.
 
 - [`notebooks/04_run_next_round_mutant_design.ipynb`](notebooks/04_run_next_round_mutant_design.ipynb)
-  (Placeholder - implementation pending). Workflow to design sequences in Round 2 onwards, after some screening data is available.
+  (Placeholder - implementation pending). Workflow to design sequences in Round 2 onwards, using optimization using supervised ML surrogates.
 
 - [`notebooks/05_get_sequences_align_and_analyse_conservation.ipynb`](notebooks/05_get_sequences_align_and_analyse_conservation.ipynb)  
-  (Placeholder - implementation pending). Retrieve homologs, obtain multiple sequence alignment, perform conservation analysis for seed sequence positions. 
+  Retrieve homologs, obtain multiple sequence alignment, perform conservation analysis for seed sequence positions. 
 
 - [`notebooks/06_get_structures_apo_holo.ipynb`](notebooks/06_get_structures_apo_holo.ipynb)  
-  (Placeholder - implementation pending). Fetch available crystal structures or predict structures and obtain docked complexes using AI models. 
+  Fetch available crystal structures or predict structures and obtain docked complexes using AI models. 
 
 - [`notebooks/07_get_sequence_structure_physicochemical_properties.ipynb`](notebooks/07_get_sequence_structure_physicochemical_properties.ipynb)
   (Placeholder - implementation pending). Extract sequence-, structure-, and physicochemical-property features.
 
 - [`notebooks/08_get_binding_pocket_properties.ipynb`](notebooks/08_get_binding_pocket_properties.ipynb)
-  (Placeholder - implementation pending). Compute and aggregate binding-pocket descriptors.
+  Compute and aggregate binding-pocket descriptors. 
 
 - [`notebooks/09_binding_pocket_analysis.ipynb`](notebooks/09_analyze_binding_pocket.ipynb)  
-  Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation and compact thread-memory persistence.
+  Binding-pocket comparative analysis from pocket descriptors + filtered alignment (+ optional reaction data), with LLM-generated mechanistic interpretation. TODO: Refine prompt.
 
 - [`notebooks/10_run_MD_calculate_dGbind.ipynb`](notebooks/10_run_MD_calculate_dGbind.ipynb)  
-  (Placeholder - implementation pending). Run molecular dynamics simulation to calculate dG_bind for protein ligand complex.
+  (Placeholder - implementation pending). Run fast OpenMM molecular dynamics simulation to calculate dG_bind for protein ligand complex.
 
 - [`notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb`](notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb)  
-  (Placeholder - implementation pending). Run energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
+  (Placeholder - implementation pending). Run YASARA energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
 
 - [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)  
-  Stability-ddG prediction notebook using **Pythia** via an isolated Python environment.
+  Stability-dG prediction notebook using **Pythia** via an isolated Python environment.
 
 - [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_get_sequence_encodings.ipynb)  
-  (Placeholder - implementation pending). Compose feature matrices and training/evaluation datasets for supervised ML.
+  Compose feature matrices and training/evaluation datasets for supervised ML.
 
 - [`notebooks/14_train_evaluate_supervised_ML_models.ipynb`](notebooks/14_train_evaluate_supervised_ML_models.ipynb)  
-  (Placeholder - implementation pending). Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
+  Train supervised ML models with screening labels (Y), and selected input feature sets (X). 
 
 - [`notebooks/15_run_sequence_patent_search.ipynb`](notebooks/16_run_sequence_patent_search.ipynb)  
   (Placeholder - implementation pending). Run patent search and analysis for sequences of interest. 
@@ -137,5 +137,4 @@ Notebooks to flesh out:
 - Sequence retrieval + align
 - Simulation-based Energy calculations
 - Sequence encodings retrieval
-- ML model training and evaluation
 - Zero shot and next round workflows

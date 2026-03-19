@@ -52,6 +52,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "resave_llr_cache_if_found": False,
         "mutations_sep": "+",
         "layers": {k: list(v) for k, v in PLM_MODELS_DICT.items()},
+        "n_components": 256,
+        "sample_mutants_for_svd": False,
         "batch_size": 4,
         "device": None,
         "save_per_residue_embeddings": True,
@@ -335,13 +337,28 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
             mutations=parsed["mutations_list"],
             sep=str(inputs.get("mutations_sep", "+")),
             layers=inputs.get("layers"),
+            n_components=int(inputs.get("n_components", 256)),
+            sample_mutants_for_svd=bool(inputs.get("sample_mutants_for_svd", False)),
             batch_size=int(inputs.get("batch_size", 4)),
             device=inputs.get("device"),
             get_embeddings_for_seq_base=bool(inputs.get("get_embeddings_for_seq_base", False)),
-            save_per_residue_embeddings=bool(inputs.get("save_per_residue_embeddings", True)),
         )
 
-    # Section 7: return consolidated execution metadata and outputs.
+    # Section 7: collect compact shape trace for embedding artifacts.
+    embedding_shape_trace: Dict[str, Any] = {}
+    for feature_name, meta in plm_results.items():
+        if not str(feature_name).endswith(("_per_residue", "_mean_pooled", "_mut_pooled")):
+            continue
+        shape_by_layer = meta.get("shape_by_layer")
+        base_shape_by_layer = meta.get("base_shape_by_layer")
+        if shape_by_layer is None and base_shape_by_layer is None:
+            continue
+        embedding_shape_trace[feature_name] = {
+            "shape_by_layer": shape_by_layer,
+            "base_shape_by_layer": base_shape_by_layer,
+        }
+
+    # Section 8: return consolidated execution metadata and outputs.
     return {
         "status": "ok",
         "input": parsed,
@@ -349,4 +366,7 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "encodings_dir": encodings_dir,
         "classical_results": classical_results,
         "plm_results": plm_results,
+        "trace": {
+            "embedding_shapes": embedding_shape_trace,
+        },
     }

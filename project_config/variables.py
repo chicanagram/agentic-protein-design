@@ -7,6 +7,7 @@ address_dict = {
     'SoluProtMut': '../solubility-data/SoluProtMut/',
     'PON-Sol2': '../solubility-data/PON-Sol2/',
     'ECOHARVEST': '../ECOHARVEST/',
+    'ppk2-hmo': '../ppk2-hmo/',
     'pips-insilico': '../pips-insilico/data/',
     'databases': '../seq-db/',
 }

@@ -1,0 +1,4 @@
+resnum,mutations,LLR_esm2-650m,min_dist_to_lig,wt_aa,mt_aa,LLR_consensus,LLR_avg,selection_rank
+208,H208E,5.4919,21.53,H,E,1,5.4919,1
+212,Y212T,4.7588,14.916,Y,T,1,4.7588,2
+82,L82A,4.2175,8.896,L,A,1,4.2175,3

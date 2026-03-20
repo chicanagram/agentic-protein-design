@@ -70,7 +70,7 @@ Steps executable in the workflow include:
 - [`notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb`](notebooks/11_run_minimization_calculate_ddGbind_mutants.ipynb)  
   (Placeholder - implementation pending). Run YASARA energy minimization simulation to calculate ddG_bind for mutations of a protein ligand complex.
 
-- [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)  
+- [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)  
   Stability-dG prediction notebook using **Pythia** via an isolated Python environment.
 
 - [`notebooks/13_obtain_ML_features_compose_datasets.ipynb`](notebooks/13_get_sequence_encodings.ipynb)  
@@ -106,7 +106,7 @@ This file is git-ignored.
 # Other Dependencies
 ## Running Stability Notebook (Pythia)
 
-Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_dGstability_mutants.ipynb)
+Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_calculate_ddGstability_mutants.ipynb)
 
 1. Set up a dedicated Pythia environment first (recommended to avoid OpenMP conflicts):
    - `conda create -n pythia python=3.10 -y`

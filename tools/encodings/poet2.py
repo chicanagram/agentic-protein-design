@@ -237,6 +237,7 @@ def get_embeddings(
     sequence_seed = kwargs.get("sequence_seed", None)
     n_components = kwargs.get("n_components", 1024)
     sample_mutants_for_svd = kwargs.get("sample_mutants_for_svd", False)
+    svd_data_reduction = kwargs.get("svd_data_reduction", None)
 
     # Section 1: reject unsupported requests for POET2 embedding helper.
     if get_embeddings_for_seq_base:
@@ -273,7 +274,7 @@ def get_embeddings(
         futures["svd_pooled"] = compute_svd_pooling(
             sequences, sequence_seed,
             n_components, sample_mutants_for_svd,
-            model_name, session, prompt_id
+            svd_data_reduction, model_name, session, prompt_id
         )
 
     # Section 4: wait for all futures.
@@ -310,6 +311,7 @@ def compute_svd_pooling(
         sequence_seed,
         n_components=1024,
         sample_mutants_for_svd=False,
+        svd_data_reduction=None,
         model_name: str = DEFAULT_MODEL_NAME,
         session: Optional[Any] = None,
         prompt_id: Optional[str] = None,
@@ -329,7 +331,10 @@ def compute_svd_pooling(
 
     # get SVD model
     model = session.embedding.get_model(model_name)
-    svd = model.fit_svd(sequences_to_compute_svd_on, n_components=n_components, prompt=prompt_id)
+    fit_kwargs = {"n_components": n_components, "prompt": prompt_id}
+    if svd_data_reduction is not None:
+        fit_kwargs["reduction"] = svd_data_reduction
+    svd = model.fit_svd(sequences_to_compute_svd_on, **fit_kwargs)
     svd.wait_until_done(verbose=True)
     svd_embed_future = svd.embed(sequences)
 

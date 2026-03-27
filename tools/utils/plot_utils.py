@@ -178,10 +178,17 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None
         start_idx = k * N_res_per_heatmap_row
         end_idx = min((k + 1) * N_res_per_heatmap_row, num_pos)
         heatmap_k = arr[:, start_idx:end_idx]
-        wt_idxs_k = np.array([[aa_list.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq_k)])
+        # Some WT sequences include non-canonical residues (e.g., 'X'). Skip WT marker for those positions.
+        wt_pairs = [
+            [aa_list.index(wt_aa), res_idx]
+            for res_idx, wt_aa in enumerate(seq_k)
+            if wt_aa in aa_list
+        ]
+        wt_idxs_k = np.array(wt_pairs, dtype=int) if wt_pairs else np.empty((0, 2), dtype=int)
         im = ax_k.imshow(heatmap_k, norm=norm, cmap=cmap, aspect="auto")
         # annotate WT amino acid with red dot
-        ax_k.scatter(wt_idxs_k[:,1], wt_idxs_k[:,0], c='r', s=4)
+        if wt_idxs_k.size > 0:
+            ax_k.scatter(wt_idxs_k[:,1], wt_idxs_k[:,0], c='r', s=4)
         ax_k.set_yticks(range(len(aa_list)), aa_list)
         ax_k.set_xticks(range(len(pos_list_k)), pos_list_k, fontsize=7, rotation=45)
 

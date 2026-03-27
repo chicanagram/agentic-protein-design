@@ -20,15 +20,25 @@ def _read_nonempty_lines(path: Path) -> Sequence[str]:
 
 def resolve_project_root() -> Path:
     """
-    Resolve the repository root when called from repo root or the notebooks subdir.
+    Resolve the repository root robustly from different working directories.
 
     Returns:
         Absolute path to the project root directory.
     """
-    root = Path.cwd().resolve()
-    if root.name == "notebooks":
-        return root.parent
-    return root
+    cwd = Path.cwd().resolve()
+
+    # Walk up parents to find a likely repository root marker set.
+    for candidate in [cwd, *cwd.parents]:
+        has_git = (candidate / ".git").exists()
+        has_project_config = (candidate / "project_config").exists()
+        has_src = (candidate / "src").exists()
+        if has_git or (has_project_config and has_src):
+            return candidate
+
+    # Fallback to previous behavior if no marker is found.
+    if cwd.name == "notebooks":
+        return cwd.parent
+    return cwd
 
 
 def setup_data_root(

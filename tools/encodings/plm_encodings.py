@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import gc
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -136,6 +137,51 @@ def _resolve_layers_for_model(
     )
 
 
+def _feature_output_path(out_dir: Path, file_prefix: str, feature_name: str) -> str:
+    """Build a normalized output stem path for a feature."""
+    return str(out_dir / f"{file_prefix}{_sanitize_name(feature_name)}")
+
+
+def _score_result_record(
+    *,
+    feature_name: str,
+    model_prefix: str,
+    plm_name: str,
+    output_path: str,
+    scores: Any,
+) -> Dict[str, Any]:
+    """Build a standardized scalar-score result record."""
+    return {
+        "feature_name": feature_name,
+        "model_prefix": model_prefix,
+        "plm_name": plm_name,
+        "output_path": output_path,
+        "shape": list(scores.shape) if isinstance(scores, np.ndarray) else None,
+    }
+
+
+def _artifact_result_record(
+    *,
+    feature_name: str,
+    model_prefix: str,
+    plm_name: str,
+    artifacts: Dict[str, Any],
+    shape_by_layer: Dict[int, List[int]],
+    base_shape_by_layer: Optional[Dict[int, List[int]]] = None,
+) -> Dict[str, Any]:
+    """Build a standardized embedding-artifact result record."""
+    record: Dict[str, Any] = {
+        "feature_name": feature_name,
+        "model_prefix": model_prefix,
+        "plm_name": plm_name,
+        "artifacts": artifacts,
+        "shape_by_layer": shape_by_layer,
+    }
+    if base_shape_by_layer is not None:
+        record["base_shape_by_layer"] = base_shape_by_layer
+    return record
+
+
 def get_plm_encodings(
     plm_feature_sets: Sequence[str],
     sequence_list: Optional[Sequence[str]],
@@ -208,9 +254,7 @@ def get_plm_encodings(
                     f"Backend '{plm_name}' does not implement get_LLR_scores."
                 )
             llr_feature_name = f"{model_prefix}_LLR"
-            llr_stem = f"{file_prefix}{_sanitize_name(llr_feature_name)}"
-            llr_base_path = out_dir / llr_stem
-            output_path = str(llr_base_path)
+            output_path = _feature_output_path(out_dir, file_prefix, llr_feature_name)
 
             print(f'Obtaining LLR scores for {model_prefix}...')
             llr_out = module.get_LLR_scores(
@@ -228,13 +272,13 @@ def get_plm_encodings(
                 prompt_id=prompt_id,
             )
             scores, prompt_id = _unpack_optional_prompt(llr_out, prompt_id)
-            results[llr_feature_name] = {
-                "feature_name": llr_feature_name,
-                "model_prefix": model_prefix,
-                "plm_name": plm_name,
-                "output_path": output_path,
-                "shape": list(scores.shape) if isinstance(scores, np.ndarray) else None,
-            }
+            results[llr_feature_name] = _score_result_record(
+                feature_name=llr_feature_name,
+                model_prefix=model_prefix,
+                plm_name=plm_name,
+                output_path=output_path,
+                scores=scores,
+            )
 
         # Section 3A.1: run mean PLL scoring once per model if requested.
         if "meanPLL" in requested_suffixes:
@@ -247,9 +291,7 @@ def get_plm_encodings(
                     f"Backend '{plm_name}' does not implement get_mean_PLL_scores."
                 )
             pll_feature_name = f"{model_prefix}_meanPLL"
-            pll_stem = f"{file_prefix}{_sanitize_name(pll_feature_name)}"
-            pll_base_path = out_dir / pll_stem
-            output_path = str(pll_base_path)
+            output_path = _feature_output_path(out_dir, file_prefix, pll_feature_name)
 
             print(f'Obtaining meanPLL scores for {model_prefix}...')
             pll_out = module.get_mean_PLL_scores(
@@ -263,13 +305,13 @@ def get_plm_encodings(
                 prompt_id=prompt_id,
             )
             scores, prompt_id = _unpack_optional_prompt(pll_out, prompt_id)
-            results[pll_feature_name] = {
-                "feature_name": pll_feature_name,
-                "model_prefix": model_prefix,
-                "plm_name": plm_name,
-                "output_path": output_path,
-                "shape": list(scores.shape) if isinstance(scores, np.ndarray) else None,
-            }
+            results[pll_feature_name] = _score_result_record(
+                feature_name=pll_feature_name,
+                model_prefix=model_prefix,
+                plm_name=plm_name,
+                output_path=output_path,
+                scores=scores,
+            )
 
 
         # Section 3B: run embeddings once per model, then derive requested artifacts.
@@ -299,7 +341,7 @@ def get_plm_encodings(
                 pool_method = None
 
             print(f"Obtaining embeddings for {model_prefix}...")
-            shared_stem = out_dir / f"{file_prefix}{_sanitize_name(model_prefix)}"
+            shared_stem = Path(_feature_output_path(out_dir, file_prefix, model_prefix))
             embed_out = module.get_embeddings(
                 sequences=sequence_list,
                 sequences_base=None,
@@ -328,26 +370,76 @@ def get_plm_encodings(
                 if not embedding_paths:
                     raise RuntimeError(f"Backend '{plm_name}' did not return {res_path_key} ({embedding_type}).")
 
-
-                target_stem = out_dir / f"{file_prefix}{_sanitize_name(feature_name)}"
+                target_stem = Path(_feature_output_path(out_dir, file_prefix, feature_name))
                 embedding_paths = _rename_layerwise_paths(embedding_paths, target_stem)
-                results[feature_name] = {
-                    "feature_name": feature_name,
-                    "model_prefix": model_prefix,
-                    "plm_name": plm_name,
-                    "artifacts": {
+                results[feature_name] = _artifact_result_record(
+                    feature_name=feature_name,
+                    model_prefix=model_prefix,
+                    plm_name=plm_name,
+                    artifacts={
                         res_path_key: embedding_paths,
                         f"base_{res_path_key}": None,
                     },
-                    "shape_by_layer": _load_layerwise_shapes(embedding_paths),
-                }
+                    shape_by_layer=_load_layerwise_shapes(embedding_paths),
+                )
 
         else:
             # Section 3B.2: non-POET branch (force per_residue first; derive pooled downstream).
+            pooled_only = set(embedding_suffixes) - {"per_residue"}
+            direct_pool_method: Optional[str] = None
+            if "per_residue" not in embedding_suffixes and pooled_only == {"mean_pooled"}:
+                direct_pool_method = "mean"
+            elif "per_residue" not in embedding_suffixes and pooled_only == {"mut_pooled"}:
+                direct_pool_method = "mut"
+
+            # Fast path: for a single pooled feature, ask backend to pool directly and avoid per-residue artifacts.
+            if direct_pool_method is not None:
+                print(f'Obtaining embeddings for {model_prefix}...')
+                feature_name = f"{model_prefix}_{'mean_pooled' if direct_pool_method == 'mean' else 'mut_pooled'}"
+                feature_base_path = Path(_feature_output_path(out_dir, file_prefix, feature_name))
+                embed_out = module.get_embeddings(
+                    sequences=sequence_list,
+                    sequences_base=sequence_base_list,
+                    save_per_residue_embeddings=False,
+                    get_embeddings_for_seq_base=bool(get_embeddings_for_seq_base and sequence_base_list is not None),
+                    pool_method=direct_pool_method,
+                    mutations=mutations if direct_pool_method == "mut" else None,
+                    sep=sep,
+                    output_path=feature_base_path,
+                    layers=model_layers,
+                    model_name=model_prefix,
+                    n_components=int(n_components),
+                    sample_mutants_for_svd=bool(sample_mutants_for_svd),
+                    svd_data_reduction=svd_data_reduction,
+                    batch_size=batch_size,
+                    device=device,
+                    session=session,
+                    prompt_id=prompt_id,
+                )
+                embed_result, prompt_id = _unpack_optional_prompt(embed_out, prompt_id)
+                pooled_paths = embed_result.get("pooled_paths", {})
+                if not pooled_paths:
+                    raise RuntimeError(f"Backend '{plm_name}' did not return pooled_paths ({direct_pool_method}).")
+                base_pooled_paths = embed_result.get("base_pooled_paths", None)
+                results[feature_name] = _artifact_result_record(
+                    feature_name=feature_name,
+                    model_prefix=model_prefix,
+                    plm_name=plm_name,
+                    artifacts={
+                        "pooled_paths": pooled_paths,
+                        "base_pooled_paths": base_pooled_paths,
+                    },
+                    shape_by_layer=_load_layerwise_shapes(pooled_paths),
+                    base_shape_by_layer=(
+                        _load_layerwise_shapes(base_pooled_paths) if base_pooled_paths else None
+                    ),
+                )
+                gc.collect()
+                continue
+
             print(f'Obtaining embeddings for {model_prefix}...')
             per_res_feature_name = f"{model_prefix}_per_residue"
-            per_res_stem = f"{file_prefix}{_sanitize_name(per_res_feature_name)}"
-            per_res_base_path = out_dir / per_res_stem
+            per_res_base_path = Path(_feature_output_path(out_dir, file_prefix, per_res_feature_name))
 
             embed_out = module.get_embeddings(
                 sequences=sequence_list,
@@ -357,15 +449,15 @@ def get_plm_encodings(
                 pool_method=None,
                 mutations=None,
                 sep=sep,
-            output_path=per_res_base_path,
-            layers=model_layers,
-            model_name=model_prefix,
-            n_components=int(n_components),
-            sample_mutants_for_svd=bool(sample_mutants_for_svd),
-            svd_data_reduction=svd_data_reduction,
-            batch_size=batch_size,
-            device=device,
-            session=session,
+                output_path=per_res_base_path,
+                layers=model_layers,
+                model_name=model_prefix,
+                n_components=int(n_components),
+                sample_mutants_for_svd=bool(sample_mutants_for_svd),
+                svd_data_reduction=svd_data_reduction,
+                batch_size=batch_size,
+                device=device,
+                session=session,
                 prompt_id=prompt_id,
             )
             embed_result, prompt_id = _unpack_optional_prompt(embed_out, prompt_id)
@@ -387,22 +479,22 @@ def get_plm_encodings(
                     if base_per_res_arrays is not None
                     else None
                 )
-                results[per_res_feature_name] = {
-                    "feature_name": per_res_feature_name,
-                    "model_prefix": model_prefix,
-                    "plm_name": plm_name,
-                    "artifacts": {
+                results[per_res_feature_name] = _artifact_result_record(
+                    feature_name=per_res_feature_name,
+                    model_prefix=model_prefix,
+                    plm_name=plm_name,
+                    artifacts={
                         "per_residue_paths": per_res_paths,
                         "base_per_residue_paths": base_per_res_paths or None,
                     },
-                    "shape_by_layer": per_res_shape_by_layer,
-                    "base_shape_by_layer": base_per_res_shape_by_layer,
-                }
+                    shape_by_layer=per_res_shape_by_layer,
+                    base_shape_by_layer=base_per_res_shape_by_layer,
+                )
 
             # Section 3D: derive and persist mean-pooled feature from cached per-residue arrays.
             if "mean_pooled" in embedding_suffixes:
                 mean_feature_name = f"{model_prefix}_mean_pooled"
-                mean_base_path = out_dir / f"{file_prefix}{_sanitize_name(mean_feature_name)}"
+                mean_base_path = Path(_feature_output_path(out_dir, file_prefix, mean_feature_name))
                 mean_pooled = compute_pooled_embeddings(per_res_arrays, pool_method="mean", mutations=None, sep=sep)
                 mean_paths = save_layerwise_embeddings(
                     mean_pooled,
@@ -426,22 +518,22 @@ def get_plm_encodings(
                     if base_per_res_arrays is not None and get_embeddings_for_seq_base
                     else None
                 )
-                results[mean_feature_name] = {
-                    "feature_name": mean_feature_name,
-                    "model_prefix": model_prefix,
-                    "plm_name": plm_name,
-                    "artifacts": {
+                results[mean_feature_name] = _artifact_result_record(
+                    feature_name=mean_feature_name,
+                    model_prefix=model_prefix,
+                    plm_name=plm_name,
+                    artifacts={
                         "pooled_paths": mean_paths,
                         "base_pooled_paths": base_mean_paths,
                     },
-                    "shape_by_layer": mean_shape_by_layer,
-                    "base_shape_by_layer": base_mean_shape_by_layer,
-                }
+                    shape_by_layer=mean_shape_by_layer,
+                    base_shape_by_layer=base_mean_shape_by_layer,
+                )
 
             # Section 3E: derive and persist mutation-pooled feature from cached per-residue arrays.
             if "mut_pooled" in embedding_suffixes:
                 mut_feature_name = f"{model_prefix}_mut_pooled"
-                mut_base_path = out_dir / f"{file_prefix}{_sanitize_name(mut_feature_name)}"
+                mut_base_path = Path(_feature_output_path(out_dir, file_prefix, mut_feature_name))
                 mut_pooled = compute_pooled_embeddings(
                     per_res_arrays,
                     pool_method="mut",
@@ -470,17 +562,25 @@ def get_plm_encodings(
                     if base_per_res_arrays is not None and get_embeddings_for_seq_base
                     else None
                 )
-                results[mut_feature_name] = {
-                    "feature_name": mut_feature_name,
-                    "model_prefix": model_prefix,
-                    "plm_name": plm_name,
-                    "artifacts": {
+                results[mut_feature_name] = _artifact_result_record(
+                    feature_name=mut_feature_name,
+                    model_prefix=model_prefix,
+                    plm_name=plm_name,
+                    artifacts={
                         "pooled_paths": mut_paths,
                         "base_pooled_paths": base_mut_paths,
                     },
-                    "shape_by_layer": mut_shape_by_layer,
-                    "base_shape_by_layer": base_mut_shape_by_layer,
-                }
+                    shape_by_layer=mut_shape_by_layer,
+                    base_shape_by_layer=base_mut_shape_by_layer,
+                )
+
+            # Remove temporary per-residue artifacts when they were used only as intermediates.
+            keep_per_residue = "per_residue" in embedding_suffixes
+            if not keep_per_residue:
+                _delete_artifact_paths(per_res_paths)
+                if base_per_res_paths:
+                    _delete_artifact_paths(base_per_res_paths)
+            gc.collect()
 
     # Section 4: return only requested features, preserving the original request order.
     ordered_results: Dict[str, Dict[str, Any]] = {}

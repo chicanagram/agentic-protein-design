@@ -10,6 +10,7 @@ address_dict = {
     'ppk2-hmo': '../ppk2-hmo/',
     'pips-insilico': '../pips-insilico/data/',
     'databases': '../seq-db/',
+    'MUTAGENESIS-DATA-BENCHMARKS': '../MUTAGENESIS-DATA-BENCHMARKS/',
 }
 
 subfolders = {

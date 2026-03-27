@@ -22,11 +22,22 @@ from tools.ml.feature_coefficients import (
     save_coefficients_csv,
     should_extract_coefficients,
 )
-from tools.ml.splits import generate_splits
+from tools.ml.splits import generate_splits, generate_progressive_splits
+
+
+PROGRESSIVE_SPLIT_KEYS = {"random", "mutres-modulo", "mutres_modulo", "custom", "retrospective", "retrospective-segment", "retrospective_segment"}
+CUSTOM_LIKE_KEYS = {"custom", "retrospective", "retrospective-segment", "retrospective_segment"}
 
 
 def _utc_now_label() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _clean_optional_str(value: Any) -> str:
+    s = str(value or "").strip()
+    if s.lower() in {"none", "null", "nan"}:
+        return ""
+    return s
 
 
 def _write_pickle(path: Path, payload: Any) -> None:
@@ -54,6 +65,17 @@ def _build_metrics_csv_name(task_type: str, suffix: str) -> str:
 def _build_summary_csv_name(task_type: str, suffix: str) -> str:
     clean_suffix = str(suffix or "").strip()
     return f"{task_type}_metrics_summary{clean_suffix}.csv"
+
+
+
+def _parse_segment_iterations(value: Any) -> int | None:
+    raw = str(value).strip().lower()
+    if raw in {"", "auto"}:
+        return None
+    n = int(raw)
+    if n < 1:
+        raise ValueError("segment_iterations must be >= 1 or 'auto'.")
+    return n
 
 
 def _compose_pred_name(run_label: str, feature_label: str, split_id: str, model_name: str, suffix: str) -> str:
@@ -104,9 +126,9 @@ def _progress_row(task_type: str, test_metrics: Dict[str, Any], train_metrics: D
 
 def _summary_progress_row(task_type: str, test_metrics: Dict[str, Any]) -> pd.DataFrame:
     if task_type == "regression":
-        cols = ["test_spearman", "test_pearson", "test_r2", "test_rmse", "n_test_pooled", "n_folds"]
+        cols = ["test_spearman", "test_pearson", "test_r2", "test_rmse", "n_test_pooled", "n_train", "n_folds"]
     else:
-        cols = ["test_mcc", "test_accuracy", "test_f1_weighted", "n_test_pooled", "n_folds"]
+        cols = ["test_mcc", "test_accuracy", "test_f1_weighted", "n_test_pooled", "n_train", "n_folds"]
     row = {k: test_metrics.get(k, np.nan) for k in cols}
     return pd.DataFrame([row])
 
@@ -191,17 +213,20 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
     mutres_col = str(inputs.get("mutres_col", "mutres_idx")).strip()
     random_split_col = str(inputs.get("random_split_col", f"fold_random_{k_folds}")).strip()
-    mutres_split_col = str(inputs.get("mutres_split_col", f"fold_modulo_{k_folds}")).strip()
+    mutres_split_col = str(inputs.get("mutres_split_col", f"fold_mutres-modulo_{k_folds}")).strip()
+    segment_col = str(inputs.get("segment_col", "segment_index_final")).strip()
+    retrospective_segment_col = str(inputs.get("retrospective_segment_col", segment_col)).strip()
+    segment_iterations = _parse_segment_iterations(inputs.get("segment_iterations", "auto"))
     contiguous_split_col = str(inputs.get("contiguous_split_col", f"fold_contiguous_{k_folds}")).strip()
 
     custom_split_col = str(inputs.get("custom_split_col", "split")).strip()
     custom_test_value = inputs.get("custom_test_value", "test")
     custom_split_indices = inputs.get("custom_split_indices")
-    custom_test_dataset_fname = str(inputs.get("custom_test_dataset_fname", "")).strip()
-    custom_test_data_subfolder_raw = str(inputs.get("custom_test_data_subfolder", "") or "").strip().strip("/")
+    custom_test_dataset_fname = _clean_optional_str(inputs.get("custom_test_dataset_fname", ""))
+    custom_test_data_subfolder_raw = _clean_optional_str(inputs.get("custom_test_data_subfolder", "")).strip().strip("/")
     custom_test_data_subfolder = custom_test_data_subfolder_raw or data_subfolder
-    input_filename_prefix = str(inputs.get("input_filename_prefix", "") or "").strip()
-    custom_input_filename_prefix = str(inputs.get("custom_input_filename_prefix", "") or "").strip()
+    input_filename_prefix = _clean_optional_str(inputs.get("input_filename_prefix", ""))
+    custom_input_filename_prefix = _clean_optional_str(inputs.get("custom_input_filename_prefix", ""))
     sequence_base_input = inputs.get("sequence_base")
 
     settings_repo_dir = Path(str(inputs.get("model_settings_repo_dir", "tools/ml/model_settings"))).expanduser().resolve()
@@ -237,7 +262,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     metrics_csv_path = out_dir / _build_metrics_csv_name(task_type=task_type, suffix=csv_suffix)
     summary_csv_path = out_dir / _build_summary_csv_name(task_type=task_type, suffix=csv_suffix)
     run_rows: List[Dict[str, Any]] = []
-    pooled_test_cache: Dict[Tuple[str, str, str, str], Dict[str, List[np.ndarray]]] = {}
+    pooled_test_cache: Dict[Tuple[str, str, str, str, str], Dict[str, List[np.ndarray]]] = {}
     matched_coeff_pairs: set[tuple[str, str]] = set()
 
     for target_col in target_col_list:
@@ -246,11 +271,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                 feature_files = list(feature_files_raw)
                 split_key = str(split_type).strip().lower()
 
-                if split_key == "custom":
-                    if not custom_test_dataset_fname:
-                        raise ValueError(
-                            "split_type='custom' requires 'custom_test_dataset_fname' for external test evaluation."
-                        )
+                if split_key == "custom" and custom_test_dataset_fname:
                     test_enc_dir = data_root / "encodings"
                     test_dataset_dir = data_root / "expdata"
                     if custom_test_data_subfolder:
@@ -286,23 +307,59 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                     )
                     X_all = bundle.X
                     y_all = bundle.y
-                    split_defs = generate_splits(
-                        dataset_df=dataset_df,
-                        n_rows=len(dataset_df),
-                        split_type=split_type,
-                        k_folds=k_folds,
-                        seed=split_seed,
-                        mutres_col=mutres_col,
-                        random_split_col=random_split_col,
-                        mutres_split_col=mutres_split_col,
-                        contiguous_split_col=contiguous_split_col,
-                        custom_split_col=custom_split_col,
-                        custom_test_value=custom_test_value,
-                        custom_split_indices=custom_split_indices,
+                    split_key_progressive = str(split_type).strip().lower()
+                    can_use_progressive = split_key_progressive in PROGRESSIVE_SPLIT_KEYS
+                    has_segment_data = (
+                        segment_col in dataset_df.columns
+                        and dataset_df[segment_col].dropna().nunique() >= 2
                     )
+                    use_progressive = can_use_progressive and has_segment_data and (
+                        segment_iterations is None or segment_iterations > 1
+                    )
+                    if split_key_progressive in CUSTOM_LIKE_KEYS and not use_progressive:
+                        if show_progress:
+                            print(
+                                "[split-skip] custom (retrospective-style) requires segment frontiers "
+                                f"(segment_col='{segment_col}', segment_iterations={inputs.get('segment_iterations', 'auto')})."
+                            )
+                        continue
+
+                    if use_progressive:
+                        split_defs = generate_progressive_splits(
+                            dataset_df=dataset_df,
+                            split_type=split_type,
+                            segment_col=segment_col,
+                            retrospective_segment_col=retrospective_segment_col,
+                            random_split_col=random_split_col,
+                            mutres_split_col=mutres_split_col,
+                        )
+                        if isinstance(segment_iterations, int):
+                            split_defs = [
+                                s for s in split_defs if int(s.get("frontier_idx", 0)) < segment_iterations
+                            ]
+                        if not split_defs:
+                            raise ValueError(
+                                "No progressive splits remain after applying segment_iterations filter."
+                            )
+                    else:
+                        split_defs = generate_splits(
+                            dataset_df=dataset_df,
+                            n_rows=len(dataset_df),
+                            split_type=split_type,
+                            k_folds=k_folds,
+                            seed=split_seed,
+                            mutres_col=mutres_col,
+                            random_split_col=random_split_col,
+                            mutres_split_col=mutres_split_col,
+                            contiguous_split_col=contiguous_split_col,
+                            custom_split_col=custom_split_col,
+                            custom_test_value=custom_test_value,
+                            custom_split_indices=custom_split_indices,
+                        )
 
                 for split_idx, split_info in enumerate(split_defs):
                     split_id = int(split_idx)
+                    eval_group = str(split_info.get("eval_group", "all_data"))
                     train_idx = np.asarray(split_info["train_idx"], dtype=int)
                     test_idx = np.asarray(split_info["test_idx"], dtype=int)
 
@@ -363,6 +420,13 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             "n_train": int(len(train_idx)),
                             "n_test": int(len(test_idx)),
                             "model_params": str(params),
+                            "eval_group": eval_group,
+                            "frontier_idx": split_info.get("frontier_idx", np.nan),
+                            "segment_min": split_info.get("segment_min", np.nan),
+                            "segment_max": split_info.get("segment_max", np.nan),
+                            "segments_included": str(split_info.get("segments_included", "")),
+                            "data_size_n": split_info.get("data_size_n", int(len(train_idx) + len(test_idx))),
+                            "test_segment": split_info.get("test_segment", np.nan),
                         }
                         row.update({f"test_{k}": v for k, v in test_metrics.items()})
                         row.update({f"train_{k}": v for k, v in train_metrics.items()})
@@ -370,13 +434,26 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                         _append_metrics_row(metrics_csv_path, row)
                         if show_progress:
                             fold_progress = _progress_row(task_type, test_metrics, train_metrics)
-                            print(f"[fold-result] split_id={split_id}")
+                            split_name = split_info.get("split_id", split_id)
+                            print(
+                                "[fold-result] "
+                                f"split_id={split_id} | split_name={split_name} | split_type={split_info['split_type']} | "
+                                f"eval_group={eval_group} | data_size_n={row['data_size_n']} | "
+                                f"segments_included={row['segments_included']} | n_train={row['n_train']} | n_test={row['n_test']}"
+                            )
                             print(fold_progress.to_string(index=False))
 
-                        pool_key = (target_col, feature_label, str(split_info["split_type"]), model_name)
-                        cache = pooled_test_cache.setdefault(pool_key, {"y_true": [], "y_pred": []})
+                        pool_key = (
+                            target_col,
+                            feature_label,
+                            str(split_info["split_type"]),
+                            model_name,
+                            eval_group,
+                        )
+                        cache = pooled_test_cache.setdefault(pool_key, {"y_true": [], "y_pred": [], "n_train": []})
                         cache["y_true"].append(np.asarray(y_test))
                         cache["y_pred"].append(np.asarray(yhat_test))
+                        cache["n_train"].append(int(len(train_idx)))
 
                         if save_trained_models:
                             model_path = model_dir / f"{run_label}__{feature_label}__{target_col}__{split_id}__{model_name}.pkl"
@@ -495,7 +572,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     run_df = pd.DataFrame(run_rows)
 
     summary_rows: List[Dict[str, Any]] = []
-    for (target_col, feature_label, split_type, model_name), cached in pooled_test_cache.items():
+    for (target_col, feature_label, split_type, model_name, eval_group), cached in pooled_test_cache.items():
         y_true_all = np.concatenate(cached["y_true"], axis=0)
         y_pred_all = np.concatenate(cached["y_pred"], axis=0)
         pooled_metrics = _round_metric_dict(compute_metrics(
@@ -510,7 +587,9 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
             "split_type": split_type,
             "model_name": model_name,
             "task_type": task_type,
+            "eval_group": eval_group,
             "n_test_pooled": int(len(y_true_all)),
+            "n_train": float(np.mean(cached.get("n_train", [np.nan]))),
             "n_folds": int(len(cached["y_true"])),
         }
         summary_row.update({f"test_{k}": v for k, v in pooled_metrics.items()})
@@ -533,13 +612,13 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
         else:
             summary_out = summary_df
         summary_out.to_csv(summary_csv_path, index=False)
-
     return {
         "status": "ok",
         "run_label": run_label,
         "dataset_path": str(train_dataset_path),
         "metrics_csv_path": str(metrics_csv_path),
         "summary_csv_path": str(summary_csv_path),
+        "data_efficiency_csv_path": "",
         "n_results": int(len(run_df)),
         "n_summary_rows": int(len(summary_df)),
         "model_dir": str(model_dir),

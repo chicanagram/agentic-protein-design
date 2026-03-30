@@ -163,7 +163,6 @@ def generate_progressive_splits(
     dataset_df: pd.DataFrame,
     split_type: str,
     segment_col: str,
-    retrospective_segment_col: str,
     random_split_col: str,
     mutres_split_col: str,
 ) -> List[Dict[str, Any]]:
@@ -182,9 +181,9 @@ def generate_progressive_splits(
                 subset_idx=subset_idx,
             )
         elif split_key == "custom":
-            if retrospective_segment_col not in dataset_df.columns:
-                raise KeyError(f"retrospective segment column '{retrospective_segment_col}' not found in dataset.")
-            seg_series = dataset_df[retrospective_segment_col]
+            if segment_col not in dataset_df.columns:
+                raise KeyError(f"segment column '{segment_col}' not found in dataset.")
+            seg_series = dataset_df[segment_col]
             seg_values = sorted(pd.unique(seg_series.iloc[subset_idx].dropna()))
             if len(seg_values) < 2:
                 split_defs = []
@@ -245,6 +244,35 @@ def get_random_split_indices(
     kf = KFold(n_splits=k, shuffle=True, random_state=int(seed))
     idx = np.arange(n_rows)
     return [(np.asarray(train_idx, dtype=int), np.asarray(test_idx, dtype=int)) for train_idx, test_idx in kf.split(idx)]
+
+
+def get_repeated_random_split_indices(
+    *,
+    n_rows: int,
+    k_folds: int,
+    n_repeats: int,
+    seed: int,
+) -> List[Dict[str, Any]]:
+    from sklearn.model_selection import RepeatedKFold
+
+    k = max(int(k_folds), 2)
+    r = max(int(n_repeats), 1)
+    rkf = RepeatedKFold(n_splits=k, n_repeats=r, random_state=int(seed))
+    idx = np.arange(n_rows)
+
+    out: List[Dict[str, Any]] = []
+    for i, (train_idx, test_idx) in enumerate(rkf.split(idx)):
+        repeat_id = int(i // k)
+        fold_id = int(i % k)
+        out.append(
+            {
+                "repeat_id": repeat_id,
+                "fold_id": fold_id,
+                "train_idx": np.asarray(train_idx, dtype=int),
+                "test_idx": np.asarray(test_idx, dtype=int),
+            }
+        )
+    return out
 
 
 def get_mutres_modulo_split_indices(
@@ -310,6 +338,7 @@ def generate_splits(
     n_rows: int,
     split_type: str,
     k_folds: int,
+    kfold_repeats: int,
     seed: int,
     mutres_col: str,
     random_split_col: str,
@@ -322,14 +351,36 @@ def generate_splits(
     split_key = _normalize_split_key(split_type)
 
     if split_key == "random":
-        if random_split_col and random_split_col in dataset_df.columns:
+        repeats = max(int(kfold_repeats), 1)
+        if repeats == 1 and random_split_col and random_split_col in dataset_df.columns:
             return _splits_from_fold_column(dataset_df, split_col=random_split_col, split_type="random")
+
+        if repeats > 1:
+            repeated = get_repeated_random_split_indices(
+                n_rows=n_rows,
+                k_folds=k_folds,
+                n_repeats=repeats,
+                seed=seed,
+            )
+            return [
+                {
+                    "split_type": "random",
+                    "split_id": f"random_repeat_{d['repeat_id']}_fold_{d['fold_id']}",
+                    "repeat_id": int(d["repeat_id"]),
+                    "fold_id": int(d["fold_id"]),
+                    "train_idx": np.sort(np.asarray(d["train_idx"], dtype=int)),
+                    "test_idx": np.sort(np.asarray(d["test_idx"], dtype=int)),
+                }
+                for d in repeated
+            ]
 
         pairs = get_random_split_indices(n_rows=n_rows, k_folds=k_folds, seed=seed)
         return [
             {
                 "split_type": "random",
                 "split_id": f"random_fold_{i}",
+                "repeat_id": 0,
+                "fold_id": int(i),
                 "train_idx": tr,
                 "test_idx": te,
             }

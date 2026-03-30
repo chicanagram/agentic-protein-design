@@ -36,13 +36,16 @@ def default_user_inputs() -> Dict[str, Any]:
             "onehot_georgiev": ["one_hot", "georgiev"],
         },
         "model_list": ["rf", "ridge", "mlp_sklearn"],
+        "run_hyperparameter_tuning": False,
+        "tuning_metric": "spearman",
+        "tuning_n_trials": 30,
         "k_folds": 5,
+        "random_kfold_repeats": 1,
         "split_seed": 42,
         "mutres_col": "mutres_idx",
         "random_split_col": "fold_random_5",
         "mutres_split_col": "fold_mutres-modulo_5",
-        "segment_col": "segment_index_final",
-        "retrospective_segment_col": "segment_index_final",
+        "segment_col": "segment_index_0",
         "segment_iterations": "auto",
         "contiguous_split_col": "",
         "custom_split_col": "fold_modulo_5",
@@ -79,7 +82,7 @@ def _resolve_data_root_dir(data_fbase: str) -> Path:
 
 def train_evaluate_supervised_ml_models(inputs: Dict[str, Any]) -> Dict[str, Any]:
     payload = dict(default_user_inputs())
-    payload.update(dict(inputs or {}))
+    payload.update(inputs or {})
 
     project_root = resolve_project_root()
     data_root_dir = _resolve_data_root_dir(str(payload.get("data_fbase", "examples")))
@@ -101,10 +104,16 @@ def train_evaluate_supervised_ml_models(inputs: Dict[str, Any]) -> Dict[str, Any
 
 def _load_inputs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.inputs_json:
-        return dict(json.loads(args.inputs_json))
+        loaded = json.loads(args.inputs_json)
+        if not isinstance(loaded, dict):
+            raise ValueError("--inputs-json must decode to a JSON object.")
+        return loaded
     if args.inputs_file:
         p = Path(args.inputs_file).expanduser().resolve()
-        return dict(json.loads(p.read_text(encoding="utf-8")))
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("--inputs-file must contain a JSON object.")
+        return loaded
     return default_user_inputs()
 
 

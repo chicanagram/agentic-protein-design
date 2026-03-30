@@ -13,6 +13,7 @@ matplotlib
 seaborn
 xgboost
 lightgbm
+optuna
 
 # Bioinformatics modules (keep)
 biopython

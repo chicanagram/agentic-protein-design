@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -66,8 +66,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "Target segment size for multi-mutation segmentation. "
-            "The number of segments per block is auto-derived from this value."
+            "Minimum layer-block size used to merge adjacent num_mutations layers."
+        ),
+    )
+    parser.add_argument(
+        "--max-layer-size-for-multimut-segmentation",
+        type=int,
+        default=None,
+        help=(
+            "Target maximum segment size used for within-layer segmentation. "
+            "If unset/None, no within-layer segmentation is performed."
         ),
     )
     parser.add_argument(
@@ -360,25 +368,14 @@ def print_fold_label_counts(df: pd.DataFrame, k_folds: int) -> None:
             print(f"  label={label_str}: {int(n)}")
 
 
-def append_split_columns(
-    df: pd.DataFrame,
+def build_segment_index_series(
+    *,
+    n_rows: int,
     index_groups: Sequence[Tuple[str, Sequence[int]]],
-    k_folds: int,
-) -> pd.DataFrame:
-    out = df.copy()
-    if k_folds <= 0:
-        raise ValueError("--k-folds must be > 0")
-
-    fold_random_col = f"fold_random_{k_folds}"
-    fold_mutres_mod_col = f"fold_mutres-modulo_{k_folds}"
-
-    out["segment_index_final"] = pd.Series([pd.NA] * len(out), dtype="Int64")
-    out[fold_random_col] = pd.Series([pd.NA] * len(out), dtype="Int64")
-    out[fold_mutres_mod_col] = pd.Series([pd.NA] * len(out), dtype="Int64")
-
+) -> pd.Series:
+    out = pd.Series([pd.NA] * n_rows, dtype="Int64")
     for segment_idx, (_, idxs) in enumerate(index_groups):
-        out.loc[list(idxs), "segment_index_final"] = segment_idx
-
+        out.iloc[list(idxs)] = segment_idx
     return out
 
 
@@ -422,6 +419,7 @@ def populate_fold_labels(
     k_folds: int,
     position_columns: Sequence[str],
     include_mutation_onehot_for_clustering: bool,
+    segment_col: str = "segment_index_0",
     mutation_one_hot: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     out = df.copy()
@@ -429,14 +427,16 @@ def populate_fold_labels(
     fold_random_col = f"fold_random_{k_folds}"
     fold_mutres_mod_col = f"fold_mutres-modulo_{k_folds}"
 
-    assigned_df = out[out["segment_index_final"].notna()].copy()
+    if segment_col not in out.columns:
+        raise KeyError(f"segment column '{segment_col}' not found in dataframe.")
+    assigned_df = out[out[segment_col].notna()].copy()
     if assigned_df.empty:
         return out
 
     # Single-mutants: keep existing segment-wise assignment behavior.
     single_df = assigned_df[assigned_df["num_mutations"] == 1]
-    for segment_idx in sorted(single_df["segment_index_final"].dropna().unique().tolist()):
-        seg_rows = single_df[single_df["segment_index_final"] == segment_idx]
+    for segment_idx in sorted(single_df[segment_col].dropna().unique().tolist()):
+        seg_rows = single_df[single_df[segment_col] == segment_idx]
         seg_indices = seg_rows.index.tolist()
 
         for i, row_idx in enumerate(seg_indices):
@@ -468,9 +468,9 @@ def populate_fold_labels(
             out.at[row_idx, fold_random_col] = i % k_folds
 
         # fold_mutres-modulo_k: within each segment in this layer, cluster into k folds.
-        layer_segments = sorted(layer_rows["segment_index_final"].dropna().unique().tolist())
+        layer_segments = sorted(layer_rows[segment_col].dropna().unique().tolist())
         for segment_idx in layer_segments:
-            seg_rows = layer_rows[layer_rows["segment_index_final"] == segment_idx]
+            seg_rows = layer_rows[layer_rows[segment_col] == segment_idx]
             seg_indices = seg_rows.index.tolist()
             if not seg_indices:
                 continue
@@ -494,12 +494,15 @@ def populate_fold_labels(
 def segment_multi_mutants_by_layer(
     df: pd.DataFrame,
     min_layer_size_for_multimut_segmentation: int,
+    max_layer_size_for_multimut_segmentation: int | None,
     position_columns: Sequence[str],
     include_mutation_onehot_for_clustering: bool,
     mutation_one_hot: pd.DataFrame | None = None,
 ) -> List[Tuple[str, List[int]]]:
     if min_layer_size_for_multimut_segmentation <= 0:
         raise ValueError("--min-layer-size-for-multimut-segmentation must be > 0")
+    if max_layer_size_for_multimut_segmentation is not None and max_layer_size_for_multimut_segmentation <= 0:
+        raise ValueError("--max-layer-size-for-multimut-segmentation must be > 0 when provided")
 
     pos_cols = list(position_columns)
     result_groups: List[Tuple[str, List[int]]] = []
@@ -536,12 +539,12 @@ def segment_multi_mutants_by_layer(
 
     print("\n=== Multi-Mutation Segmentation (KMeans by num_mutations Layer) ===")
     print(
-        "Auto-derive segments per multi-mutation block using target size: "
+        "Minimum layer-block size for merging adjacent layers: "
         f"{min_layer_size_for_multimut_segmentation}"
     )
     print(
-        "Minimum layer size for multi-mutant segmentation: "
-        f"{min_layer_size_for_multimut_segmentation}"
+        "Maximum layer size for within-layer segmentation: "
+        f"{max_layer_size_for_multimut_segmentation}"
     )
     print(
         "Clustering feature set: "
@@ -560,43 +563,51 @@ def segment_multi_mutants_by_layer(
             continue
 
         n_samples = len(layer_df)
-        approx = float(n_samples) / float(min_layer_size_for_multimut_segmentation)
-        k_floor = max(1, int(np.floor(approx)))
-        k_ceil = max(1, int(np.ceil(approx)))
-        k_round = max(1, int(round(approx)))
-        candidates = sorted({1, k_floor, k_ceil, k_round})
-        n_clusters = min(
-            n_samples,
-            min(
-                candidates,
-                key=lambda k: (
-                    abs((float(n_samples) / float(k)) - float(min_layer_size_for_multimut_segmentation)),
-                    abs(float(k) - approx),
-                    k,
+        if max_layer_size_for_multimut_segmentation is None:
+            n_clusters = 1
+        else:
+            approx = float(n_samples) / float(max_layer_size_for_multimut_segmentation)
+            k_floor = max(1, int(np.floor(approx)))
+            k_ceil = max(1, int(np.ceil(approx)))
+            k_round = max(1, int(round(approx)))
+            candidates = sorted({1, k_floor, k_ceil, k_round})
+            n_clusters = min(
+                n_samples,
+                min(
+                    candidates,
+                    key=lambda k: (
+                        abs((float(n_samples) / float(k)) - float(max_layer_size_for_multimut_segmentation)),
+                        abs(float(k) - approx),
+                        k,
+                    ),
                 ),
-            ),
-        )
+            )
         equal_size = n_samples / n_clusters
         base = n_samples // n_clusters
         remainder = n_samples % n_clusters
         target_counts = {c: base + (1 if c < remainder else 0) for c in range(n_clusters)}
-        x = build_clustering_features(
-            df=df,
-            row_indices=layer_df.index.tolist(),
-            position_columns=pos_cols,
-            include_mutation_onehot_for_clustering=include_mutation_onehot_for_clustering,
-            mutation_one_hot=mutation_one_hot,
-        )
-        model = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto")
-        labels = model.fit_predict(x)
-        pre_counts = {c: int(np.sum(labels == c)) for c in range(n_clusters)}
-        labels = rebalance_kmeans_labels(
-            labels=labels,
-            features=x,
-            centroids=model.cluster_centers_,
-            n_clusters=n_clusters,
-        )
-        post_counts = {c: int(np.sum(labels == c)) for c in range(n_clusters)}
+        if n_clusters == 1:
+            labels = np.zeros(n_samples, dtype=int)
+            pre_counts = {0: int(n_samples)}
+            post_counts = {0: int(n_samples)}
+        else:
+            x = build_clustering_features(
+                df=df,
+                row_indices=layer_df.index.tolist(),
+                position_columns=pos_cols,
+                include_mutation_onehot_for_clustering=include_mutation_onehot_for_clustering,
+                mutation_one_hot=mutation_one_hot,
+            )
+            model = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto")
+            labels = model.fit_predict(x)
+            pre_counts = {c: int(np.sum(labels == c)) for c in range(n_clusters)}
+            labels = rebalance_kmeans_labels(
+                labels=labels,
+                features=x,
+                centroids=model.cluster_centers_,
+                n_clusters=n_clusters,
+            )
+            post_counts = {c: int(np.sum(labels == c)) for c in range(n_clusters)}
         layer_df["kmeans_cluster"] = labels
 
         if len(block_layers) == 1:
@@ -708,6 +719,10 @@ def main(defaults: Dict[str, object] | None = None) -> None:
         args.min_layer_size_for_multimut_segmentation = defaults.get(
             "min_layer_size_for_multimut_segmentation", 1000
         )
+    if args.max_layer_size_for_multimut_segmentation is None:
+        args.max_layer_size_for_multimut_segmentation = defaults.get(
+            "max_layer_size_for_multimut_segmentation", None
+        )
     if args.smallest_single_mutant_size is None:
         args.smallest_single_mutant_size = defaults.get("smallest_single_mutant_size", 100)
     if args.k_folds is None:
@@ -731,6 +746,11 @@ def main(defaults: Dict[str, object] | None = None) -> None:
         mutation_separator=str(args.mutation_separator),
         num_mutation_segments_singlemut=int(args.num_mutation_segments_singlemut),
         min_layer_size_for_multimut_segmentation=int(args.min_layer_size_for_multimut_segmentation),
+        max_layer_size_for_multimut_segmentation=(
+            None
+            if args.max_layer_size_for_multimut_segmentation in (None, "")
+            else int(args.max_layer_size_for_multimut_segmentation)
+        ),
         smallest_single_mutant_size=int(args.smallest_single_mutant_size),
         k_folds=int(args.k_folds),
         include_mutation_onehot_for_clustering=bool(args.include_mutation_onehot_for_clustering),
@@ -744,6 +764,7 @@ def run_segmentation_pipeline(
     mutation_separator: str = ":",
     num_mutation_segments_singlemut: int = 5,
     min_layer_size_for_multimut_segmentation: int = 1000,
+    max_layer_size_for_multimut_segmentation: int | None | List[int | None] = None,
     smallest_single_mutant_size: int = 100,
     k_folds: int = 5,
     include_mutation_onehot_for_clustering: bool = True,
@@ -759,6 +780,11 @@ def run_segmentation_pipeline(
     if verbose:
         print(f"Loading CSV from: {csv_path}")
     df = load_and_validate_dataframe(csv_path)
+    original_columns = list(df.columns)
+    original_index_col_candidates = [c for c in original_columns if str(c).startswith("Unnamed:")]
+    original_index_col = original_index_col_candidates[0] if original_index_col_candidates else None
+    # Preserve original row order even after temporary sorting for segmentation.
+    df["_original_row_order"] = np.arange(len(df), dtype=int)
 
     df, all_positions = add_position_one_hot(df)
     df = sort_dataframe(df)
@@ -777,46 +803,140 @@ def run_segmentation_pipeline(
         if include_mutation_onehot_for_clustering
         else None
     )
-    multi_groups = segment_multi_mutants_by_layer(
-        df=df,
-        min_layer_size_for_multimut_segmentation=min_layer_size_for_multimut_segmentation,
-        position_columns=position_columns,
-        include_mutation_onehot_for_clustering=include_mutation_onehot_for_clustering,
-        mutation_one_hot=mutation_one_hot,
-    )
-    index_groups = rename_groups_sequentially(single_groups + multi_groups)
-    df = append_split_columns(df, index_groups, k_folds)
+
+    if isinstance(max_layer_size_for_multimut_segmentation, list):
+        max_layer_schemes = list(max_layer_size_for_multimut_segmentation)
+    else:
+        max_layer_schemes = [max_layer_size_for_multimut_segmentation]
+    if not max_layer_schemes:
+        max_layer_schemes = [None]
+
+    segment_cols: List[str] = []
+    segmentation_schemes: List[Tuple[str, int | None, Sequence[Tuple[str, Sequence[int]]]]] = []
+    for i, max_layer_size in enumerate(max_layer_schemes):
+        multi_groups = segment_multi_mutants_by_layer(
+            df=df,
+            min_layer_size_for_multimut_segmentation=min_layer_size_for_multimut_segmentation,
+            max_layer_size_for_multimut_segmentation=max_layer_size,
+            position_columns=position_columns,
+            include_mutation_onehot_for_clustering=include_mutation_onehot_for_clustering,
+            mutation_one_hot=mutation_one_hot,
+        )
+        index_groups = rename_groups_sequentially(single_groups + multi_groups)
+        seg_col = f"segment_index_{i}"
+        df[seg_col] = build_segment_index_series(n_rows=len(df), index_groups=index_groups)
+        segment_cols.append(seg_col)
+        segmentation_schemes.append((seg_col, max_layer_size, index_groups))
+
+    if "segment_index_0" not in df.columns:
+        raise ValueError("Expected segment_index_0 to be present after segmentation.")
+
+    # Fold labels are generated from the first segmentation scheme.
+    fold_random_col = f"fold_random_{k_folds}"
+    fold_mutres_mod_col = f"fold_mutres-modulo_{k_folds}"
+    df[fold_random_col] = pd.Series([pd.NA] * len(df), dtype="Int64")
+    df[fold_mutres_mod_col] = pd.Series([pd.NA] * len(df), dtype="Int64")
     df = populate_fold_labels(
         df=df,
         k_folds=k_folds,
+        segment_col="segment_index_0",
         position_columns=position_columns,
         include_mutation_onehot_for_clustering=include_mutation_onehot_for_clustering,
         mutation_one_hot=mutation_one_hot,
     )
 
     if verbose:
-        if print_group_details:
-            print_index_group_list(index_groups, df)
-        else:
-            print_index_group_summary(index_groups)
+        for seg_col, max_layer_size, index_groups in segmentation_schemes:
+            print(
+                "\n=== Segmentation Scheme ===\n"
+                f"column={seg_col} | max_layer_size_for_multimut_segmentation={max_layer_size}"
+            )
+            if print_group_details:
+                print_index_group_list(index_groups, df)
+            else:
+                print_index_group_summary(index_groups)
         print("\n=== Appended Columns ===")
-        fold_random_col = f"fold_random_{k_folds}"
-        fold_mutres_mod_col = f"fold_mutres-modulo_{k_folds}"
+        seg_cols_fmt = ", ".join(segment_cols)
         print(
             "Added columns: "
-            "one-hot position columns (pos_*), segment_index_final, "
+            f"{seg_cols_fmt}, "
             f"{fold_random_col}, {fold_mutres_mod_col}"
         )
         print(
-            "segment_index_final populated in final size-sorted segment order "
-            "across single/multi groups; fold columns are populated."
+            "segment_index_<i> populated for each segmentation scheme; "
+            "fold columns are populated using segment_index_0."
         )
         print_fold_label_counts(df, k_folds)
+
+    # Restore original dataset order so fold labels align with precomputed encoding arrays.
+    df = df.sort_values(by="_original_row_order", kind="stable").reset_index(drop=True)
+    df = df.drop(columns=["_original_row_order"], errors="ignore")
+
+    keep_cols = list(original_columns) + segment_cols + [fold_random_col, fold_mutres_mod_col]
+    keep_cols = [c for c in keep_cols if c in df.columns]
+    df = df.loc[:, keep_cols].copy()
+
+    # Keep legacy index column if present, but avoid saving as "Unnamed:*".
+    if original_index_col and original_index_col in df.columns:
+        df = df.rename(columns={original_index_col: "row_index"})
 
     out_path = output_csv_path or csv_path.with_name(f"{csv_path.stem}_processed.csv")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
     return out_path
+
+
+def _parse_optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or s.lower() in {"none", "null", "nan"}:
+        return None
+    return int(s)
+
+
+def _parse_optional_int_or_list(value: Any) -> int | None | List[int | None]:
+    if isinstance(value, list):
+        return [_parse_optional_int(v) for v in value]
+    return _parse_optional_int(value)
+
+
+def run_data_segmentation(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """High-level wrapper for notebook calls."""
+    csv_dir = Path(str(inputs.get("csv_dir", "")).strip()).expanduser()
+    csv_file = str(inputs.get("csv_file", "")).strip()
+    if not csv_dir or not csv_file:
+        raise ValueError("run_data_segmentation requires 'csv_dir' and 'csv_file'.")
+
+    csv_path = (csv_dir / csv_file).resolve()
+    output_csv_file = str(inputs.get("output_csv_file", "") or "").strip()
+    output_csv_path = (csv_dir / output_csv_file).resolve() if output_csv_file else None
+
+    out_path = run_segmentation_pipeline(
+        csv_path=csv_path,
+        mutation_separator=str(inputs.get("mutation_separator", ":")).strip() or ":",
+        num_mutation_segments_singlemut=int(inputs.get("num_mutation_segments_singlemut", 5)),
+        min_layer_size_for_multimut_segmentation=int(
+            inputs.get("min_layer_size_for_multimut_segmentation", 1000)
+        ),
+        max_layer_size_for_multimut_segmentation=_parse_optional_int_or_list(
+            inputs.get("max_layer_size_for_multimut_segmentation", None)
+        ),
+        smallest_single_mutant_size=int(inputs.get("smallest_single_mutant_size", 100)),
+        k_folds=int(inputs.get("k_folds", 5)),
+        include_mutation_onehot_for_clustering=bool(
+            inputs.get("include_mutation_onehot_for_clustering", True)
+        ),
+        output_csv_path=output_csv_path,
+        verbose=bool(inputs.get("verbose", True)),
+        print_group_details=bool(inputs.get("print_group_details", False)),
+    )
+    return {
+        "status": "ok",
+        "input_csv_path": str(csv_path),
+        "output_csv_path": str(out_path),
+        "output_dataset_fname": out_path.name,
+    }
 
 
 if __name__ == "__main__":
@@ -827,6 +947,7 @@ if __name__ == "__main__":
         "mutation_separator": ":",
         "num_mutation_segments_singlemut": 4,
         "min_layer_size_for_multimut_segmentation": 1500,
+        "max_layer_size_for_multimut_segmentation": None,
         "smallest_single_mutant_size": 60,
         "k_folds": 5,
         "include_mutation_onehot_for_clustering": True,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pickle
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from tools.ml.metrics import compute_metrics
-from tools.ml.model_factory import build_model, load_model_params
+from tools.ml.model_registry import build_model, load_model_params
 from tools.ml.feature_matrix import (
     build_feature_matrix,
     load_dataset_table,
@@ -22,6 +23,7 @@ from tools.ml.feature_coefficients import (
     save_coefficients_csv,
     should_extract_coefficients,
 )
+from tools.ml.hyperparameter_tuning import resolve_tuning_metric, tune_model_hyperparameters
 from tools.ml.splits import generate_splits, generate_progressive_splits
 
 
@@ -92,6 +94,19 @@ def _round_metric_dict(metrics: Dict[str, Any], ndigits: int = 4) -> Dict[str, A
         except Exception:
             out[k] = v
     return out
+
+
+def _params_to_json(params: Dict[str, Any]) -> str:
+    return json.dumps(dict(params), sort_keys=True, default=str)
+
+
+def _collapse_param_strings(values: List[str]) -> str:
+    uniq = sorted({str(v) for v in values if str(v).strip()})
+    if not uniq:
+        return ""
+    if len(uniq) == 1:
+        return uniq[0]
+    return json.dumps(uniq)
 
 
 def _progress_row(task_type: str, test_metrics: Dict[str, Any], train_metrics: Dict[str, Any]) -> pd.DataFrame:
@@ -210,12 +225,12 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     sample_id_col = str(inputs.get("sample_id_col", "")).strip()
     split_seed = int(inputs.get("split_seed", 42))
     k_folds = int(inputs.get("k_folds", 5))
+    kfold_repeats = max(int(inputs.get("random_kfold_repeats", 1)), 1)
 
     mutres_col = str(inputs.get("mutres_col", "mutres_idx")).strip()
     random_split_col = str(inputs.get("random_split_col", f"fold_random_{k_folds}")).strip()
     mutres_split_col = str(inputs.get("mutres_split_col", f"fold_mutres-modulo_{k_folds}")).strip()
-    segment_col = str(inputs.get("segment_col", "segment_index_final")).strip()
-    retrospective_segment_col = str(inputs.get("retrospective_segment_col", segment_col)).strip()
+    segment_col = str(inputs.get("segment_col", "segment_index_0")).strip()
     segment_iterations = _parse_segment_iterations(inputs.get("segment_iterations", "auto"))
     contiguous_split_col = str(inputs.get("contiguous_split_col", f"fold_contiguous_{k_folds}")).strip()
 
@@ -231,6 +246,12 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
     settings_repo_dir = Path(str(inputs.get("model_settings_repo_dir", "tools/ml/model_settings"))).expanduser().resolve()
     model_params_override = inputs.get("model_params")
+    run_hyperparameter_tuning = bool(inputs.get("run_hyperparameter_tuning", False))
+    tuning_metric = resolve_tuning_metric(
+        task_type=task_type,
+        tuning_metric=str(inputs.get("tuning_metric", "spearman")),
+    )
+    tuning_n_trials = int(inputs.get("tuning_n_trials", 30))
 
     save_trained_models = bool(inputs.get("save_trained_models", True))
     train_full_data_model = bool(inputs.get("train_full_data_model", False))
@@ -262,13 +283,16 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     metrics_csv_path = out_dir / _build_metrics_csv_name(task_type=task_type, suffix=csv_suffix)
     summary_csv_path = out_dir / _build_summary_csv_name(task_type=task_type, suffix=csv_suffix)
     run_rows: List[Dict[str, Any]] = []
-    pooled_test_cache: Dict[Tuple[str, str, str, str, str], Dict[str, List[np.ndarray]]] = {}
+    pooled_test_cache: Dict[Tuple[str, str, str, str, str], Dict[str, List[Any]]] = {}
     matched_coeff_pairs: set[tuple[str, str]] = set()
+    tuning_cache: Dict[Tuple[str, str, str, str, str], Dict[str, Any]] = {}
 
     for target_col in target_col_list:
         for split_type in split_type_list:
             for feature_label, feature_files_raw in feature_combinations_dict.items():
-                feature_files = list(feature_files_raw)
+                feature_files = [str(x).strip() for x in list(feature_files_raw) if str(x).strip()]
+                if not feature_files:
+                    raise ValueError(f"feature_combinations_dict['{feature_label}'] must contain at least one feature file name.")
                 split_key = str(split_type).strip().lower()
 
                 if split_key == "custom" and custom_test_dataset_fname:
@@ -307,8 +331,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                     )
                     X_all = bundle.X
                     y_all = bundle.y
-                    split_key_progressive = str(split_type).strip().lower()
-                    can_use_progressive = split_key_progressive in PROGRESSIVE_SPLIT_KEYS
+                    can_use_progressive = split_key in PROGRESSIVE_SPLIT_KEYS
                     has_segment_data = (
                         segment_col in dataset_df.columns
                         and dataset_df[segment_col].dropna().nunique() >= 2
@@ -316,7 +339,9 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                     use_progressive = can_use_progressive and has_segment_data and (
                         segment_iterations is None or segment_iterations > 1
                     )
-                    if split_key_progressive in CUSTOM_LIKE_KEYS and not use_progressive:
+                    if split_key == "random" and kfold_repeats > 1:
+                        use_progressive = False
+                    if split_key in CUSTOM_LIKE_KEYS and not use_progressive:
                         if show_progress:
                             print(
                                 "[split-skip] custom (retrospective-style) requires segment frontiers "
@@ -329,7 +354,6 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             dataset_df=dataset_df,
                             split_type=split_type,
                             segment_col=segment_col,
-                            retrospective_segment_col=retrospective_segment_col,
                             random_split_col=random_split_col,
                             mutres_split_col=mutres_split_col,
                         )
@@ -347,6 +371,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             n_rows=len(dataset_df),
                             split_type=split_type,
                             k_folds=k_folds,
+                            kfold_repeats=kfold_repeats,
                             seed=split_seed,
                             mutres_col=mutres_col,
                             random_split_col=random_split_col,
@@ -357,28 +382,67 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             custom_split_indices=custom_split_indices,
                         )
 
-                for split_idx, split_info in enumerate(split_defs):
-                    split_id = int(split_idx)
-                    eval_group = str(split_info.get("eval_group", "all_data"))
-                    train_idx = np.asarray(split_info["train_idx"], dtype=int)
-                    test_idx = np.asarray(split_info["test_idx"], dtype=int)
+                for model_name in model_list:
+                    base_params = load_model_params(
+                        model_name=model_name,
+                        task_type=task_type,
+                        settings_repo_dir=settings_repo_dir,
+                        model_params_override=model_params_override,
+                    )
+                    for split_idx, split_info in enumerate(split_defs):
+                        split_id = int(split_idx)
+                        eval_group = str(split_info.get("eval_group", "all_data"))
+                        train_idx = np.asarray(split_info["train_idx"], dtype=int)
+                        test_idx = np.asarray(split_info["test_idx"], dtype=int)
 
-                    X_train, X_test = X_all[train_idx], X_all[test_idx]
-                    y_train, y_test = y_all[train_idx], y_all[test_idx]
-
-                    for model_name in model_list:
+                        X_train, X_test = X_all[train_idx], X_all[test_idx]
+                        y_train, y_test = y_all[train_idx], y_all[test_idx]
                         if show_progress:
                             print(
                                 "[eval-start] "
                                 f"target_col={target_col} | split_type={split_info['split_type']} | "
                                 f"feature_combi_name={feature_label} | model_name={model_name}"
                             )
-                        params = load_model_params(
-                            model_name=model_name,
-                            task_type=task_type,
-                            settings_repo_dir=settings_repo_dir,
-                            model_params_override=model_params_override,
+
+                        params = dict(base_params)
+                        tune_key = (
+                            target_col,
+                            str(split_info["split_type"]),
+                            feature_label,
+                            str(model_name),
+                            eval_group,
                         )
+                        if run_hyperparameter_tuning:
+                            if tune_key not in tuning_cache:
+                                try:
+                                    tuning_result = tune_model_hyperparameters(
+                                        model_name=model_name,
+                                        task_type=task_type,
+                                        X_train=X_train,
+                                        y_train=y_train,
+                                        base_params=base_params,
+                                        tuning_metric=tuning_metric,
+                                        n_trials=tuning_n_trials,
+                                        show_progress=show_progress,
+                                    )
+                                    tuning_cache[tune_key] = dict(tuning_result)
+                                except Exception as exc:
+                                    tuning_cache[tune_key] = {
+                                        "best_params": dict(base_params),
+                                        "metric_name": tuning_metric,
+                                        "n_trials": 0,
+                                        "best_value": np.nan,
+                                        "used_tuning": False,
+                                        "reason": str(exc),
+                                    }
+                                    if show_progress:
+                                        print(
+                                            "[tuning-skipped] "
+                                            f"target_col={target_col} | split_type={split_info['split_type']} | "
+                                            f"feature_combi_name={feature_label} | model_name={model_name} | reason={exc}"
+                                        )
+                            params = dict(tuning_cache[tune_key].get("best_params", base_params))
+
                         model = build_model(model_name=model_name, task_type=task_type, params=params)
                         model.fit(X_train, y_train)
 
@@ -419,7 +483,9 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             "p": int(X_all.shape[1]),
                             "n_train": int(len(train_idx)),
                             "n_test": int(len(test_idx)),
-                            "model_params": str(params),
+                            "selected_hyperparameters": _params_to_json(params),
+                            "hyperparameter_tuning_enabled": bool(run_hyperparameter_tuning),
+                            "hyperparameter_tuning_metric": tuning_metric,
                             "eval_group": eval_group,
                             "frontier_idx": split_info.get("frontier_idx", np.nan),
                             "segment_min": split_info.get("segment_min", np.nan),
@@ -454,6 +520,7 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                         cache["y_true"].append(np.asarray(y_test))
                         cache["y_pred"].append(np.asarray(yhat_test))
                         cache["n_train"].append(int(len(train_idx)))
+                        cache.setdefault("selected_hyperparameters", []).append(_params_to_json(params))
 
                         if save_trained_models:
                             model_path = model_dir / f"{run_label}__{feature_label}__{target_col}__{split_id}__{model_name}.pkl"
@@ -591,6 +658,9 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
             "n_test_pooled": int(len(y_true_all)),
             "n_train": float(np.mean(cached.get("n_train", [np.nan]))),
             "n_folds": int(len(cached["y_true"])),
+            "selected_hyperparameters": _collapse_param_strings(cached.get("selected_hyperparameters", [])),
+            "hyperparameter_tuning_enabled": bool(run_hyperparameter_tuning),
+            "hyperparameter_tuning_metric": tuning_metric,
         }
         summary_row.update({f"test_{k}": v for k, v in pooled_metrics.items()})
         summary_rows.append(summary_row)

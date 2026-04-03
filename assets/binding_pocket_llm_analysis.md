@@ -1,275 +1,222 @@
 ## Stage 1: Global Pocket Phenotypes
 
-Assumptions/notes on inputs  
-- The `binding_pocket_table` already contains **explicit proximal vs distal** columns (e.g., `charged_fraction (proximal)`), so no inference was needed.  
-- `pocket_alignment_table` is a **filtered alignment of pocket-proximal positions**; I use it qualitatively to point to “where” steric/electrostatic differences likely come from (e.g., ET096 has deletions at some aligned pocket positions where others have hydrophobics/polars).
+Assumptions / parsing notes  
+- Your `binding_pocket_table` already contains explicit “(proximal)” and “(distal)” suffixes for most descriptors; I treat those as the <6 Å vs ~6–11 Å residue sets you defined.  
+- `num_pocket_res<8` is used as a proxy for “how many residues are close enough to matter”; you requested `num_pocket_res_lt6`, but it isn’t present—so I interpret `num_pocket_res<8` as a *looser* proximity count and lean more on distance metrics (`median_min_dist_res_to_ligand`, `reactive_center_distance`) for true proximity.
 
 ---
 
-## Per-protein interpretations (structure → mechanism → observed chemistry)
+## Per-protein interpretations
 
-### 1) **ET096_S82 — “Wide, dry active site: fast access, weak pose-locking → over-oxidation.”**
-- **Proximal electrostatics:** essentially **uncharged** (charged_fraction 0.0) and **low polar** (0.182) with **high hydrophobicity** (kd_weighted 2.177; hw_weighted −0.94). Median residue→reactive-center distance is relatively long (7.921 Å), consistent with fewer strong “anchoring” contacts near the reactive locus.
-- **Proximal sterics:** **small-residue enriched** (small_residue_frac 0.636; bulky 0.273) with moderate volumes (weighted_mean_volume 90.8) and **12 residues <6 Å**. This reads like a **more permissive, less shape-complementary** inner pocket.
-- **Distal electrostatics:** distal shell is mildly polar/charged (polar 0.368; charged 0.132) but still fairly hydrophobic overall (kd_weighted 0.967; hw_weighted −0.464). So the “outer vestibule” doesn’t strongly electrostatically steer/hold a single pose.
-- **Distal sterics / outer size:** distal centroid distances are among the **largest** here (mean_dist_to_centroid 10.247; mean_min_dist_to_centroid 8.57) with **38 aligned pocket residues**—an **open outer pocket** that likely tolerates multiple substrate approaches.
-- **Pocket phenotype & catalytic implication (with reaction data):** matches **high total turnover but poorer selectivity**: S82 total 41.1% with **Mono:Di = 0.3** (strongly di-oxidation/peroxidation-leaning). A hydrophobic, small-residue-rich proximal pocket tends to **allow re-binding/re-orientation** of mono-oxidized product and/or allow **electron-transfer/peroxidative** events because the substrate isn’t “pose-locked” for a single productive oxygen insertion.
-  - Reaction support: ET096 has **low ABTS** (0.146) but still shows strong **Di-Ox** on S82 (32.7%), consistent with “over-oxidation via permissive geometry” rather than classic ABTS-type surface ET alone.
+### 1) **RML_SucroseOleate**
+**Tagline:** *Polar-rimmed, moderately tight pocket that “guides” the sugar while keeping the acyl chain comfortable.*
 
----
+- **(i) Proximal electrostatics**
+  - Proximal charged/polar fractions are fairly high (charged ~0.18; polar ~0.46), suggesting a chemically “wet” microenvironment near the ligand—helpful for positioning sucrose hydroxyls for deacylation (productive synthesis step).
+  - Proximal hydropathy is moderately hydrophobic (hw_weighted ≈ -0.40), consistent with a lipase pocket that still tolerates an oleate chain.
+  - Proximal kd_weighted is negative (~ -0.16), i.e., overall more hydrophilic/less hydrophobic character than the distal shell—again consistent with a polar alcohol-acceptor region.
+  - Median distance of residues to the ligand reactive center is ~10.26 Å (this is relatively large), implying that *many* pocket residues are not tightly “reactive-center clamping”; catalysis likely depends on a smaller subset of key proximal residues plus dynamics (lid/open state).
 
-### 2) **CviUPO_S82 — “Tight, polar-and-bulky clamp: pose control favors mono-oxygenation, but enables peroxidation too.”**
-- **Proximal electrostatics:** more **polar/charged** than ET096 (polar 0.385; charged 0.077) and less hydrophobic (kd_weighted 1.055). Median residue→reactive-center distance is shorter (6.683 Å), consistent with **closer functional groups** shaping the reactive pose.
-- **Proximal sterics:** very **bulky** inner pocket (bulky_residue_frac 0.615; small 0.154) with high mean volume (111.0) and **13 residues <6 Å**; median min distance to ligand is tight (3.575 Å). This combination suggests **strong steric guidance** (a “clamp”) rather than a roomy cavity.
-- **Distal electrostatics:** distal shell is the **most polar** in the set (polar 0.513) with modest charge (0.128) and low hydrophobicity (kd_weighted 0.387). This can **steer binding trajectories** and stabilize specific entrance/egress paths.
-- **Distal sterics / outer size:** distal centroid distances are slightly smaller than ET096 (mean_dist_to_centroid 9.906; mean_min_dist_to_centroid 8.079), implying a **somewhat more compact vestibule**.
-- **Pocket phenotype & catalytic implication (with reaction data):** consistent with **higher mono-selectivity** on S82 (Mono:Di 1.7) and decent peroxygenation on small aromatics (NBD 0.169). The bulky/polar proximal environment likely **restricts orientations** that lead to repeated oxidation, favoring a single productive oxygen transfer event.
-  - But CviUPO also shows **very high ABTS (3.939)**: the same polar/charged environment (especially in the distal shell) can support **peroxidative electron-transfer competence** (substrate positioning/ET pathways), so CviUPO looks like a “pose-locking oxygenase” that is nevertheless **peroxidation-capable**.
+- **(ii) Proximal sterics**
+  - Mean/weighted proximal residue volume ~103/101 Å³ with moderate variance (~881): not extremely tight, but not highly heterogeneous.
+  - Bulky residue fraction proximal ~0.34 (weighted ~0.31) with small-residue fraction ~0.25 → a mixed lining that can provide both shape and some compliance.
+  - Median minimum distance residue→ligand ~5.00 Å and reactive_center_distance ~6.39 Å: the docked pose is not “deeply buried” against many sidechains; suggests more of a channel/groove binding mode than a snug cavity lock.
+  - `num_pocket_res<8` is high (51), consistent with a fairly extensive pocket surface contacting/near the ligand (even if not all are within 6 Å).
 
----
+- **(iii) Distal electrostatics**
+  - Distal shell is slightly *less* polar/charged than proximal (charged ~0.175; polar ~0.456 ~same), and kd_weighted becomes slightly positive (~0.02), i.e., more hydrophobic character outward.
+  - This “polar inside / more hydrophobic outside” gradient is consistent with lipase architecture: polar features to manage the alcohol acceptor chemistry, hydrophobic features to stabilize acyl chain occupancy and lid-open state.
 
-### 3) **DcaUPO_S82 — “Reactive-center close approach + hydrophobic inner wall: strong oxygenation power with controlled mono bias.”**
-- **Proximal electrostatics:** low polar (0.154) but some charge (0.077) and fairly hydrophobic (kd_weighted 1.785; hw_weighted −1.042). Median residue→reactive-center distance 7.314 Å is mid-range.
-- **Proximal sterics:** bulky-rich (bulky 0.615) with **15 residues <6 Å** (highest here) and **very high proximal volume variance** (1183) → a **rugged/anisotropic pocket**: tight in some directions, open in others. Importantly, **reactive_center_distance is small (4.931 Å)**, suggesting the docked reactive atom is positioned **closer to the catalytic center** than in ET096/CviUPO.
-- **Distal electrostatics:** distal is relatively charged (0.2; highest) with moderate polarity (0.4) and moderate hydrophobicity (kd_weighted 0.823). This can create **electrostatic steering** without making the vestibule overly polar.
-- **Distal sterics / outer size:** distal centroid distances are similar to ET096 (mean_dist_to_centroid 10.004), so access is not especially restricted.
-- **Pocket phenotype & catalytic implication (with reaction data):** DcaUPO combines **good access** with **better reactive alignment** (short reactive_center_distance), matching its strong peroxygenation signals (Veratryl 1.558; NBD 1.242). On S82 it is **mono-biased** (Mono:Di 1.6), consistent with a pocket that can place the substrate close for the first oxygenation but—with bulky features and anisotropy—**discourages the second oxidation pose** or slows product re-binding in the “right” orientation.
-  - ABTS is also high (2.7), so DcaUPO appears broadly competent; the key differentiator vs CviUPO is likely **geometry (closer reactive placement)** rather than higher polarity.
+- **(iv) Distal sterics / outer pocket size**
+  - Distal centroid distances are modest (mean_dist_to_centroid ~10.69 Å; mean_min_dist_to_centroid ~8.86 Å), indicating an outer pocket that is not extremely expanded.
+  - Distal mean volume ~102.5 Å³ with variance ~909: similar to proximal—suggesting the pocket doesn’t flare dramatically outward.
 
----
-
-### 4) **TE314_S82 — “Balanced pocket: neither tight clamp nor open funnel → mixed pathway behavior.”**
-- **Proximal electrostatics:** uncharged (0.0) but moderately polar (0.308) and moderately hydrophobic (kd_weighted 1.821). Median residue→reactive-center distance is the longest (8.205 Å), implying fewer close electrostatic “handles” near the reactive locus.
-- **Proximal sterics:** intermediate volumes (weighted_mean_volume 95.4), moderate small/bulky (small 0.231; bulky 0.308), **12 residues <6 Å**. This looks like a **middle-of-the-road** inner pocket.
-- **Distal electrostatics:** distal is relatively hydrophobic (kd_weighted 1.49; hw_weighted −0.661) with modest polarity (0.353) and low charge (0.118) → less electrostatic steering than CviUPO/DcaUPO.
-- **Distal sterics / outer size:** among the **most compact** distal shells (mean_dist_to_centroid 9.675; mean_min_dist_to_centroid 7.81), and fewer aligned residues (34), suggesting a **smaller outer pocket/vestibule**.
-- **Pocket phenotype & catalytic implication (with reaction data):** S82 total is decent (36.5%) with **Mono:Di 0.7** (di-oxidation somewhat favored). Mechanistically: a slightly tighter outer vestibule can **retain product** (promoting second oxidation), while the proximal site lacks the strong polar “pose lock” that would enforce mono-selectivity.
+- **(v) Pocket phenotype → catalytic implications (peroxygenative vs peroxidative framing)**
+  - Phenotype: **balanced amphiphilic channel**—enough polarity near the ligand to support productive positioning of sucrose OH groups, while maintaining a hydrophobic “runway” for oleate.
+  - Mechanistic expectation: this kind of pocket tends to **favor productive binding geometries** (less nonspecific oxidation chemistry) because polar proximal residues can enforce orientation/anchoring of the polyol headgroup. If the pocket were too hydrophobic and open, you’d expect more nonproductive poses and side reactions; RML here looks more “pose-guiding” than “promiscuously permissive.”
 
 ---
 
-### 5) **OA167_S82 — “Bulky hydrophobic inner pocket + roomy chemistry: high throughput, di-oxidation prone.”**
-- **Proximal electrostatics:** uncharged (0.0), moderately polar (0.308), and **most hydrophobic proximal pocket** by hw_weighted (−1.359) with kd_weighted 1.405. This is a “hydrophobic wall” near the ligand.
-- **Proximal sterics:** bulky-rich (bulky 0.538; small 0.154) with high weighted volume (111.14) but only **10 residues <6 Å** (fewest), suggesting fewer close contacts but those present are **big/hydrophobic**.
-- **Distal electrostatics:** moderate polarity (0.4) and low charge (0.114) with kd_weighted 1.03 → not strongly steering.
-- **Distal sterics / outer size:** distal centroid distances are moderate (mean_dist_to_centroid 9.74; mean_min_dist_to_centroid 8.075) with 35 aligned residues—access is not extremely open, not extremely tight.
-- **Pocket phenotype & catalytic implication (with reaction data):** highest S82 total (46.8%) but **Mono:Di 0.6** (di-oxidation favored). A plausible mechanism is **hydrophobic capture + weak polar anchoring**: substrate and mono-oxidized product bind readily and can reorient, enabling a second oxidation event.
+### 2) **TLL_SucroseOleate**
+**Tagline:** *Bulkier, more hydrophobic proximal clamp with a roomier outer shell—built for monoacylation-style positioning rather than deep polar anchoring.*
+
+- **(i) Proximal electrostatics**
+  - Proximal polar fraction is lower than RML (polar ~0.41 vs ~0.46), while charged fraction is similar (~0.18).
+  - Proximal hw_weighted is more negative (~ -0.50), i.e., **more hydrophobic** near the ligand than RML.
+  - Proximal kd_weighted is less negative (~ -0.064 vs -0.158), which partially offsets the hydropathy read; net interpretation: **TLL proximal region is less “polyol-friendly” by polarity but still not extremely hydrophobic by kd**—suggesting fewer strong polar anchoring points but not a purely greasy tunnel.
+
+- **(ii) Proximal sterics**
+  - Proximal mean/weighted volume is larger (~108/104 Å³) and variance is higher (~1112): **more sterically structured and heterogeneous**.
+  - Bulky residue fraction proximal is notably higher (0.477; weighted 0.414) with slightly fewer small residues (0.227): this reads like a **more shape-defining clamp** near the ligand.
+  - Median minimum distance residue→ligand is larger (~5.54 Å vs 5.00 Å in RML) even though reactive_center_distance is slightly shorter (~5.97 Å vs 6.39). This combination often indicates: fewer close sidechain contacts overall, but the reactive center sits somewhat closer to the catalytic machinery while the rest of the ligand is less snugly packed.
+
+- **(iii) Distal electrostatics**
+  - Distal charged fraction is higher than RML (0.20 vs 0.175) but distal polar fraction is lower (0.40 vs 0.456).
+  - Distal hw_weighted ~ -0.40 (less hydrophobic than its own proximal region), suggesting a **hydrophobic “inner clamp” with a slightly more mixed outer shell**.
+
+- **(iv) Distal sterics / outer pocket size**
+  - Distal centroid distances are larger than RML (mean_dist_to_centroid ~11.29 Å vs 10.69; mean_min_dist_to_centroid ~9.38 vs 8.86): **roomier outer pocket / more expanded shell**.
+  - Distal volume variance is higher (~1060 vs 909): more geometric diversity outward—often correlated with broader substrate tolerance but also more pose degeneracy.
+
+- **(v) Pocket phenotype → catalytic implications (peroxygenative vs peroxidative framing)**
+  - Phenotype: **hydrophobic, bulky proximal “gate” + expanded outer shell**.
+  - Mechanistic expectation: this architecture tends to **favor selective, geometry-driven outcomes** when the substrate can be “presented” correctly (e.g., primary-OH targeting on sucrose) because bulky proximal residues can restrict which hydroxyl approaches the acyl-enzyme. At the same time, the lower proximal polarity may reduce strong polyol anchoring, making activity more dependent on lid dynamics and transient binding.
+  - In the sugar-ester context (literature you included): TLL is often associated with **6-O monoacylation selectivity** on sucrose; a plausible structural rationale is exactly this: **a shape-selective proximal clamp** that biases which sucrose OH can access the reactive center, while the outer pocket remains permissive enough to accommodate the large sucrose headgroup without forcing deep burial.
 
 ---
 
-## 2A) Intra-protein variant analysis (families/variants)
-No intra-protein variant sets are present in the provided tables in the sense of “same base protein with multiple mutation labels.” All structures are single entries per homolog and all are labeled `_S82` (which appears to be the docked ligand/condition rather than a protein mutation series).  
-- Therefore, **no WT vs variant comparisons can be performed** from these inputs.
+## 2) Comparative analysis
 
-(If you later provide e.g., `ET096_WT`, `ET096_FxxY`, etc., I can do the mandatory variant-vs-reference deltas.)
+### A) Intra-protein variant analysis
+- No variant families are present in the provided dataset (only **RML_SucroseOleate** and **TLL_SucroseOleate**, no WT/mutant labels). Therefore, no WT-vs-variant comparisons can be performed.
 
----
+### B) Requested pairwise comparison: **RML vs TLL**
 
-## 2B) Requested pairwise comparison: **CviUPO vs ET096**
+**Proximal electrostatics**
+- **RML is more polar proximally** (polar ~0.455 vs 0.409) and less hydrophobic by hw_weighted (≈ -0.404 vs -0.497).
+- Mechanistic implication: RML should provide **better polar “landing pads”** for sucrose hydroxyl organization near the catalytic center, potentially improving productive deacylation geometry (synthesis step) and reducing reliance on purely hydrophobic packing.
 
-### Dimension-by-dimension contrasts
-**(i) Proximal electrostatics**
-- CviUPO is **more polar/charged** (polar 0.385; charged 0.077) vs ET096 (polar 0.182; charged 0.0).
-- CviUPO is **less hydrophobic** (kd_weighted 1.055) vs ET096 (2.177).
-- Mechanistic read: CviUPO should provide **more specific H-bonding / electrostatic pose constraints**, favoring a defined reactive orientation.
+**Proximal sterics**
+- **TLL is bulkier and more heterogeneous proximally** (higher mean/weighted volume and higher variance; bulky fraction 0.477 vs 0.341).
+- Mechanistic implication: TLL likely imposes **stronger shape constraints** on how sucrose can sit near the reactive center—consistent with **regioselective monoacylation tendencies** (restricting which OH can approach).
 
-**(ii) Proximal sterics**
-- CviUPO is **much bulkier** (bulky 0.615; small 0.154) vs ET096 (bulky 0.273; small 0.636).
-- CviUPO has tighter median ligand contact (median_min_dist_to_ligand 3.575 Å) vs ET096 (4.33 Å).
-- Mechanistic read: CviUPO’s inner pocket is a **steric gate/fixture**; ET096 is a **small-residue, permissive cavity** that allows multiple poses and easier re-binding.
+**Distal electrostatics**
+- TLL distal shell: **more charged but less polar** (charged 0.20 vs 0.175; polar 0.40 vs 0.456).
+- Mechanistic implication: TLL may have more discrete ionic features at the rim/outer shell (possible steering/solvent interactions), but fewer overall polar contacts—potentially promoting a more “interfacial” binding mode rather than deep polyol solvation.
 
-**(iii) Distal electrostatics**
-- CviUPO distal shell is **far more polar** (0.513) and less hydrophobic (kd_weighted 0.387) than ET096 (polar 0.368; kd_weighted 0.967).
-- Mechanistic read: CviUPO likely has **better electrostatic steering** into a productive binding mode and may support **peroxidative ET competence** (consistent with ABTS).
+**Distal sterics / outer pocket size**
+- **TLL has a larger outer pocket** (greater centroid distances) and higher distal variance.
+- Mechanistic implication: TLL can accommodate the bulky sucrose headgroup with less penalty (less need to thread deeply), but that extra space can increase **pose multiplicity**—making proximal steric gating more important for selectivity.
 
-**(iv) Distal sterics / outer pocket size**
-- ET096 has a **more open distal geometry** (mean_dist_to_centroid 10.247; mean_min_dist_to_centroid 8.57) vs CviUPO (9.906; 8.079).
-- Mechanistic read: ET096’s larger vestibule can increase throughput but also increases the number of accessible, potentially non-productive orientations.
-
-### Functional consequence (supported by reaction data)
-- **Selectivity:** CviUPO is **mono-selective** on S82 (Mono:Di 1.7) vs ET096 strongly **di-oxidation prone** (0.3). This matches “pose-locking clamp” (CviUPO) vs “open/permissive” (ET096).
-- **Peroxidation marker:** CviUPO has **very high ABTS** (3.939) vs ET096 low (0.146), consistent with CviUPO’s more polar/charged pocket environment (especially distal) being compatible with peroxidative chemistry.
+**Pocket-phenotype conclusion (RML vs TLL)**
+- **RML:** “pose-guiding amphiphilic channel” → likely more robust productive binding for polar acceptors (sucrose) when access is achieved.  
+- **TLL:** “bulky hydrophobic clamp + roomy shell” → likely stronger regioselective presentation (monoacylation bias) but potentially more dependent on dynamics/solvent to achieve productive sugar engagement.
 
 ---
 
-## 3) Cross-protein pocket phenotypes (clusters) and expected trade-offs
+## 3) Cross-protein pocket phenotypes (clusters)
 
-### Phenotype 1 — **Open, hydrophobic, small-residue proximal (“permissive funnel”)**
-- Representative: **ET096**
-- Signature: high proximal kd_weighted, high small_residue_frac, low proximal polarity/charge; larger distal centroid distances.
-- Expected behavior: **high throughput**, broader substrate tolerance, but **more over-oxidation (Di-Ox)** and less control over peroxygenation vs competing pathways because substrates/products can **reorient and rebind** easily.
+With only two proteins, the “clusters” reduce to two archetypes:
 
-### Phenotype 2 — **Bulky + polar proximal with polar distal steering (“pose-locking clamp”)**
-- Representative: **CviUPO**
-- Signature: high proximal bulky fraction + higher proximal polarity/charge; very polar distal shell.
-- Expected behavior: **higher mono-selectivity** (pose control), but can also show **strong peroxidative competence** (ABTS high), likely because the same polar/charged environment supports ET-friendly configurations.
+1) **Amphiphilic, polarity-supported acceptor binding (RML-like)**
+- Hallmarks: higher proximal polar fraction; less hydrophobic proximal hw; moderate steric bulk.
+- Trade-off intuition: tends toward **more reliable productive chemistry** for polar acceptors (better orientation/anchoring), potentially at the cost of **less extreme shape-enforced regioselectivity**.
 
-### Phenotype 3 — **Close reactive placement with anisotropic sterics (“reactive but guided”)**
-- Representative: **DcaUPO**
-- Signature: small reactive_center_distance + many residues <6 Å + high proximal volume variance (directional constraints), with moderate distal steering.
-- Expected behavior: strong **peroxygenation potency** (good reactive alignment) with **mono bias** when steric anisotropy disfavors the second-oxidation pose.
+2) **Hydrophobic, bulky proximal gating with expanded outer shell (TLL-like)**
+- Hallmarks: higher proximal bulky fraction and variance; more hydrophobic proximal hw; larger distal centroid distances.
+- Trade-off intuition: tends toward **higher selectivity via steric presentation** (which OH can reach), but can show **greater sensitivity to lid/open-state population and solvent microenvironment** because polar anchoring is weaker.
 
-### Phenotype 4 — **Intermediate/balanced pockets (“generalist, mixed outcomes”)**
-- Representatives: **TE314, OA167** (OA167 skewing more hydrophobic/bulky proximally)
-- Signature: mid-range polarity/hydrophobicity and centroid distances.
-- Expected behavior: decent turnover with **mixed mono/di outcomes**, depending on whether the outer pocket retains product (favoring Di-Ox) and whether proximal polarity is sufficient to enforce a single productive pose.
-
----
-
-If you want, I can also:  
-- Extract a **ranked “selectivity index”** from the structural descriptors (a simple heuristic combining proximal polarity + bulky fraction − distal openness) and see how well it tracks the S82 Mono:Di ratios.  
-- Use the `pocket_alignment_table` to highlight **specific aligned positions** that most plausibly drive the ET096↔CviUPO differences (e.g., ET096 deletions at positions where others have hydrophobic/polar side chains near the ligand).
+If you add more homologs/variants (especially CALB/CALA or RML/TLL mutants), I can turn these into a multi-cluster map (e.g., tight/polar “pose-locking” vs open/hydrophobic “permissive”) and explicitly assign each protein to a phenotype with engineering levers (which residues to polarize, which to debulk, which to widen/narrow distally).
 
 ## Stage 2: Residue-Level Mechanistic Drivers
 
-## 1) Key variable pocket positions → residue-level mechanistic hypotheses
-(Positions are given in **each protein’s own numbering**; I refer back to the earlier pocket phenotypes: ET096 “wide/dry/permissive”, CviUPO “tight/polar clamp”, DcaUPO “close reactive placement + anisotropic sterics”, TE314 “balanced/compact vestibule”, OA167 “bulky hydrophobic inner wall + weak anchoring”.)
+## 1) Key variable pocket positions → residue-level mechanistic hypotheses (RML vs TLL)
 
-### A. **ET096 has a deletion where others have a hydrophobic wall residue near the ligand**
-- **Position (aligned row index 104):**
-  - **ET096:** **gap** (no residue)
-  - **CviUPO:** **I61** (min dist 3.32 Å)
-  - **DcaUPO:** **L59** (3.63 Å)
-  - **TE314:** **L81** (3.39 Å)
-  - **OA167:** **L77** (3.41 Å)
-- **Substitution class:** **steric (missing side chain vs medium hydrophobe)**; also **polarity shift** (loss of hydrophobic surface).
-- **Mechanistic consequence:** this is a *direct structural explanation* for ET096’s **more permissive, less shape-complementary proximal pocket**. Removing an Ile/Leu “wall” near ~3.3–3.6 Å:
-  - increases local free volume → **more ligand microstates**, weaker pose-locking
-  - reduces van der Waals “caging” → **easier product reorientation/rebinding**, consistent with ET096’s **di-oxidation/permissive geometry** phenotype.
-- **Tie-back:** matches ET096’s “wide, dry active site” and higher small-residue enrichment; other homologs keep a close hydrophobic contact that contributes to the **clamp** (CviUPO) or **guided anisotropy** (DcaUPO).
+Below, “key” means (i) within the filtered pocket set and (ii) plausibly causal for the **RML polar/pose-guiding channel** vs **TLL hydrophobic/bulky proximal clamp + roomier shell** phenotype described in the structural summary.
 
-**Confidence:** very high (gap vs conserved hydrophobe at <3.6 Å is a strong steric driver).
-
----
-
-### B. **Charged Lys in CviUPO at a near-pocket position (electrostatic handle)**
-- **Position (aligned row index 226):**
-  - **ET096:** **A178** (min dist 4.18 Å)
-  - **CviUPO:** **K165** (3.38 Å)
-  - **DcaUPO:** **C161** (5.54 Å)
-  - **TE314:** **V190** (4.58 Å)
-  - **OA167:** **A181** (5.86 Å)
-- **Substitution class:** **electrostatic (neutral → positively charged)** and **polarity increase**; modest steric increase (A→K).
+### A. **RML 83 (S) ↔ TLL 84 (R)**  *(min dist ~3.5–3.6 Å; proximal)*
+- **Residues:** RML **Ser83** vs TLL **Arg84**
+- **Substitution class:** **Electrostatic + steric** (neutral small polar → **positively charged, bulky**)
 - **Mechanistic consequence:**
-  - In **CviUPO**, **K165** places a **localized + charge** within ~3.4 Å of ligand → can create **stronger electrostatic steering / H-bond networks (via water or direct contacts)**.
-  - This supports the earlier phenotype: CviUPO’s **more polar/charged proximal environment** and **shorter median reactive-center distances** (more “handles” near the reactive locus).
-  - Functionally, a proximal Lys can **reduce rotational freedom** (pose-locking) and can also support **peroxidative ET competence** (consistent with CviUPO’s high ABTS) by stabilizing polar transition states / charge-separated configurations.
-- **Contrast across proteins:** ET096/OA167 keep Ala (nonpolar, no steering) → consistent with “dry/permissive” (ET096) and “hydrophobic capture but weak anchoring” (OA167). DcaUPO has Cys (polarizable but uncharged) and is farther away here, so less direct electrostatic effect.
-
-**Confidence:** high (unique charged residue at closest distance among homologs).
+  - In **TLL**, Arg introduces a **localized cationic “hook”** and a larger sidechain that can **sterically gate** nearby sugar hydroxyls. This matches the summary’s **shape-defining proximal clamp** and can bias which sucrose OH can approach the acyl-enzyme (consistent with TLL’s monoacylation/regioselectivity tendency).
+  - In **RML**, Ser keeps this region **smaller and more H-bond permissive without strong ionic steering**, consistent with a **more uniformly polar rim** that “guides” sucrose rather than clamping it.
+- **Phenotype tie-back:** This single change can simultaneously explain **(i) higher proximal steric bulk/heterogeneity in TLL** and **(ii) reduced “polyol-friendly” polarity (fewer neutral H-bond donors/acceptors arranged as a network) despite similar charged fraction overall**.
 
 ---
 
-### C. **Acidic residue in DcaUPO at a position that is neutral in others (introduces negative electrostatics)**
-- **Position (aligned row index 103):**
-  - **ET096:** **A77** (min dist 3.94 Å)
-  - **CviUPO:** **T60** (5.14 Å)
-  - **DcaUPO:** **D58** (5.86 Å)
-  - **TE314:** **T80** (5.39 Å)
-  - **OA167:** **A76** (7.30 Å)
-- **Substitution class:** **electrostatic (neutral → negative)** + polarity increase; small steric change.
+### B. **RML 91 (D) ↔ TLL 92 (N)**  *(min dist ~2.37 vs 3.30 Å; very proximal)*
+- **Residues:** RML **Asp91** vs TLL **Asn92**
+- **Substitution class:** **Electrostatic** (negative → neutral polar amide) + **polarity shift** (ionic → H-bonding)
 - **Mechanistic consequence:**
-  - **DcaUPO D58** can contribute to DcaUPO’s **higher distal/proximal charge fraction** and “electrostatic steering without overly polar vestibule”.
-  - Even at ~5.9 Å, a carboxylate can bias **substrate approach/orientation** (especially for polarizable aromatics) and influence **local water structure** that affects rebound vs escape.
-  - This can help explain DcaUPO’s “reactive but guided” behavior: not necessarily a tight clamp, but **electrostatic biasing** combined with anisotropic sterics.
-- **Tie-back:** consistent with DcaUPO having the **highest distal charged fraction** in the summary.
-
-**Confidence:** medium (distance is not ultra-proximal, but charge effects can be long-range in a pocket).
+  - **RML Asp91** provides a **fixed negative charge** very close to the ligand. That can create a **strong electrostatic anchor/steering point** for sucrose OH patterning (via direct H-bonds or water-mediated networks), supporting the summary’s **polar proximal “landing pads”** and more reliable productive binding geometries.
+  - **TLL Asn92** removes the negative charge, weakening ionic steering and making binding more dependent on **steric presentation** (the “clamp”) and dynamics. This aligns with the summary’s view that TLL has **weaker polar anchoring** near the ligand.
+- **Mechanistic prediction:** D→N in this location should **increase pose degeneracy** and potentially **increase reliance on proximal bulky residues to enforce regioselectivity** (i.e., selectivity maintained by shape rather than electrostatic anchoring).
 
 ---
 
-### D. **Bulky aromatic vs small residue at a key “inner-wall” position (steric clamp / hydrophobic packing)**
-- **Position (aligned row index 221):**
-  - **ET096:** **L174** (min dist 3.40 Å)
-  - **CviUPO:** **G161** (3.47 Å)
-  - **DcaUPO:** **G157** (3.96 Å)
-  - **TE314:** **G186** (3.76 Å)
-  - **OA167:** **F177** (3.38 Å)
-- **Substitution class:** strong **steric** variation (G ↔ L/F) and hydrophobic surface change.
+### C. **RML 215 (F) ↔ TLL 213 (Y)**  *(min dist ~6.8 Å; distal/moderately close)*
+- **Residues:** RML **Phe215** vs TLL **Tyr213**
+- **Substitution class:** **Polarity shift** (hydrophobic aromatic → aromatic with **phenolic OH**)
 - **Mechanistic consequence:**
-  - **OA167 F177** at 3.38 Å creates a **bulky hydrophobic wall** very close to ligand → promotes **hydrophobic capture** and can enforce certain orientations, but without polar anchors it can still allow **reorientation/rebinding**, consistent with OA167’s **di-oxidation-prone** phenotype.
-  - **ET096 L174** provides some walling, but ET096 simultaneously lacks the “missing Ile/Leu” position (gap at ET096 in row 104) and is overall small-residue enriched → net effect still **permissive**.
-  - **CviUPO/DcaUPO/TE314 Gly** here removes side-chain bulk at this specific spot; in CviUPO the “clamp” must therefore come from *other* bulky residues plus polarity (e.g., K165 and other bulky positions), whereas in OA167 this Phe is a major contributor to the “bulky hydrophobic inner wall”.
-- **Tie-back:** explains why OA167 can be “bulky proximally” despite having fewer <6 Å contacts overall: the contacts it does have include **very bulky hydrophobes**.
-
-**Confidence:** high (large steric differences at ~3.4–4.0 Å).
+  - **TLL Tyr213** can add a **rim H-bond donor/acceptor** that may interact with sucrose at the **outer shell**, consistent with the summary’s **more charged/mixed distal shell** and “interfacial” binding mode.
+  - **RML Phe215** keeps this region more purely hydrophobic/aromatic, consistent with RML’s **hydrophobic runway outward** while keeping key polarity more proximal.
+- **Mechanistic prediction:** This is more likely a **secondary modulator**: it can tune **entry/exit and outer-shell residence time** (and thus effective on-rate/pose filtering), rather than directly controlling reactive-center geometry.
 
 ---
 
-### E. **Aromatic “cap” vs small residue in the 170s region (controls pocket roof/retention)**
-- **Position (aligned row index 220):**
-  - **ET096:** **A173** (min dist 8.19 Å)
-  - **CviUPO:** **Y160** (5.80 Å)
-  - **DcaUPO:** **L156** (5.90 Å)
-  - **TE314:** **L185** (6.09 Å)
-  - **OA167:** **Y176** (7.46 Å)
-- **Substitution class:** **steric + polarity** (A → Y/L).
+### D. **RML 174 (Q) ↔ TLL 171 (Y)**  *(~7.5–7.8 Å; distal)*
+- **Residues:** RML **Gln174** vs TLL **Tyr171**
+- **Substitution class:** **Steric + polarity shift** (flexible polar amide → bulkier aromatic with phenolic OH)
 - **Mechanistic consequence:**
-  - **CviUPO Y160** (closer) can act as a **bulky polarizable cap** that helps **pose-lock** and can increase **product retention** in a defined orientation (mono-selectivity) *while* also shaping ET pathways (aromatic residues can participate in packing networks).
-  - **ET096 A173** removes that cap → contributes to ET096’s **open vestibule / weak pose-locking**.
-  - **OA167 Y176** is farther (7.46 Å) so it may contribute more to **outer-pocket character** than direct clamping; consistent with OA167 being not strongly steering electrostatically.
-- **Tie-back:** aligns with CviUPO’s “tight bulky clamp” and ET096’s “wide/dry”.
-
-**Confidence:** medium-high (distance varies; strongest effect in CviUPO).
+  - **TLL Tyr171** can contribute to the **bulkier, more structured outer shell** (summary: larger distal centroid distances + higher variance). Aromatic packing can create **shape features** that help “stage” the sucrose headgroup without deep burial.
+  - **RML Gln174** is more flexible and polar, consistent with a **more continuously polar surface** that can accommodate multiple H-bonding patterns (pose-guiding rather than clamping).
+- **Mechanistic prediction:** Likely affects **outer-shell shaping and solvent exposure** of the sugar, influencing **pose multiplicity** and possibly product distribution (mono vs further acylation) indirectly.
 
 ---
 
-### F. **Bulky aromatic at DcaUPO 154 near the reactive locus (anisotropic sterics / close placement)**
-- **Position (aligned row index 219):**
-  - **ET096:** **A171** (6.76 Å)
-  - **CviUPO:** **T158** (3.77 Å)
-  - **DcaUPO:** **F154** (3.54 Å)
-  - **TE314:** **V183** (3.81 Å)
-  - **OA167:** **P174** (3.62 Å)
-- **Substitution class:** **steric** (A/T/V/P ↔ **F**), plus hydrophobic packing increase.
+### E. **RML 265 (T) ↔ TLL 265 (I)**  *(min dist ~2.91 vs 3.97 Å; proximal)*
+- **Residues:** RML **Thr265** vs TLL **Ile265**
+- **Substitution class:** **Polarity + steric** (small polar → hydrophobic, slightly bulkier)
 - **Mechanistic consequence:**
-  - **DcaUPO F154** at 3.54 Å is a strong candidate for DcaUPO’s **“rugged/anisotropic” proximal sterics**: a phenyl side chain can create a **directional wall** that forces the ligand to approach the heme/reactive center along a preferred trajectory.
-  - This supports DcaUPO’s phenotype of **good reactive alignment** (short reactive-center distance) while still discouraging the “second-oxidation pose” (mono bias).
-  - ET096 has **A171** and is far → consistent with less guidance.
-- **Tie-back:** matches DcaUPO’s “tight in some directions, open in others” description.
-
-**Confidence:** high (bulky aromatic at ~3.5 Å unique to DcaUPO).
+  - **TLL Ile265** increases **local hydrophobicity** near the ligand and removes an H-bonding handle, consistent with the summary’s **more hydrophobic proximal clamp**.
+  - **RML Thr265** supports the **polar proximal microenvironment** and could help stabilize a productive sucrose OH orientation (directly or via structured water).
+- **Mechanistic prediction:** This position is a plausible contributor to the **RML “polyol-friendly” proximal region** vs **TLL hydrophobic gating**.
 
 ---
 
-### G. **ET096 small residues where others are bulky (general permissiveness drivers)**
-Two notable examples:
-1) **ET096 V74 vs OA167 T73 / others L** (row index 100; ET096 min dist 2.94 Å)
-   - **ET096 V74** close contact but relatively small; **OA167 T73** adds polarity; **others L** add bulk.
-   - Likely tunes **local packing vs H-bonding** right at the ligand surface; OA167’s Thr could add weak anchoring but overall OA167 remains hydrophobic/bulky elsewhere.
-2) **ET096 A80 vs DcaUPO F62 / CviUPO L64 / OA167 L80 / TE314 P84** (row index 107; ET096 min dist 4.44 Å)
-   - **A80** is much smaller than **F/L/P** → contributes to ET096’s **wider inner pocket** and weaker shape complementarity.
-
-**Confidence:** medium (effects depend on exact geometry, but consistent with ET096 “small-residue enriched”).
+### F. **RML 264 (N) ↔ TLL 264 (L)**  *(~6–7.9 Å; distal/edge)*
+- **Residues:** RML **Asn264** vs TLL **Leu264**
+- **Substitution class:** **Polarity shift** (polar → hydrophobic)
+- **Mechanistic consequence:**
+  - **TLL Leu264** reinforces a **hydrophobic wall** at/near the pocket periphery, consistent with the summary’s **hydrophobic inner clamp** architecture.
+  - **RML Asn264** maintains a polar feature that can support **sucrose approach/solvation** at the rim.
+- **Mechanistic prediction:** More of a **secondary modulator** (rim wetting/entry energetics) than a direct reactive-center clamp.
 
 ---
 
-## 1b) Variant-within-same-sequence contrasts
-No intra-protein variant series (e.g., WT vs mutants of ET096) are present in the provided alignment/summary; only one entry per homolog. Therefore I cannot satisfy the “point mutations in variants of the same base sequence” requirement from these inputs alone.
+### G. **RML 303? (L267) ↔ TLL 267 (T)**  *(min dist ~3.78 vs 5.15 Å; proximal-to-mid)*
+- **Residues:** RML **Leu267** vs TLL **Thr267**
+- **Substitution class:** **Polarity shift** (hydrophobic → polar)
+- **Mechanistic consequence (context-dependent):**
+  - This is one of the few changes that would make **TLL locally more polar** than RML. If oriented toward the ligand, **Thr267** could partially compensate for TLL’s reduced proximal polarity elsewhere (e.g., D→N at 92; T→I at 265).
+  - However, the larger TLL “clamp” phenotype suggests that even if Thr is present, the **net proximal environment** is still more shape/sterics-driven.
+- **Mechanistic prediction:** likely a **fine-tuner** of local H-bonding rather than a primary driver.
 
 ---
 
-## 2) Ranked residue list (mechanistic drivers vs modulators vs likely neutral)
+### H. Other variable positions that are mostly steric/background in this context
+- **RML 90 (A) ↔ TLL 91 (G):** small↔small; minor packing/dynamics effect.
+- **RML 93 (T) ↔ TLL 94 (N):** polar↔polar; modest H-bond pattern change, likely secondary.
+- **RML 207 (H) ↔ TLL 205 (R):** charge-capable↔positive; but distances here are ~7 Å min—more likely distal electrostatic steering than direct clamp.
+- **RML 254 (V) ↔ TLL 255 (I):** hydrophobic↔hydrophobic; small steric tweak.
+- **RML 259 (S) ↔ TLL 260 (W):** big steric change but at ~7.6–7.7 Å; could shape outer shell, but less directly tied to the “proximal clamp” unless this residue points inward in the open state.
 
-### High-confidence mechanistic driver residues (most causal)
-1) **ET096 deletion at the position corresponding to CviUPO I61 / DcaUPO L59 / TE314 L81 / OA167 L77** (row index 104)  
-   *Primary steric “missing wall” → permissive pocket / weak pose-locking.*
-2) **CviUPO K165** (vs ET096 A178, etc.; row index 226)  
-   *Primary electrostatic handle near ligand → steering/pose-locking; supports polar clamp + ABTS competence.*
-3) **DcaUPO F154** (row index 219)  
-   *Primary anisotropic steric wall near ligand → close placement + mono bias via constrained orientations.*
-4) **OA167 F177** (row index 221)  
-   *Primary bulky hydrophobic inner-wall contact → hydrophobic capture/retention, di-oxidation prone.*
+---
 
-### Secondary modulators (context-dependent, likely real but less singular)
-- **CviUPO Y160** (row index 220): aromatic cap contributing to clamp/pose definition.
-- **DcaUPO D58** (row index 103): negative electrostatic bias/steering (longer-range).
-- **ET096 A80** (row index 107): small residue contributing to widened inner pocket vs L/F/P in others.
-- **ET096 V74 / OA167 T73** (row index 100): local packing vs polarity tweak at very close contact.
+## 2) Variant-within-family contrasts
+Only **two base sequences (RML vs TLL)** are present; there are **no intra-family variants** (WT vs mutants) in the provided alignment table, so I can’t do “point mutations in variants of the same base sequence” comparisons from this dataset.  
+If you provide RML-mutant/TLL-mutant rows, the same framework above will map each mutation onto the **polar-channel vs hydrophobic-clamp** axes.
 
-### Likely neutral/background (within this dataset)
-(Conservative or distal-ish changes with weaker mechanistic leverage given distances/chemistry)
-- **ET096 S172 / CviUPO S159 / TE314 S184 / OA167 T175** (row index 220): mostly conservative polar small residues and relatively distal in ET096.
-- **ET096 F223 vs CviUPO M210 vs DcaUPO L206 vs TE314 V236 vs OA167 I226** (row index 278): hydrophobic swaps; could matter for shape, but without stronger phenotype linkage here they look secondary/background.
-- **ET096 S227 vs TE314 S240 vs OA167 T230 vs CviUPO V214 vs DcaUPO M210** (row index 282): mixed but relatively distal in ET096/OA167; likely modest tuning.
+---
 
-If you provide a true variant set (e.g., ET096_WT and ET096 mutants), I can convert these cross-homolog drivers into **specific mutation→phenotype delta predictions** (e.g., “introduce the missing hydrophobe at the ET096 gap position to increase pose-locking and raise Mono:Di”).
+## 3) Ranked residue list (mechanistic drivers vs modulators vs likely neutral)
+
+### High-confidence mechanistic driver residues (most likely causal for phenotype differences)
+1. **RML Ser83 ↔ TLL Arg84** — introduces **bulky positive gate** in TLL (steric + electrostatic); matches “proximal clamp”.
+2. **RML Asp91 ↔ TLL Asn92** — removes **proximal negative anchor** in TLL; matches reduced polyol-friendly anchoring.
+3. **RML Thr265 ↔ TLL Ile265** — polar→hydrophobic near ligand; supports RML polar proximal vs TLL hydrophobic clamp.
+
+### Secondary modulators (tune rim wetting, outer-shell shaping, pose multiplicity)
+- **RML Asn264 ↔ TLL Leu264** — polar→hydrophobic at rim/edge.
+- **RML Gln174 ↔ TLL Tyr171** — flexible polar→aromatic polar; outer-shell shaping.
+- **RML Phe215 ↔ TLL Tyr213** — adds phenolic OH; distal H-bonding/entry effects.
+- **RML Leu267 ↔ TLL Thr267** — hydrophobic→polar; local compensation/fine-tuning.
+- **RML His207 ↔ TLL Arg205** — distal electrostatic steering (context-dependent).
+
+### Likely neutral/background (small effects or conservative swaps in this pocket context)
+- **RML Ala90 ↔ TLL Gly91**
+- **RML Thr93 ↔ TLL Asn94**
+- **RML Val254 ↔ TLL Ile255**
+- (Most other listed positions are conserved between RML and TLL in this filtered pocket set.)
+
+If you share the **3D orientation** (sidechain vectors) for the top candidates (83/91/265/264) in the open-state structures, I can tighten these into testable hypotheses (e.g., predicted H-bond partners on sucrose; expected shifts in reactive-center approach angles; which OH becomes sterically excluded).

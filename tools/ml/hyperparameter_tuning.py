@@ -195,3 +195,90 @@ def tune_model_hyperparameters(
         "best_value": float(best_trial.value),
         "used_tuning": True,
     }
+
+
+def select_best_params_from_candidates(
+    *,
+    model_name: str,
+    task_type: str,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    base_params: Dict[str, Any],
+    candidate_params_list: list[Dict[str, Any]],
+    tuning_metric: str,
+    show_progress: bool = False,
+) -> Dict[str, Any]:
+    metric_name = resolve_tuning_metric(task_type=task_type, tuning_metric=tuning_metric)
+    direction = _resolve_direction(metric_name)
+
+    X_subtrain, X_val, y_subtrain, y_val = _split_train_validation(
+        X_train=X_train,
+        y_train=y_train,
+        task_type=task_type,
+        seed=TUNING_RANDOM_SEED,
+    )
+
+    if not candidate_params_list:
+        return {
+            "best_params": dict(base_params),
+            "metric_name": metric_name,
+            "direction": direction,
+            "n_trials": 0,
+            "best_value": np.nan,
+            "used_tuning": False,
+            "reason": "no_candidate_params",
+        }
+
+    best_params = dict(base_params)
+    best_value = -np.inf if direction == "maximize" else np.inf
+
+    for i, cand in enumerate(candidate_params_list, start=1):
+        params = dict(base_params)
+        params.update(dict(cand))
+        model = build_model(model_name=model_name, task_type=task_type, params=params)
+        model.fit(X_subtrain, y_subtrain)
+        y_pred = model.predict(X_val)
+
+        y_score = None
+        if str(task_type).strip().lower() == "classification" and hasattr(model, "predict_proba"):
+            try:
+                y_score = model.predict_proba(X_val)
+            except Exception:
+                y_score = None
+        scores = compute_metrics(
+            y_true=y_val,
+            y_pred=y_pred,
+            task_type=task_type,
+            y_score=y_score,
+        )
+        if metric_name not in scores:
+            raise KeyError(
+                f"Tuning metric '{metric_name}' is unavailable. Available metrics: {sorted(scores.keys())}"
+            )
+        value = float(scores[metric_name])
+        improved = (value > best_value) if direction == "maximize" else (value < best_value)
+        if improved:
+            best_value = value
+            best_params = params
+
+        if show_progress:
+            print(
+                "[preset-search] "
+                f"model={model_name} | metric={metric_name} | candidate={i}/{len(candidate_params_list)} | "
+                f"value={value:.6f} | best={best_value:.6f}"
+            )
+
+    if show_progress:
+        print(
+            "[preset-search-selected] "
+            f"model={model_name} | metric={metric_name} | selected_hyperparameters={best_params}"
+        )
+
+    return {
+        "best_params": best_params,
+        "metric_name": metric_name,
+        "direction": direction,
+        "n_trials": int(len(candidate_params_list)),
+        "best_value": float(best_value),
+        "used_tuning": True,
+    }

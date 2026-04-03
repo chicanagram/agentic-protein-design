@@ -35,12 +35,6 @@ def resolve_thread_identifier(thread_ref: str) -> str:
     Returns:
         Normalized thread id.
     """
-    """
-    Accept either:
-    - raw thread_id (hex uuid string), or
-    - thread file key/stem: f\"{tag}_{thread_id}\" (optionally with .json)
-    and return normalized thread_id.
-    """
     ref = str(thread_ref or "").strip()
     if not ref:
         return ref
@@ -62,9 +56,6 @@ def find_thread_file(thread_ref: str, project_root: Optional[Path] = None) -> Pa
 
     Returns:
         Path to matching thread JSON file.
-    """
-    """
-    Find a thread JSON file by thread identifier or file key.
     """
     ref = str(thread_ref or "").strip()
     if not ref:
@@ -115,52 +106,85 @@ def _collect_path_candidates(value: str, root: Path) -> List[Path]:
     return candidates
 
 
-def _walk_metadata_for_paths(metadata: Any, out: Set[str]) -> None:
+def _is_markdown_path(value: str) -> bool:
+    text = str(value or "").strip()
+    return bool(text and text.lower().endswith(".md") and not re.search(r"[\n\r]", text))
+
+
+def _is_artifact_path(value: str, allowed_exts: Set[str]) -> bool:
+    text = str(value or "").strip()
+    if not text or re.search(r"[\n\r]", text):
+        return False
+    suffix = Path(text).suffix.lower()
+    return suffix in allowed_exts
+
+
+def _walk_metadata_for_markdown_paths(metadata: Any, out: Set[str]) -> None:
+    """
+    Collect markdown artifact paths from nested metadata structures.
+    """
     if isinstance(metadata, dict):
-        for _, v in metadata.items():
-            _walk_metadata_for_paths(v, out)
+        for k, v in metadata.items():
+            key = str(k).strip().lower()
+            if isinstance(v, str):
+                candidate = v.strip()
+                if _is_markdown_path(candidate) and key.endswith("_path"):
+                    out.add(candidate)
+            _walk_metadata_for_markdown_paths(v, out)
         return
     if isinstance(metadata, list):
         for v in metadata:
-            _walk_metadata_for_paths(v, out)
+            _walk_metadata_for_markdown_paths(v, out)
         return
     if isinstance(metadata, str):
         text = metadata.strip()
-        if not text:
-            return
-        if len(text) > 400:
-            return
-        if "\n" in text or "\r" in text:
-            return
-        if re.search(r"\s", text):
-            return
-        if re.search(r"^(?:/|\\./|\\.\\./|~\\/)", text) or re.search(
-            r"\.(?:md|csv|json|txt|tsv|parquet|yaml|yml)$", text, flags=re.IGNORECASE
-        ):
+        if _is_markdown_path(text):
             out.add(text)
 
 
-def extract_referenced_file_paths(
+def _walk_metadata_for_artifact_paths(metadata: Any, out: Set[str], allowed_exts: Set[str]) -> None:
+    if isinstance(metadata, dict):
+        for k, v in metadata.items():
+            key = str(k).strip().lower()
+            if isinstance(v, str):
+                candidate = v.strip()
+                if key.endswith("_path") and _is_artifact_path(candidate, allowed_exts):
+                    out.add(candidate)
+            _walk_metadata_for_artifact_paths(v, out, allowed_exts)
+        return
+    if isinstance(metadata, list):
+        for v in metadata:
+            _walk_metadata_for_artifact_paths(v, out, allowed_exts)
+        return
+    if isinstance(metadata, str):
+        text = metadata.strip()
+        if _is_artifact_path(text, allowed_exts):
+            out.add(text)
+
+
+def extract_generated_markdown_paths(
     thread_payload: Dict[str, Any],
     project_root: Optional[Path] = None,
 ) -> List[Path]:
     """
-    Extract file-path references from thread messages and metadata.
+    Extract generated markdown output paths from thread message metadata.
 
     Args:
-        thread: Parsed thread payload.
+        thread_payload: Parsed thread payload.
         project_root: Optional project root override.
 
     Returns:
-        Deduplicated list of existing file paths referenced by the thread.
-    """
-    """
-    Extract existing file paths referenced in thread metadata across all messages.
+        Deduplicated list of existing markdown files, preferring latest message metadata.
     """
     root = project_root or _project_root()
+    messages = list(thread_payload.get("messages", []))
     raw_values: Set[str] = set()
-    for msg in thread_payload.get("messages", []):
-        _walk_metadata_for_paths(msg.get("metadata", {}), raw_values)
+    for msg in reversed(messages):
+        candidates: Set[str] = set()
+        _walk_metadata_for_markdown_paths(msg.get("metadata", {}), candidates)
+        if candidates:
+            raw_values = candidates
+            break
 
     resolved: List[Path] = []
     seen: Set[str] = set()
@@ -179,7 +203,47 @@ def extract_referenced_file_paths(
     return resolved
 
 
-def read_files_as_context(paths: List[Path], max_chars_per_file: int = 20000) -> Dict[str, str]:
+def extract_metadata_artifact_paths(
+    thread_payload: Dict[str, Any],
+    project_root: Optional[Path] = None,
+    allowed_extensions: Optional[List[str]] = None,
+) -> List[Path]:
+    """
+    Extract existing artifact paths (for example .md/.json) from latest message metadata.
+    """
+    root = project_root or _project_root()
+    allowed_exts = {
+        str(ext).strip().lower() if str(ext).startswith(".") else f".{str(ext).strip().lower()}"
+        for ext in (allowed_extensions or [".md", ".json"])
+        if str(ext).strip()
+    }
+    messages = list(thread_payload.get("messages", []))
+    raw_values: Set[str] = set()
+    for msg in reversed(messages):
+        candidates: Set[str] = set()
+        _walk_metadata_for_artifact_paths(msg.get("metadata", {}), candidates, allowed_exts)
+        if candidates:
+            raw_values = candidates
+            break
+
+    resolved: List[Path] = []
+    seen: Set[str] = set()
+    for raw in sorted(raw_values):
+        for candidate in _collect_path_candidates(raw, root):
+            try:
+                exists = candidate.exists()
+            except OSError:
+                continue
+            if exists:
+                key = str(candidate.resolve())
+                if key not in seen:
+                    seen.add(key)
+                    resolved.append(candidate.resolve())
+                break
+    return resolved
+
+
+def read_files_as_context(paths: List[Path], max_chars_per_file: int = 40000) -> Dict[str, str]:
     """
     Read referenced files into bounded text snippets for LLM context.
 
@@ -206,54 +270,54 @@ def build_thread_context_bundle(
     *,
     project_root: Optional[Path] = None,
     include_referenced_files: bool = True,
-    max_chars_per_file: int = 20000,
+    max_chars_per_file: int = 40000,
+    json_artifact_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Build a structured context bundle from a prior chat thread.
+    Build a context bundle from a prior chat thread.
 
     Args:
-        thread_ref: Thread reference (`None` to disable).
-        include_referenced_files: Whether to include referenced file contents.
+        thread_ref: Thread id, tagged id, or thread filename stem.
+        include_referenced_files: Whether to include generated markdown file contents.
         max_chars_per_file: Per-file context character limit.
-        on_missing: Missing-thread behavior: `warn` or `raise`.
         project_root: Optional project root override.
 
     Returns:
-        Context bundle including thread payload, text snippets, and errors.
-    """
-    """
-    Generic accessor for historical thread context and referenced output traces.
+        Context bundle including thread payload and generated markdown snippets.
     """
     payload = load_thread_by_id(thread_ref, project_root=project_root)
     paths: List[Path] = []
     file_texts: Dict[str, str] = {}
     if include_referenced_files:
-        paths = extract_referenced_file_paths(payload, project_root=project_root)
+        paths = extract_generated_markdown_paths(payload, project_root=project_root)
         file_texts = read_files_as_context(paths, max_chars_per_file=max_chars_per_file)
-
-    messages = payload.get("messages", [])
-    latest_assistant = ""
-    latest_user = ""
-    for msg in reversed(messages):
-        role = str(msg.get("role", ""))
-        content = str(msg.get("content", ""))
-        if not latest_assistant and role == "assistant":
-            latest_assistant = content
-        if not latest_user and role == "user":
-            latest_user = content
-        if latest_assistant and latest_user:
-            break
+    artifact_paths = extract_metadata_artifact_paths(payload, project_root=project_root)
+    requested_json_names = {str(x).strip().lower() for x in (json_artifact_names or []) if str(x).strip()}
+    json_objects: Dict[str, Any] = {}
+    if requested_json_names:
+        for p in artifact_paths:
+            if p.suffix.lower() != ".json":
+                continue
+            stem = p.stem.lower()
+            name = p.name.lower()
+            if stem not in requested_json_names and name not in requested_json_names:
+                continue
+            try:
+                parsed = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            json_objects[stem] = parsed
 
     return {
         "thread_id": payload.get("thread_id", ""),
         "root_key": payload.get("root_key", ""),
         "llm_process_tag": payload.get("llm_process_tag", ""),
         "thread_file": payload.get("_thread_file", ""),
-        "n_messages": len(messages),
-        "latest_user_message": latest_user,
-        "latest_assistant_message": latest_assistant,
+        "n_messages": len(payload.get("messages", [])),
         "referenced_files": [str(p) for p in paths],
         "referenced_file_contents": file_texts,
+        "referenced_artifact_paths": [str(p) for p in artifact_paths],
+        "referenced_json_objects": json_objects,
         "thread_payload": payload,
     }
 
@@ -262,29 +326,21 @@ def build_thread_context_text(
     thread_ref: Optional[str],
     *,
     include_referenced_files: bool = True,
-    max_chars_per_file: int = 20000,
+    max_chars_per_file: int = 40000,
     on_missing: str = "warn",
+    json_artifact_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Build concatenated plain-text context for prompt injection.
+    Build plain-text context from generated markdown artifacts only.
 
     Args:
         thread_ref: Thread reference (`None` to disable).
-        include_referenced_files: Whether to include referenced file contents.
+        include_referenced_files: Whether to include generated markdown file contents.
         max_chars_per_file: Per-file context character limit.
         on_missing: Missing-thread behavior: `warn` or `raise`.
-        project_root: Optional project root override.
 
     Returns:
         Dict with `context_text` plus raw bundle/error metadata.
-    """
-    """
-    Build a compact text context block from a prior thread, plus the raw bundle.
-
-    Returns:
-    - context_text: merged text for downstream prompts
-    - context_bundle: parsed thread bundle or None
-    - context_error: error message when missing/unreadable and on_missing != "raise"
     """
     ref = str(thread_ref or "").strip()
     if not ref:
@@ -295,6 +351,7 @@ def build_thread_context_text(
             ref,
             include_referenced_files=include_referenced_files,
             max_chars_per_file=max_chars_per_file,
+            json_artifact_names=json_artifact_names,
         )
     except FileNotFoundError as exc:
         if on_missing == "raise":
@@ -304,17 +361,11 @@ def build_thread_context_text(
             print(f"Skipping thread context: {msg}")
         return {"context_text": "", "context_bundle": None, "context_error": msg}
 
-    file_blocks: List[str] = []
-    for path, text in bundle.get("referenced_file_contents", {}).items():
-        file_blocks.append(f"FILE: {path}\n{text}")
-
-    context_text = "\n\n".join(
-        [
-            str(bundle.get("latest_user_message", "")),
-            str(bundle.get("latest_assistant_message", "")),
-            "\n\n".join(file_blocks),
-        ]
-    ).strip()
+    file_blocks = [
+        f"FILE: {path}\n{text}"
+        for path, text in bundle.get("referenced_file_contents", {}).items()
+    ]
+    context_text = "\n\n".join(file_blocks).strip()
     return {"context_text": context_text, "context_bundle": bundle, "context_error": ""}
 
 
@@ -344,9 +395,10 @@ def load_optional_thread_context(
     thread_ref: Optional[str],
     *,
     include_referenced_files: bool = True,
-    max_chars_per_file: int = 20000,
+    max_chars_per_file: int = 40000,
     on_missing: str = "warn",
     filter_keyword: str = "",
+    json_artifact_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Load optional prior-thread context and optionally add a keyword-filtered view.
@@ -356,6 +408,7 @@ def load_optional_thread_context(
         include_referenced_files=include_referenced_files,
         max_chars_per_file=max_chars_per_file,
         on_missing=on_missing,
+        json_artifact_names=json_artifact_names,
     )
     if str(filter_keyword or "").strip():
         result["filtered_context_text"] = filter_context_text_by_keyword(

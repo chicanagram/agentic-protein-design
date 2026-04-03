@@ -48,6 +48,7 @@ class AlignStruct:
             print('Saved SCE output:', output_sce_fpath)
 
         num_obj = yasara.CountObj('All')
+        print('num_obj:', num_obj)
         if join_obj_in_pdb:
             for obj_num in range(2, num_obj + 1):
                 yasara.JoinObj(obj_num, 1, center='No')
@@ -135,10 +136,13 @@ class AlignStruct:
         delete_not_protein=False,
     ):
         struct_fpaths = [Path(f) for f in struct_fpaths]
+        print('struct_fpaths:', len(struct_fpaths))
+        print(struct_fpaths)
 
         yasara.info.mode = 'txt'
         yasara.Console('off')
         yasara.FormatRes('RESName')
+        yasara.Clear()
 
         temp_struct_fpaths = []
         try:

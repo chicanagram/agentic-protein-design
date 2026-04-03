@@ -19,7 +19,7 @@ from tools.encodings.common import (
     save_llr_vect_and_heatmap,
     score_mutants_from_llr_map,
 )
-from tools.utils.model_utils import get_device
+from tools.utils.model_utils import get_device, iter_batches
 from project_config.variables import aaList_with_X
 
 from esm.models.esmc import ESMC
@@ -77,6 +77,7 @@ def forward_pass(
     layers: Optional[List[int]] = None,
     show_progress: bool = False,
     progress_tag: str = "esmc embeddings",
+    collect_logits: bool = True,
 ) -> Any:
 
     embedding_config = LogitsConfig(sequence=True, return_embeddings=output_hidden_states, return_hidden_states=output_hidden_states)
@@ -86,22 +87,25 @@ def forward_pass(
         model = bundle["model"]
 
     # Section 2: run per-sequence forward passes and collect outputs.
-    logits = []
-    representations = {layer: [] for layer in layers} if layers is not None else None
+    logits = [] if collect_logits else None
+    resolved_layers = [int(x) for x in (layers or [])]
+    representations = {layer: [] for layer in resolved_layers} if output_hidden_states else None
     total = len(sequences)
-    for idx, seq in enumerate(sequences):
-        protein = ESMProtein(sequence=seq)
-        protein_tensor = model.encode(protein)
-        output_seq = model.logits(protein_tensor, embedding_config)
-        logits_seq = output_seq.logits.sequence[0, :, :] # logits shape: n, T, V
-        logits.append(logits_seq)
-        # optionally obtain embeddings
-        if output_hidden_states:
-            hidden_states_seq = output_seq.hidden_states[:, 0, :, :]
-            for layer in layers:
-                representations[layer].append(hidden_states_seq[layer - 1, :, :])
-        if show_progress:
-            _print_progress(progress_tag, idx + 1, total)
+    with torch.inference_mode():
+        for idx, seq in enumerate(sequences):
+            protein = ESMProtein(sequence=seq)
+            protein_tensor = model.encode(protein)
+            output_seq = model.logits(protein_tensor, embedding_config)
+            if collect_logits:
+                logits_seq = output_seq.logits.sequence[0, :, :] # logits shape: n, T, V
+                logits.append(logits_seq)
+            # optionally obtain embeddings
+            if output_hidden_states:
+                hidden_states_seq = output_seq.hidden_states[:, 0, :, :]
+                for layer in resolved_layers:
+                    representations[layer].append(hidden_states_seq[layer - 1, :, :])
+            if show_progress:
+                _print_progress(progress_tag, idx + 1, total)
     return logits, representations
 
 
@@ -511,22 +515,30 @@ def _compute_per_residue_embeddings(
     # Section 1: Load model
     bundle = load_model(model_name=model_name, device=device)
     seq_list = [sequences] if isinstance(sequences, str) else list(sequences)
-    collected: Dict[int, List[np.ndarray]] = {layer: [] for layer in layers}
+    n_total = len(seq_list)
+    n_done = 0
+    resolved_layers = [int(x) for x in (layers or [])]
+    if not resolved_layers:
+        raise ValueError("layers must be a non-empty sequence for esmc embeddings.")
+    collected: Dict[int, List[np.ndarray]] = {layer: [] for layer in resolved_layers}
 
     # Section 2: run batched forward passes and collect residue spans per layer.
-    _, representations = forward_pass(
-        seq_list,
-        model=bundle["model"],
-        output_hidden_states=True,
-        layers=layers,
-        show_progress=bool(progress_tag),
-        progress_tag=str(progress_tag or "esmc embeddings"),
-    )
-
-    collected = {layer:[] for layer in layers}
-    for layer in layers:
-        for i, seq in enumerate(seq_list):
-            collected[layer].append(representations[layer][i][1:1+len(seq), :].detach().cpu().numpy())
+    for batch_sequences in iter_batches(seq_list, batch_size):
+        batch_list = list(batch_sequences)
+        _, representations = forward_pass(
+            batch_list,
+            model=bundle["model"],
+            output_hidden_states=True,
+            layers=resolved_layers,
+            show_progress=False,
+            collect_logits=False,
+        )
+        for layer in resolved_layers:
+            for i, seq in enumerate(batch_list):
+                collected[layer].append(representations[layer][i][1:1+len(seq), :].detach().cpu().numpy())
+        n_done += len(batch_list)
+        if progress_tag:
+            _print_progress(progress_tag, n_done, n_total)
 
     # Section 3: convert per-layer list outputs to dense matrices.
     out: Dict[int, np.ndarray] = {}
@@ -536,8 +548,7 @@ def _compute_per_residue_embeddings(
             continue
         lengths = {int(np.asarray(a).shape[0]) for a in arrays}
         if len(lengths) != 1:
-            out = collected
-            print(
+            raise ValueError(
                 f"Layer {int(layer)} embeddings have variable sequence lengths {sorted(lengths)}; "
                 "cannot return a single dense matrix."
             )

@@ -13,6 +13,7 @@ if __name__ == "__main__" and __package__ in (None, ""):
 import argparse
 import json
 from pathlib import Path
+from pprint import pprint
 from typing import Any, Dict
 
 from agentic_protein_design.core.paths import resolve_project_root
@@ -36,9 +37,11 @@ def default_user_inputs() -> Dict[str, Any]:
             "onehot_georgiev": ["one_hot", "georgiev"],
         },
         "model_list": ["rf", "ridge", "mlp_sklearn"],
-        "run_hyperparameter_tuning": False,
+        "hyperparameter_mode": "default",
         "tuning_metric": "spearman",
         "tuning_n_trials": 30,
+        "summary_source_mode": "run_cache",
+        "summary_metric_mode": "average",
         "k_folds": 5,
         "random_kfold_repeats": 1,
         "split_seed": 42,
@@ -46,7 +49,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "random_split_col": "fold_random_5",
         "mutres_split_col": "fold_mutres-modulo_5",
         "segment_col": "segment_index_0",
-        "segment_iterations": "auto",
+        "segment_index_range": None,
         "contiguous_split_col": "",
         "custom_split_col": "fold_modulo_5",
         "custom_test_value": 0,
@@ -129,4 +132,70 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    user_inputs = default_user_inputs()
+
+    # === Dataset Inputs ===
+    user_inputs["root_key"] = 'ECOHARVEST' # "MUTAGENESIS-DATA-BENCHMARKS"  # e.g. "examples"
+    user_inputs["data_fbase"] = user_inputs["root_key"]
+    user_inputs["data_subfolder"] = 'RML_R1' # "D7PM05_CLYGR_Somermeyer_2022"
+    user_inputs["csv_suffix"] = ""
+    default_dataset_fname = user_inputs["data_subfolder"] + user_inputs["csv_suffix"] + ".csv"
+    user_inputs["dataset_fname"] = default_dataset_fname
+    user_inputs["input_filename_prefix"] = user_inputs["data_subfolder"] + "_"
+    user_inputs["sequence_base"] = "sequences/RML/RML-propeptide-mature.fasta" # "sequences/D7PM05_CLYGR_Somermeyer_2022.fasta"
+    user_inputs["target_col"] = ['foldchange_TSO'] # ["DMS_score"]
+    user_inputs["classification_or_regression"] = "regression"
+
+    # === Split Settings ===
+    user_inputs["split_type_list"] = ['random'] # ["custom", "mutres-modulo", "random"]
+    user_inputs["k_folds"] = 5
+    user_inputs["random_kfold_repeats"] = 5
+    user_inputs["random_split_col"] = f'fold_random_{user_inputs["k_folds"]}'
+    user_inputs["mutres_split_col"] = f'fold_mutres-modulo_{user_inputs["k_folds"]}'
+    user_inputs["contiguous_split_col"] = f'fold_contiguous_{user_inputs["k_folds"]}'
+    user_inputs["custom_split_col"] = "fold_custom"
+    user_inputs["custom_test_value"] = 1
+    user_inputs["segment_col"] = "segment_index_0"
+    user_inputs["segment_index_range"] = None  # e.g. [0, 26] or [24, 26]
+
+    # === Custom Test Dataset (Optional) ===
+    user_inputs["custom_test_dataset_fname"] = None
+    user_inputs["custom_test_data_subfolder"] = user_inputs["data_subfolder"]
+    user_inputs["custom_input_filename_prefix"] = (
+        None
+        if user_inputs["custom_test_dataset_fname"] is None
+        else str(user_inputs["custom_test_dataset_fname"]).split(".")[0]
+    )
+
+    # === Feature Combinations ===
+    user_inputs["feature_combinations_dict"] = {
+        "one_hot": ["one_hot"],
+        "onehot_esm2_LLR-masked": ["one_hot", "esm2-650m_LLR-masked"],
+        "onehot_esm2_LLR-wt": ["one_hot", "esm2-650m_LLR-wt"],
+        "georgiev": ["georgiev"],
+        "georgiev_esm2_LLR-masked": ["georgiev", "esm2-650m_LLR-masked"],
+        "georgiev_esm2_LLR-wt": ["georgiev", "esm2-650m_LLR-wt"],
+        # "esm2_seq_embeddings_LLR": ["esm2-650m_mean_pooled-33", "esm2-650m_LLR-masked"],
+    }
+
+    # === Models ===
+    user_inputs["model_list"] = ["ridge"] # ["ridge", "xgboost"]
+
+    # === Hyperparameter Mode ===
+    # options: "default", "ntrain_preset", "preset_search", "optuna_search"
+    user_inputs["hyperparameter_mode"] = "optuna_search"
+    user_inputs["tuning_metric"] = "spearman"
+    user_inputs["tuning_n_trials"] = 20
+    user_inputs["summary_source_mode"] = "run_cache"  # "run_cache" or "all_saved_rows"
+    user_inputs["summary_metric_mode"] = "average"  # "average" or "pooled"
+
+    # === Save / Output Controls ===
+    user_inputs["save_trained_models"] = False
+    user_inputs["save_predictions"] = False
+    user_inputs["train_full_data_model"] = False
+    user_inputs["featurecombi_model_pair_to_extract_coefficients_for"] = [] # [('one_hot', 'ridge')]
+    user_inputs["show_progress"] = True
+
+    pprint(user_inputs)
+    result = train_evaluate_supervised_ml_models(user_inputs)
+    pprint(result)

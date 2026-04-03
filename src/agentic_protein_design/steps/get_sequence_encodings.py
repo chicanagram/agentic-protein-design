@@ -28,7 +28,7 @@ from project_config.variables import address_dict
 from tools.encodings.classical_encodings import get_classical_encodings
 from tools.encodings.common import _sanitize_name
 from tools.encodings.plm_encodings import get_plm_encodings
-from tools.utils.seq_utils import fetch_sequences_from_fasta, normalize_sequences
+from tools.utils.seq_utils import fetch_sequences_from_fasta, get_mutated_sequence, normalize_sequences
 
 
 FASTA_SUFFIXES = {".fasta", ".fa", ".faa", ".fna"}
@@ -138,6 +138,49 @@ def _extract_required_sequence_column(df: pd.DataFrame, sequence_col: str, input
     return sequence_list
 
 
+def _infer_sequences_from_base_and_mutations(
+    *,
+    sequence_base_list: Sequence[str],
+    mutations_raw: Sequence[str],
+    mutations_sep: str = "+",
+) -> List[str]:
+    """
+    Infer mutated sequences row-wise from sequence_base + mutation strings.
+
+    Mutation strings may contain multi-mutations separated by `mutations_sep`.
+    """
+    # Section 1: validate row alignment.
+    if len(sequence_base_list) != len(mutations_raw):
+        raise ValueError(
+            f"Length mismatch: sequence_base_list ({len(sequence_base_list)}) vs "
+            f"mutations ({len(mutations_raw)})."
+        )
+
+    # Section 2: apply mutations sequentially for each row.
+    inferred_sequences: List[str] = []
+    for row_idx, (seq_base, mut_str) in enumerate(zip(sequence_base_list, mutations_raw)):
+        curr_seq = str(seq_base).strip()
+        if not curr_seq:
+            raise ValueError(f"Empty sequence_base at row {row_idx}; cannot infer sequence.")
+        raw_mut = str(mut_str or "").strip()
+        if not raw_mut:
+            inferred_sequences.append(curr_seq)
+            continue
+        mut_tokens = [m.strip() for m in raw_mut.split(str(mutations_sep or "+")) if m.strip()]
+        for mut in mut_tokens:
+            _, _, seq_out, _ = get_mutated_sequence(curr_seq, [mut], seq_name="inferred", write_to_fasta=None)
+            if not seq_out:
+                raise ValueError(f"Failed to infer sequence at row {row_idx} for mutation '{mut}'.")
+            curr_seq = str(seq_out[0]).strip()
+        inferred_sequences.append(curr_seq)
+
+    # Section 3: normalize and enforce non-empty inferred sequences.
+    normalized = normalize_sequences(inferred_sequences)
+    if len(normalized) != len(inferred_sequences):
+        raise ValueError("Could not normalize all inferred sequences into non-empty strings.")
+    return normalized
+
+
 def _normalize_sequence_base_input(
     sequence_base: Optional[Union[str, Sequence[Optional[str]]]],
     n_rows: int = 1,
@@ -224,6 +267,7 @@ def parse_sequence_input(
     sequence_col: str = "sequence",
     sequence_base_col: str = "sequence_base",
     mutation_col: str = "mutations",
+    mutations_sep: str = "+",
     sequence_base: Optional[Union[str, Sequence[Optional[str]]]] = None,
 ) -> Dict[str, Any]:
     """
@@ -243,8 +287,13 @@ def parse_sequence_input(
     if suffix == ".csv":
         # Section 2A: parse CSV sequence/base/mutation columns.
         df = pd.read_csv(input_path)
-        sequence_list = _extract_required_sequence_column(df, sequence_col, input_path)
-        n_seq = len(sequence_list)
+        n_rows = len(df)
+        sequence_list: Optional[List[str]] = None
+        if sequence_col in df.columns:
+            sequence_list = _extract_required_sequence_column(df, sequence_col, input_path)
+            n_seq = len(sequence_list)
+        else:
+            n_seq = n_rows
 
         # Section 2A.1: resolve sequence_base list from CSV column or fallback input.
         sequence_base_list: Optional[List[str]] = None
@@ -266,10 +315,32 @@ def parse_sequence_input(
             sequence_base_list = _normalize_sequence_base_input(sequence_base, n_rows=n_seq)
 
         mutations_list: Optional[List[str]] = None
+        raw_mutations: Optional[List[str]] = None
         if mutation_col in df.columns:
             raw_mutations = [str(x).strip() for x in df[mutation_col].fillna("").tolist()]
             if any(raw_mutations):
                 mutations_list = raw_mutations
+
+        # Section 2A.2: infer missing sequence column from sequence_base + mutations.
+        if sequence_list is None:
+            if sequence_base_list is None:
+                raise ValueError(
+                    f"Column '{sequence_col}' not found in CSV: {input_path}. "
+                    f"To infer sequences, provide '{sequence_base_col}' column or user_inputs['sequence_base']."
+                )
+            if raw_mutations is None:
+                raise ValueError(
+                    f"Column '{sequence_col}' not found in CSV: {input_path}. "
+                    f"To infer sequences, provide '{mutation_col}' column."
+                )
+            sequence_list = _infer_sequences_from_base_and_mutations(
+                sequence_base_list=sequence_base_list,
+                mutations_raw=raw_mutations,
+                mutations_sep=mutations_sep,
+            )
+            # Section 2A.3: persist inferred sequence column back to source CSV.
+            df[sequence_col] = sequence_list
+            df.to_csv(input_path, index=False)
 
         return {
             "input_path": str(input_path),
@@ -511,6 +582,7 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
             sequence_col=str(inputs.get("sequence_col", "sequence")),
             sequence_base_col=str(inputs.get("sequence_base_col", "sequence_base")),
             mutation_col=str(inputs.get("mutation_col", "mutations")),
+            mutations_sep=str(inputs.get("mutations_sep", "+")),
             sequence_base=sequence_base_input,
         )
     else:
@@ -644,8 +716,8 @@ if __name__ == "__main__":
     user_inputs = default_user_inputs()
 
     # Section 1A: Configure output root and subfolders.
-    user_inputs["root_key"] = "MUTAGENESIS-DATA-BENCHMARKS"
-    user_inputs["data_subfolder"] = "D7PM05_CLYGR_Somermeyer_2022"
+    user_inputs["root_key"] = 'PIPS' # "MUTAGENESIS-DATA-BENCHMARKS"
+    user_inputs["data_subfolder"] = 'GOh1052_mutagenesis' # "D7PM05_CLYGR_Somermeyer_2022"
     user_inputs["encodings_subfolder"] = "encodings/"
     filename = f'{user_inputs["data_subfolder"]}.csv'
     user_inputs["filename_prefix"] = filename.split(".")[0] + "_" if filename is not None else ""
@@ -663,8 +735,8 @@ if __name__ == "__main__":
     user_inputs["mutation_col"] = "mutations"
     # Leave as None by default so CSV `sequence_base_col` is used when present.
     # Set this to a FASTA path string (e.g. "sequences/<name>.fasta") if desired.
-    # user_inputs["sequence_base"] = None
-    user_inputs["sequence_base"] = f'sequences/{user_inputs["data_subfolder"]}.fasta'  # None
+    user_inputs["sequence_base"] = None
+    # user_inputs["sequence_base"] = f'sequences/{user_inputs["data_subfolder"]}.fasta'  # None
 
 
     # Section 1D: Configure feature sets.
@@ -674,8 +746,8 @@ if __name__ == "__main__":
         # "esm2-650m_LLR",
         # "esm2-650m_meanPLL",
         # "esm2-650m_per_residue",
-        "esm2-650m_mean_pooled",
-        "esmc-600m_LLR",
+        # "esm2-650m_mean_pooled",
+        # "esmc-600m_LLR",
         # "esm2-650m_meanPLL",
         # "esmc-600m_per_residue",
         "esmc-600m_mean_pooled",
@@ -697,7 +769,7 @@ if __name__ == "__main__":
     user_inputs["n_components"] = 1024
     user_inputs["sample_mutants_for_svd"] = False
     user_inputs["svd_data_reduction"] = None
-    user_inputs["chunk_size"] = 3000
+    user_inputs["chunk_size"] = 200
     user_inputs["cleanup_chunk_files"] = True
     user_inputs["batch_size"] = 4
     user_inputs["device"] = None

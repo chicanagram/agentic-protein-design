@@ -97,7 +97,7 @@ def get_mutated_sequence(seq_base, mutations, seq_name=None, write_to_fasta=None
 
     # get mutated sequences
     for mut in mutations:
-        if mut is not None:
+        if mut not in [None, 'WT']:
             wildtype_aa, position, mutant_aa = split_wildtype(mut)
 
             if seq_base[position-1] == wildtype_aa:

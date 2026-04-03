@@ -24,7 +24,7 @@ import requests
 from agentic_protein_design.core import apply_optional_text_inputs
 from agentic_protein_design.core.llm_display import display_llm_output_bundle
 from agentic_protein_design.core.paths import (
-    get_step_processed_dir as core_get_step_processed_dir,
+    get_step_processed_dir,
     resolve_project_root,
     setup_data_root,
 )
@@ -86,12 +86,15 @@ INSTRUCTIONS FOR INFORMATION GATHERING
 OUTPUT FORMAT
 
 1. Executive Summary (<=10 bullet points)
-   - High-level takeaways most relevant to engineering strategy.
+   - High-level takeaways most relevant to engineering strategy
+   - Identify key design knobs along with directional hypotheses to guide engineering.
 
-2. Structural Overview
+2. Structural Overview (focusing on the 1st enzyme provided)
+   Describe different aspects of the enzyme's structure, noting features relevant to, or that could limit, reaction with the target substrates. 
    - Fold classification
    - Domain architecture
    - Active site organization
+   - Binding pocket properties (geometry, sterics, electrostatics)
    - Access channels / substrate tunnels
    - Cofactor binding
    - Known motifs or epitopes
@@ -110,12 +113,12 @@ OUTPUT FORMAT
    - Known limitations
 
 5. Engineering Landscape
-   - Mutations known to affect activity/selectivity
-   - Stability-enhancing mutations
-   - Expression improvements
-   - Channel reshaping strategies
-   - ML-guided or computational design efforts
-   - Reported performance gains (quantitative if available)
+    List reported mutations and describe their effect. E.g.:
+   - Effect on activity/selectivity (identify if mutation is in binding pocket and its effect)
+   - Enhance stability
+   - Improve expression
+   - Reshape the channel or binding pocket
+   Summarize literature ML-guided or computational design efforts as well as reported performance gains.
 
 6. Practical Constraints
    - Cofactor stability (e.g. H2O2 sensitivity)
@@ -124,7 +127,7 @@ OUTPUT FORMAT
    - Solvent/temperature/pH tolerance
 
 7. Comparative Analysis (if multiple homologs provided)
-   - Structural or mechanistic differences
+   - Comparison of binding pockets and overall structures
    - Performance trade-offs
    - Known phenotypic clusters
 
@@ -158,13 +161,6 @@ If reactions_of_interest are specified:
 
 The goal is not just to summarize literature, but to extract engineering-relevant insight that can guide rational or ML-assisted enzyme optimization.
 """
-
-def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
-    """
-    Return/create processed output directory for this notebook step.
-    """
-    return core_get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
-
 
 def init_thread(root_key: str, existing_thread_id: Optional[str] = None) -> Tuple[Dict[str, Any], pd.DataFrame]:
     return init_step_thread(
@@ -349,7 +345,7 @@ def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[
         project_root: Optional project root override.
 
     Returns:
-        Dict with local-document hit table, combined context text, and diagnostics.
+        Dict with combined context text, lightweight per-document index, and diagnostics.
     """
     docs_dir = resolve_literature_docs_dir(inputs, project_root=project_root)
     max_files = int(inputs.get("pdf_rag_max_files", 20))
@@ -361,8 +357,8 @@ def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[
         print(f"[LocalPDF] disabled; docs_dir={docs_dir}")
         return {
             "docs_dir": str(docs_dir),
-            "local_document_hits": pd.DataFrame(),
             "local_document_context": "",
+            "local_document_index": pd.DataFrame(),
             "doc_errors": [],
             "n_docs_discovered": 0,
             "n_docs_used": 0,
@@ -375,7 +371,7 @@ def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[
         f"max_files={max_files} max_chars_per_file={max_chars_per_file} max_total_chars={max_total_chars}"
     )
 
-    rows: List[Dict[str, Any]] = []
+    doc_index_rows: List[Dict[str, Any]] = []
     context_chunks: List[str] = []
     errors: List[str] = []
     used_chars = 0
@@ -410,20 +406,15 @@ def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[
         excerpt = _clean_text(file_text, max_chars=max_chars_per_file)
         used_this_file = len(excerpt)
         truncated = used_this_file < extracted_chars
-        rows.append(
+        doc_index_rows.append(
             {
                 "source": "LocalPDF",
                 "id": p.name,
                 "title": p.stem,
-                "journal": "",
-                "year": "",
-                "abstract": excerpt[:1200],
-                "is_open_access": True,
-                "fulltext_url": str(p),
                 "url": str(p),
-                "pmcid": "",
-                "host_venue": "Local literature folder",
-                "fulltext_excerpt": excerpt,
+                "extracted_chars": extracted_chars,
+                "used_chars": used_this_file,
+                "truncated": truncated,
             }
         )
         context_chunks.append(f"[LocalPDF: {p.name}]\n{excerpt}")
@@ -436,8 +427,8 @@ def ingest_local_literature_docs(inputs: Dict[str, Any], project_root: Optional[
 
     return {
         "docs_dir": str(docs_dir),
-        "local_document_hits": pd.DataFrame(rows),
         "local_document_context": "\n\n".join(context_chunks),
+        "local_document_index": pd.DataFrame(doc_index_rows),
         "doc_errors": errors,
         "n_docs_discovered": int(len(pdf_files)),
         "n_docs_used": int(n_used),
@@ -698,7 +689,7 @@ def search_general_web(query: str, max_results: int = 20) -> pd.DataFrame:
                 )
             return pd.DataFrame(rows)
         except Exception as exc:
-            raise RuntimeError("`tavily` package not available") from exc
+            print(f"[WebSearch] Tavily unavailable, falling back to DuckDuckGo: {type(exc).__name__}: {exc}")
 
     # Fallback: DuckDuckGo Instant Answer API (no key).
     url = (
@@ -789,7 +780,9 @@ def enrich_open_access_fulltext(literature_df: pd.DataFrame, max_chars: int = 60
     return out
 
 
-def annotate_literature_targets(literature_df: pd.DataFrame) -> pd.DataFrame:
+def annotate_literature_targets(
+    literature_df: pd.DataFrame, literature_targets: Optional[List[str]] = None
+) -> pd.DataFrame:
     if literature_df.empty:
         out = literature_df.copy()
         out["is_biorxiv"] = False
@@ -799,6 +792,7 @@ def annotate_literature_targets(literature_df: pd.DataFrame) -> pd.DataFrame:
         return out
 
     out = literature_df.copy()
+    selected_targets = [str(t).strip() for t in (literature_targets or []) if str(t).strip()]
     text = (
         out.get("title", "").fillna("").astype(str)
         + " "
@@ -817,21 +811,49 @@ def annotate_literature_targets(literature_df: pd.DataFrame) -> pd.DataFrame:
         "elsevier", regex=False
     )
 
+    target_patterns: Dict[str, List[str]] = {
+        "bioRxiv": ["biorxiv"],
+        "Nature": ["nature.com", "nature "],
+        "ScienceDirect": ["sciencedirect", "elsevier"],
+        "PNAS": ["pnas.org", "proc natl acad sci", "pnas"],
+        "ACS": ["acs.org", "american chemical society", "acs "],
+        "Wiley": ["wiley.com", "wiley"],
+        "ChemRxiv": ["chemrxiv"],
+    }
+    for target in selected_targets:
+        if target not in target_patterns:
+            target_patterns[target] = [target.lower()]
+
+    target_match_columns: Dict[str, pd.Series] = {}
+    for target, patterns in target_patterns.items():
+        series = pd.Series(False, index=out.index)
+        for pattern in patterns:
+            series = series | text.str.contains(pattern, regex=False)
+        target_match_columns[target] = series
+
     def _match_labels(row: pd.Series) -> str:
         labels: List[str] = []
-        if bool(row.get("is_biorxiv", False)):
-            labels.append("bioRxiv")
-        if bool(row.get("is_nature", False)):
-            labels.append("Nature")
-        if bool(row.get("is_sciencedirect", False)):
-            labels.append("ScienceDirect")
+        for target in selected_targets:
+            col = f"is_target_{target.lower().replace(' ', '_')}"
+            if bool(row.get(col, False)):
+                labels.append(target)
+        if not labels:
+            if bool(row.get("is_biorxiv", False)):
+                labels.append("bioRxiv")
+            if bool(row.get("is_nature", False)):
+                labels.append("Nature")
+            if bool(row.get("is_sciencedirect", False)):
+                labels.append("ScienceDirect")
         return "; ".join(labels)
 
+    for target, series in target_match_columns.items():
+        col = f"is_target_{target.lower().replace(' ', '_')}"
+        out[col] = series
     out["target_matches"] = out.apply(_match_labels, axis=1)
     return out
 
 
-def build_source_report(literature_df: pd.DataFrame) -> pd.DataFrame:
+def build_source_report(literature_df: pd.DataFrame, local_pdf_hits: int = 0) -> pd.DataFrame:
     if literature_df.empty:
         return pd.DataFrame(
             [
@@ -840,7 +862,7 @@ def build_source_report(literature_df: pd.DataFrame) -> pd.DataFrame:
                 {"metric": "nature_hits", "value": 0},
                 {"metric": "sciencedirect_hits", "value": 0},
                 {"metric": "open_access_hits", "value": 0},
-                {"metric": "local_pdf_hits", "value": 0},
+                {"metric": "local_pdf_hits", "value": int(local_pdf_hits)},
                 {"metric": "high_quality_hits", "value": 0},
                 {"metric": "medium_quality_hits", "value": 0},
                 {"metric": "low_quality_hits", "value": 0},
@@ -854,7 +876,7 @@ def build_source_report(literature_df: pd.DataFrame) -> pd.DataFrame:
             {"metric": "nature_hits", "value": int(literature_df["is_nature"].sum())},
             {"metric": "sciencedirect_hits", "value": int(literature_df["is_sciencedirect"].sum())},
             {"metric": "open_access_hits", "value": int(literature_df.get("is_open_access", pd.Series(dtype=bool)).sum())},
-            {"metric": "local_pdf_hits", "value": int((literature_df.get("source", pd.Series(dtype=str)) == "LocalPDF").sum())},
+            {"metric": "local_pdf_hits", "value": int(local_pdf_hits)},
             {"metric": "high_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "high").sum())},
             {"metric": "medium_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "medium").sum())},
             {"metric": "low_quality_hits", "value": int((literature_df.get("quality_tier", pd.Series(dtype=str)) == "low").sum())},
@@ -927,13 +949,6 @@ def annotate_quality_scores(literature_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _safe_call(func, *args, **kwargs) -> pd.DataFrame:
-    try:
-        return func(*args, **kwargs)
-    except Exception:
-        return pd.DataFrame()
-
-
 def _call_with_debug(func, query: str, max_results: int) -> Tuple[pd.DataFrame, str]:
     try:
         df = func(query, max_results)
@@ -959,94 +974,74 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
 
     source_debug_rows: List[Dict[str, Any]] = []
     local_docs_bundle = ingest_local_literature_docs(inputs)
-    local_document_hits = local_docs_bundle.get("local_document_hits", pd.DataFrame())
+    n_local_docs_used = int(local_docs_bundle.get("n_docs_used", 0))
     source_debug_rows.append(
         {
             "source": "LocalPDF",
             "query_mode": "local_folder",
             "query": str(local_docs_bundle.get("docs_dir", "")),
-            "rows": int(len(local_document_hits)),
+            "rows": n_local_docs_used,
             "error": "; ".join(local_docs_bundle.get("doc_errors", [])),
         }
     )
 
     protein_tables: List[pd.DataFrame] = []
-    if "UniProt" in sources:
-        df, err = _call_with_debug(search_uniprot, query, max_results)
-        protein_tables.append(df)
-        source_debug_rows.append({"source": "UniProt", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "InterPro" in sources:
-        df, err = _call_with_debug(search_interpro, query, max_results)
-        protein_tables.append(df)
-        source_debug_rows.append({"source": "InterPro", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "PDB" in sources:
-        df, err = _call_with_debug(search_pdb, query, max_results)
-        protein_tables.append(df)
-        source_debug_rows.append({"source": "PDB", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "AlphaFold DB" in sources:
-        df, err = _call_with_debug(search_alphafold, query, max_results)
-        protein_tables.append(df)
-        source_debug_rows.append({"source": "AlphaFold DB", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-
-    protein_nonempty = [t for t in protein_tables if not t.empty]
-    protein_hits = pd.concat(protein_nonempty, ignore_index=True) if protein_nonempty else pd.DataFrame()
-
     lit_tables: List[pd.DataFrame] = []
-    if "PubMed" in sources:
-        df, err = _call_with_debug(search_pubmed, query, max_results)
-        lit_tables.append(df)
-        source_debug_rows.append({"source": "PubMed", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "EuropePMC" in sources:
-        df, err = _call_with_debug(search_europe_pmc, query, max_results)
-        lit_tables.append(df)
-        source_debug_rows.append({"source": "EuropePMC", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "OpenAlex" in sources:
-        df, err = _call_with_debug(search_openalex, query, max_results)
-        lit_tables.append(df)
-        source_debug_rows.append({"source": "OpenAlex", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
-    if "WebSearch" in sources:
-        df, err = _call_with_debug(search_general_web, query, max_results)
-        lit_tables.append(df)
-        source_debug_rows.append({"source": "WebSearch", "query_mode": "primary", "query": query, "rows": int(len(df)), "error": err})
+    protein_source_funcs = [
+        ("UniProt", search_uniprot),
+        ("InterPro", search_interpro),
+        ("PDB", search_pdb),
+        ("AlphaFold DB", search_alphafold),
+    ]
+    literature_source_funcs = [
+        ("PubMed", search_pubmed),
+        ("EuropePMC", search_europe_pmc),
+        ("OpenAlex", search_openalex),
+        ("WebSearch", search_general_web),
+    ]
+
+    def _query_sources(search_query: str, query_mode: str) -> None:
+        for source_name, source_fn in protein_source_funcs:
+            if source_name not in sources:
+                continue
+            df, err = _call_with_debug(source_fn, search_query, max_results)
+            protein_tables.append(df)
+            source_debug_rows.append(
+                {
+                    "source": source_name,
+                    "query_mode": query_mode,
+                    "query": search_query,
+                    "rows": int(len(df)),
+                    "error": err,
+                }
+            )
+
+        for source_name, source_fn in literature_source_funcs:
+            if source_name not in sources:
+                continue
+            df, err = _call_with_debug(source_fn, search_query, max_results)
+            lit_tables.append(df)
+            source_debug_rows.append(
+                {
+                    "source": source_name,
+                    "query_mode": query_mode,
+                    "query": search_query,
+                    "rows": int(len(df)),
+                    "error": err,
+                }
+            )
+
+    _query_sources(query, "primary")
 
     lit_nonempty = [t for t in lit_tables if not t.empty]
     literature_hits = pd.concat(lit_nonempty, ignore_index=True) if lit_nonempty else pd.DataFrame()
+    protein_nonempty = [t for t in protein_tables if not t.empty]
+    protein_hits = pd.concat(protein_nonempty, ignore_index=True) if protein_nonempty else pd.DataFrame()
 
     if enable_relaxed and protein_hits.empty and literature_hits.empty:
         relaxed_query = _build_relaxed_query(inputs)
         if relaxed_query and relaxed_query != query:
-            if "UniProt" in sources:
-                df, err = _call_with_debug(search_uniprot, relaxed_query, max_results)
-                protein_tables.append(df)
-                source_debug_rows.append({"source": "UniProt", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "InterPro" in sources:
-                df, err = _call_with_debug(search_interpro, relaxed_query, max_results)
-                protein_tables.append(df)
-                source_debug_rows.append({"source": "InterPro", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "PDB" in sources:
-                df, err = _call_with_debug(search_pdb, relaxed_query, max_results)
-                protein_tables.append(df)
-                source_debug_rows.append({"source": "PDB", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "AlphaFold DB" in sources:
-                df, err = _call_with_debug(search_alphafold, relaxed_query, max_results)
-                protein_tables.append(df)
-                source_debug_rows.append({"source": "AlphaFold DB", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "PubMed" in sources:
-                df, err = _call_with_debug(search_pubmed, relaxed_query, max_results)
-                lit_tables.append(df)
-                source_debug_rows.append({"source": "PubMed", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "EuropePMC" in sources:
-                df, err = _call_with_debug(search_europe_pmc, relaxed_query, max_results)
-                lit_tables.append(df)
-                source_debug_rows.append({"source": "EuropePMC", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "OpenAlex" in sources:
-                df, err = _call_with_debug(search_openalex, relaxed_query, max_results)
-                lit_tables.append(df)
-                source_debug_rows.append({"source": "OpenAlex", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
-            if "WebSearch" in sources:
-                df, err = _call_with_debug(search_general_web, relaxed_query, max_results)
-                lit_tables.append(df)
-                source_debug_rows.append({"source": "WebSearch", "query_mode": "relaxed", "query": relaxed_query, "rows": int(len(df)), "error": err})
+            _query_sources(relaxed_query, "relaxed")
 
             protein_nonempty = [t for t in protein_tables if not t.empty]
             protein_hits = pd.concat(protein_nonempty, ignore_index=True) if protein_nonempty else pd.DataFrame()
@@ -1058,12 +1053,12 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
             literature_hits,
             max_chars=int(inputs.get("fulltext_max_chars", 6000)),
         )
-    if not local_document_hits.empty:
-        # Keep local PDFs in the same literature dataframe used for downstream scoring/LLM context.
-        literature_hits = pd.concat([literature_hits, local_document_hits], ignore_index=True, sort=False)
-    literature_hits = annotate_literature_targets(literature_hits)
+    literature_hits = annotate_literature_targets(
+        literature_hits,
+        literature_targets=inputs.get("literature_targets", []),
+    )
     literature_hits = annotate_quality_scores(literature_hits)
-    source_report = build_source_report(literature_hits)
+    source_report = build_source_report(literature_hits, local_pdf_hits=n_local_docs_used)
 
     summary_rows: List[Dict[str, Any]] = []
     for _, r in literature_hits.head(max_results).iterrows():
@@ -1101,7 +1096,7 @@ def run_literature_pipeline(inputs: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
     return {
         "protein_hits": protein_hits,
         "literature_hits": literature_hits,
-        "local_document_hits": local_document_hits,
+        "local_document_index": local_docs_bundle.get("local_document_index", pd.DataFrame()),
         "local_document_context": pd.DataFrame(
             [{"context_text": str(local_docs_bundle.get("local_document_context", ""))}]
         ),
@@ -1140,8 +1135,8 @@ def generate_literature_llm_review(outputs: Dict[str, pd.DataFrame], inputs: Dic
     payload = {
         "protein_database_hits": table_records(outputs.get("protein_hits", pd.DataFrame()), max_rows),
         "literature_hits": table_records(lit_for_llm, max_rows),
-        "local_document_hits": table_records(outputs.get("local_document_hits", pd.DataFrame()), max_rows),
         "local_document_context": local_context_text,
+        "local_document_index": table_records(outputs.get("local_document_index", pd.DataFrame()), max_rows),
         "literature_summary": table_records(outputs.get("literature_summary", pd.DataFrame()), max_rows),
         "source_report": table_records(outputs.get("source_report", pd.DataFrame()), max_rows),
     }
@@ -1191,6 +1186,123 @@ def save_literature_llm_review(review_text: str, processed_dir: Path) -> Path:
     )
 
 
+LITERATURE_STRUCTURED_EXTRACTION_PROMPT = """
+You are extracting structured data from a literature review markdown report.
+
+Return ONLY valid JSON (no markdown fences, no commentary) with this exact top-level schema:
+{
+  "backbone_structure_summary": {
+    "binding_pocket": {"description": string, "residues": [string]},
+    "catalytic_triad": {"description": string, "residues": [string]},
+    "access_tunnel": {"description": string, "residues": [string]},
+    "other_motifs": {"description": string, "residues": [string]},
+    "cofactor_binding": {"description": string, "residues": [string]}
+  },
+  "engineering_strategy": {
+    "1": {"design_knob": string, "engineering_hypothesis": string, "mutagenesis_strategy": string, "process_strategy": string},
+    "2": {"design_knob": string, "engineering_hypothesis": string, "mutagenesis_strategy": string, "process_strategy": string}
+  }
+}
+
+Rules:
+- Use only evidence present in the markdown text.
+- Keep descriptions concise and mechanistically informative.
+- Under "binding_pocket", describe overall properties, geometry, substrate compatibility, and any notable binding pocket motifs.
+- Under "other_motifs", describe any other notable motifs, such as lid, ligand- or cofactor- coordinating motifs, etc.
+- Include residue positions only when explicitly available; else use [].
+- engineering_strategy should contain at least 2 items when supported, otherwise as many as available.
+- Extract both mutagenesis and process strategies; when one is not applicable, set it to "".
+- Keys in engineering_strategy must be numeric strings ("1", "2", ...).
+"""
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    body = str(text or "").strip()
+    if not body:
+        raise ValueError("Empty JSON text")
+    try:
+        parsed = json.loads(body)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    block = re.search(r"```json\s*(\{.*?\})\s*```", body, flags=re.DOTALL | re.IGNORECASE)
+    if block:
+        parsed = json.loads(block.group(1))
+        if isinstance(parsed, dict):
+            return parsed
+
+    match = re.search(r"\{.*\}", body, flags=re.DOTALL)
+    if match:
+        parsed = json.loads(match.group(0))
+        if isinstance(parsed, dict):
+            return parsed
+
+    raise ValueError("Could not parse a JSON object from LLM response.")
+
+
+def generate_literature_structured_jsons(
+    review_text: str,
+    inputs: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Use LLM extraction to convert literature-review markdown into structured JSON dicts.
+    """
+    settings = inputs or {}
+    model = str(settings.get("llm_model", "gpt-5.2"))
+    client = get_openai_client(
+        missing_package_message="The `openai` package is required for structured JSON extraction.",
+        missing_key_message="OPENAI_API_KEY is not set. Export it before structured extraction.",
+    )
+    response = client.chat.completions.create(
+        model=model,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": "You are a precise biochemical information extractor."},
+            {
+                "role": "user",
+                "content": (
+                    f"{LITERATURE_STRUCTURED_EXTRACTION_PROMPT}\n\n"
+                    f"INPUT_LITERATURE_MARKDOWN:\n{str(review_text or '').strip()}"
+                ),
+            },
+        ],
+    )
+    text = (response.choices[0].message.content or "").strip()
+    parsed = _extract_json_object(text)
+
+    if "backbone_structure_summary" not in parsed or not isinstance(parsed.get("backbone_structure_summary"), dict):
+        raise RuntimeError("Structured extraction missing `backbone_structure_summary` object.")
+    if "engineering_strategy" not in parsed or not isinstance(parsed.get("engineering_strategy"), dict):
+        raise RuntimeError("Structured extraction missing `engineering_strategy` object.")
+
+    return {
+        "backbone_structure_summary": parsed["backbone_structure_summary"],
+        "engineering_strategy": parsed["engineering_strategy"],
+    }
+
+
+def save_literature_structured_outputs(
+    review_text: str,
+    processed_dir: Path,
+    inputs: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Path]:
+    """
+    Save structured JSON artifacts extracted by LLM from the literature-review markdown output.
+    """
+    structured = generate_literature_structured_jsons(review_text, inputs=inputs)
+    out_paths: Dict[str, Path] = {}
+    for key, payload in structured.items():
+        filename = f"{key}.json"
+        out_paths[key] = save_text_output(
+            json.dumps(payload, indent=2, ensure_ascii=True),
+            processed_dir,
+            filename,
+        )
+    return out_paths
+
+
 def summarize_text(text: str, max_chars: int = 1000) -> str:
     return summarize_compact_text(text, max_chars=max_chars)
 
@@ -1213,6 +1325,8 @@ def save_literature_outputs(outputs: Dict[str, pd.DataFrame], processed_dir: Pat
         "literature_source_report": processed_dir / "literature_source_report.csv",
         "literature_source_debug.csv": processed_dir / "literature_source_debug.csv",
         "web_search_hits.csv": processed_dir / "web_search_hits.csv",
+        "local_document_index.csv": processed_dir / "local_document_index.csv",
+        "local_document_context.txt": processed_dir / "local_document_context.txt",
     }
 
     outputs.get("literature_summary", pd.DataFrame()).to_csv(out_paths["literature_summary"], index=False)
@@ -1220,30 +1334,17 @@ def save_literature_outputs(outputs: Dict[str, pd.DataFrame], processed_dir: Pat
     outputs.get("protein_hits", pd.DataFrame()).to_csv(out_paths["protein_database_hits"], index=False)
     outputs.get("source_report", pd.DataFrame()).to_csv(out_paths["literature_source_report"], index=False)
     outputs.get("source_debug", pd.DataFrame()).to_csv(out_paths["literature_source_debug.csv"], index=False)
+    outputs.get("local_document_index", pd.DataFrame()).to_csv(out_paths["local_document_index.csv"], index=False)
+    local_ctx_df = outputs.get("local_document_context", pd.DataFrame())
+    local_ctx_text = ""
+    if not local_ctx_df.empty and "context_text" in local_ctx_df.columns:
+        local_ctx_text = str(local_ctx_df.iloc[0].get("context_text", "") or "")
+    save_text_output(local_ctx_text, processed_dir, "local_document_context.txt")
+
     web_hits = outputs.get("literature_hits", pd.DataFrame())
     if not web_hits.empty and "source" in web_hits.columns:
         web_hits = web_hits[web_hits["source"] == "WebSearch"].copy()
-
-    # Optional local document retrieval hits (for example PDF RAG) are merged into
-    # the same output file to avoid proliferating separate artifacts.
-    local_doc_hits = outputs.get("local_document_hits", pd.DataFrame()).copy()
-    if not local_doc_hits.empty:
-        if "source" not in local_doc_hits.columns:
-            local_doc_hits["source"] = "LocalDocument"
-        if "source" in local_doc_hits.columns:
-            local_doc_hits["source"] = local_doc_hits["source"].replace("", "LocalDocument")
-
-    combined_external_hits = (
-        pd.concat([web_hits, local_doc_hits], ignore_index=True, sort=False)
-        if (not web_hits.empty or not local_doc_hits.empty)
-        else pd.DataFrame()
-    )
-    if not combined_external_hits.empty:
-        dedupe_cols = [c for c in ["source", "id", "title", "url", "fulltext_url"] if c in combined_external_hits.columns]
-        if dedupe_cols:
-            combined_external_hits = combined_external_hits.drop_duplicates(subset=dedupe_cols).reset_index(drop=True)
-
-    combined_external_hits.to_csv(out_paths["web_search_hits.csv"], index=False)
+    web_hits.to_csv(out_paths["web_search_hits.csv"], index=False)
     return out_paths
 
 
@@ -1254,12 +1355,16 @@ def persist_thread_update(
     out_paths: Dict[str, Path],
     llm_review_path: Optional[Path] = None,
     llm_review_text: Optional[str] = None,
+    backbone_structure_summary_path: Optional[Path] = None,
+    engineering_strategy_path: Optional[Path] = None,
 ) -> str:
     metadata = {
         "inputs": inputs,
         "outputs": out_paths,
         "llm_review_path": llm_review_path,
         "llm_review_summary": "" if not llm_review_text else summarize_text(llm_review_text),
+        "backbone_structure_summary_path": backbone_structure_summary_path,
+        "engineering_strategy_path": engineering_strategy_path,
         "llm_model": str(inputs.get("llm_model", "")),
     }
     return persist_step_thread_update(
@@ -1279,6 +1384,7 @@ def run_literature_review_step(
     input_paths: Optional[Dict[str, str]] = None,
     existing_thread_id: Optional[str] = None,
     run_llm: bool = True,
+    run_structured_extraction: bool = True,
     persist: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -1290,16 +1396,14 @@ def run_literature_review_step(
         input_paths: Optional external text-input files to merge into inputs.
         existing_thread_id: Optional existing thread id.
         run_llm: Whether to generate LLM review text.
+        run_structured_extraction: Whether to run LLM-based structured JSON extraction.
         persist: Whether to persist thread metadata/messages.
 
     Returns:
         Dict containing outputs, saved paths, and thread metadata.
     """
-    """
-    Run the full literature-review step and return outputs for downstream composition.
-    """
     data_root, resolved_dirs = setup_data_root(root_key, REQUIRED_SUBFOLDERS)
-    step_processed_dir = get_step_processed_dir(resolved_dirs)
+    step_processed_dir = get_step_processed_dir(resolved_dirs, STEP_OUTPUT_SUBDIR)
     thread, _ = init_thread(root_key, existing_thread_id)
     thread_id = str(thread["thread_id"])
 
@@ -1311,9 +1415,17 @@ def run_literature_review_step(
 
     llm_review_text: Optional[str] = None
     llm_review_path: Optional[Path] = None
+    structured_paths: Dict[str, Path] = {}
     if run_llm:
         llm_review_text = generate_literature_llm_review(outputs, step_inputs)
         llm_review_path = save_literature_llm_review(llm_review_text, step_processed_dir)
+        if run_structured_extraction:
+            structured_paths = save_literature_structured_outputs(
+                llm_review_text,
+                step_processed_dir,
+                inputs=step_inputs,
+            )
+            out_paths.update(structured_paths)
 
     updated_at: Optional[str] = None
     if persist:
@@ -1324,6 +1436,8 @@ def run_literature_review_step(
             out_paths=out_paths,
             llm_review_path=llm_review_path,
             llm_review_text=llm_review_text,
+            backbone_structure_summary_path=structured_paths.get("backbone_structure_summary"),
+            engineering_strategy_path=structured_paths.get("engineering_strategy"),
         )
 
     return {

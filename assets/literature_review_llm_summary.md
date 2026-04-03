@@ -1,215 +1,221 @@
-## 1. Executive Summary (engineering-relevant takeaways; ≤10 bullets)
+## 1) Executive Summary (engineering-relevant; ≤10 bullets)
 
-- **UPOs are secreted heme-thiolate enzymes (EC 1.11.2.1)** that generate a **P450-like Compound I** directly from **H₂O₂** (no NAD(P)H/redox partners), enabling high-value **aromatic hydroxylations** and related oxyfunctionalizations under mild conditions.  
-- **Chemoselectivity is a central bottleneck for aromatics**: desired *peroxygenation* (2e⁻ oxygen transfer) competes with *peroxidation* (1e⁻ oxidation → phenoxy radicals/quinones → oligomerization/polymerization). This is explicitly observed in aromatic antioxidant chemistry (e.g., rutin) and in naphthalene overoxidation scenarios.  
-- **Active-site access channel geometry is a dominant selectivity lever** across UPOs: multiple studies show that **tunnel/channel reshaping** can strongly shift product distributions (epoxidation vs hydroxylation; benzylic vs aromatic; overoxidation propensity).  
-- **H₂O₂ management is non-negotiable**: UPOs are prone to oxidative inactivation and uncoupling; reaction engineering (controlled dosing, in situ generation, scavengers) often matters as much as protein engineering.  
-- **Expression is historically limiting**, but the field now has multiple workable platforms: (i) **S. cerevisiae directed evolution** for secretion (AaeUPO), (ii) **E. coli soluble expression** for some short UPOs (e.g., CviUPO) and now **sfGFP-mediated secretion in E. coli** enabling faster engineering cycles, and (iii) **Pichia pastoris** with **signal peptide shuffling + stability design (PROSS on AF2 models)** enabling broad access to diverse UPOs.  
-- For your **seed enzyme rCviUPO**, **channel alanine scanning** and **F88A/T158A** are validated “go-to” mutations for altering access/positioning (shown for fatty-acid epoxidation; conceptually transferable to aromatic access/pose control).  
-- **Assay choice can bias evolution outcomes**: ABTS reports peroxidase-like 1e⁻ activity; NBD and other oxygen-transfer probes report peroxygenation. Dual assays are useful to tune the **peroxygenation:peroxidation (P:p) ratio**.  
-- **Radical scavengers can redirect aromatic outcomes** (ascorbate in rutin work), suggesting a practical knob to suppress peroxidative radical cascades while maintaining oxygen transfer.  
-- **Key opportunity for aromatics**: engineer (a) **tunnel polarity/shape** to favor productive aromatic binding near the oxo, and (b) **surface ET/radical pathways** (putative LRET sites) to reduce phenoxy-radical formation and overoxidation.
+- **Catalytic bottleneck for sugar esters is usually *mass transfer/solubility* of sugars + *water activity control*, not intrinsic chemistry.** High conversions (≈85–96%) are repeatedly achieved by combining (i) polar co-solvents or ILs to dissolve sugar, (ii) molecular sieves / headspace drying, and (iii) immobilized lipases (often CALB, RML, TLL). Key knob: **drive low a_w without dehydrating the enzyme microenvironment**.  
+- **Regioselectivity is enzyme-dependent and strongly impacts product distribution (mono- vs diesters; 6-O vs 6,6′-diacyl).** In sucrose acylation, **TLL tends to favor 6-O-monoacylsucrose**, while **CALB can favor diacylation (e.g., 6,6′-diacylsucrose)** under comparable solvent-mixture conditions (Ferrer 2005).  
+- **CALB is a “low-water” specialist**: activity in organic media can be high at low a_w but may drop at higher a_w due to **surface water clustering** (supported by MD + kinetics comparisons across CALB/RML/TLL) → knob: **tune hydration layer via immobilization matrix + solvent choice** (Tjørnelund 2025).  
+- **RML/TLL are “lid lipases” (interfacial activation)**; their performance correlates with **active-site/lid conformational stability** in organic solvents rather than water clustering (Tjørnelund 2025). Engineering knob: **lid/hinge dynamics and access channel geometry**.  
+- **Solvent systems that balance sugar solubility and enzyme integrity dominate the field**: tertiary alcohols (t-BuOH, t-amyl alcohol) often with **≤20% DMSO** are a recurring optimum for sucrose/glucose esters (Ferrer 2005; Ye 2010; Gumel 2011).  
+- **Solvent-free strategies are viable** when you can maintain **metastable sugar particle suspensions** (10–200 µm; later down to ~2–3 µm via high-pressure homogenization) and aggressively remove water; can reach **~89–96% ester** (Ye 2010; Ye 2016).  
+- **Immobilization is not just reuse—it's microenvironment engineering.** Hydrophobic supports (octyl-agarose, acrylic resins) can “hyperactivate” lipases and shift hydration; but desorption risk exists with detergents/high cosolvent (Siòdmiak 2025; Borrelli & Trono 2015 review).  
+- **RML engineering has unusually strong leverage via the propeptide.** Directed evolution including propeptide mutations can boost k_cat ~7× (Wang 2012), and structures show the propeptide can **bind/inhibit and shield the active site** (Moroz 2019) → knob: **folding/maturation + expression yield + latent inhibition**.  
+- **Thermostability engineering is mature for RML** (cavity redesign, B-factor guided, glycosylation-site engineering), enabling operation at higher T to improve mass transfer—highly relevant for viscous/sugar-limited systems (Zhang 2023 AEM; Teng 2024; Tian 2021).  
+- **Opportunity gap:** comparatively fewer studies directly engineer **sugar-binding/recognition** (electrostatics for polyol approach) vs. acyl-pocket/channel; sugar ester work is still largely **process-driven**. Engineering opportunity: **introduce polar “landing pads” near the alcohol-binding region while preserving hydrophobic acyl pocket**.
 
 ---
 
-## 2. Structural Overview
+## 2) Structural Overview (focus: **Rhizomucor miehei lipase, RML**)
+
+**Databases/structures (experimentally solved):**
+- Mature RML closed form: **PDB 3TGL** (commonly used reference; catalytic triad Ser144–Asp203–His257 reported in multiple sources, e.g., Huang 2014).  
+- Open form exists for class-3 fungal lipases; RML/TLL are canonical “lid” lipases with interfacial activation behavior (reviewed broadly in Aloulou 2006; Khan 2017).  
+- Proenzyme/propeptide complexes: **structures of RML bound to its propeptide** reported (Moroz 2019), showing inhibitory/occluding binding.
 
 ### Fold classification
-- **Heme-thiolate peroxidase (HTP) superfamily**, related to **chloroperoxidase (CPO)** and mechanistically analogous to **P450 peroxide shunt** chemistry.
-- Two broad size classes frequently discussed: **“long” (~45 kDa)** and **“short” (~29 kDa)** UPOs (phylogeny/architecture correlate with substrate profiles and expression behavior).
+- **α/β-hydrolase fold** (classical lipase/esterase scaffold): central β-sheet flanked by α-helices; catalytic Ser in a **nucleophile elbow** motif (lipase consensus around Ser).
 
 ### Domain architecture
-- Typically **single-domain globular heme enzyme**, secreted; long UPOs often glycosylated in native fungal hosts.
-- **Signal peptide** is essential for secretion in yeast/fungi; signal peptide identity is a major determinant of functional expression.
+- **Signal peptide + propeptide + mature catalytic domain** in native biosynthesis. Propeptide (~65–70 aa) is important for folding/maturation and can remain associated/inhibitory in heterologous contexts (Wang 2012; Moroz 2019; Huang 2014).
 
 ### Active site organization
-- **Buried heme** with **axial cysteine thiolate ligand** (defining feature vs classical peroxidases).
-- **Distal acid–base residues** (classically a **Glu/His** pair in HTPs) support H₂O₂ activation and O–O cleavage; exact identities vary by subfamily but the functional motif is conserved.
+- **Catalytic triad:** Ser144 (nucleophile), Asp203, His257 (Huang 2014; widely consistent for RML).  
+- **Oxyanion hole:** typical backbone NH donors near the nucleophile elbow (class-3 lipases); stabilizes tetrahedral intermediates.
 
-### Access channels / substrate tunnels
-- A **hydrophobic heme access channel** governs:
-  - substrate entry/egress,
-  - pose relative to the oxoferryl oxygen,
-  - and thus **regio-/chemoselectivity**.
-- Engineering repeatedly targets **channel-lining residues** (often bulky aromatics like Phe/Ile/Leu) to tune space and positioning.
+### Binding pocket properties (relevant to sugar esterification)
+- **Bipartite recognition** typical of lipases:
+  - **Acyl pocket**: hydrophobic groove/tunnel accommodating fatty acyl chains (oleate fits well).  
+  - **Alcohol/acceptor region**: more polar and sterically constrained; for sugars, access is limited by size/polarity mismatch → often requires cosolvents/ILs or suspension strategies.
+- **Hydrophobic binding pocket** is a constraint you flagged: for RML, engineering often increases hydrophobicity to improve esterification with hydrophobic substrates (e.g., structured lipid work), but **sugar acyl acceptors need polar accommodation**.
+
+### Access channels / gating (lid)
+- RML has a **lid helix/loop** that gates access; opening is promoted at hydrophobic interfaces/organic media (interfacial activation paradigm).  
+- For sugar ester synthesis in low-water organic systems, lid dynamics can become rate-relevant: **open-state population + tunnel geometry** influences turnover (supported conceptually and by solvent MD comparisons across CALB/RML/TLL; Tjørnelund 2025).
 
 ### Cofactor binding
-- **Protoporphyrin IX heme b** (noncovalent) is the only cofactor required.
-- No reductase domain; no flavins; no NAD(P)H.
+- **No cofactors** required (typical for lipases).
 
-### Known motifs / signatures (sequence-level)
-- UPObase reports motif-based classification and distinguishes UPO-like vs CPO-like signatures; UPOs and CPOs differ in conserved motif patterns (reviewed in UPObase paper).  
-  - Practical use: **motif screening** helps avoid misannotated peroxidases when mining homologs.
+### Known motifs/epitopes
+- **Propeptide interaction surface**: Moroz 2019 shows propeptide wraps and occludes active site region; mutations here can alter folding and final activity (Wang 2012; Tian 2021).
 
 ---
 
-## 3. Reaction Mechanism (focused on aromatic peroxygenation)
+## 3) Reaction Mechanism (lipase-catalyzed esterification/transesterification → sugar esters)
 
-### Catalytic cycle (productive peroxygenation)
-1. **Resting state Fe(III)-heme** binds/activates **H₂O₂** on the distal side.
-2. Formation of **Compound 0 (Fe(III)-OOH)** (hydroperoxo intermediate).
-3. **Heterolytic O–O cleavage** → **Compound I**: **Fe(IV)=O + porphyrin π-cation radical** (the key oxidant).
-4. **Oxygen transfer to substrate**:
-   - For **aromatics**, initial step is often described as **arene epoxidation / radical-type addition** followed by **NIH shift / rearrangement** to yield **phenols** (formal hydroxylation).
-5. Return to Fe(III) resting state after product release.
+### Catalytic cycle (serine hydrolase “ping–pong”)
+1. **Acylation step:** fatty acid (or activated acyl donor like vinyl ester) binds; His activates Ser → Ser attacks carbonyl → **tetrahedral intermediate** stabilized by oxyanion hole.  
+2. Collapse → **acyl–enzyme intermediate** + leaving group (water in hydrolysis; alcohol/vinyl alcohol in transesterification).  
+3. **Deacylation step:** sugar hydroxyl (acyl acceptor) attacks acyl–enzyme → second tetrahedral intermediate → collapse to **sugar ester** + regenerated enzyme.
 
-### Competing pathways: peroxidation vs peroxygenation
-- **Peroxidative (1e⁻) oxidation**: Compound I/II can oxidize phenols/anilines/etc. to **radicals** → **quinones/oligomers**.
-- For aromatic hydroxylation, this is especially problematic because **phenolic products are better peroxidase substrates than the parent aromatic**, driving **overoxidation and polymerization** (explicitly highlighted in the AaeUPO engineering literature and recent reviews).
+### Key intermediates
+- **Acyl–enzyme (Ser–O–C(O)R)** is central.  
+- Two tetrahedral oxyanion intermediates.
 
-### Rate-limiting / inactivation considerations (what matters experimentally)
-- Often not a single intrinsic chemical step but **effective rate** is dominated by:
-  - **H₂O₂ delivery regime** (local high [H₂O₂] accelerates inactivation),
-  - **substrate access/pose** (tunnel gating),
-  - and **uncoupling** (H₂O₂ consumption without productive oxygen transfer).
+### Rate-limiting steps (context-dependent)
+- In sugar ester synthesis, often **not chemical** but:
+  - **Sugar delivery to active site** (solubility/transport)  
+  - **Water removal / equilibrium control** (a_w)  
+  - **Conformational gating** (lid opening for RML/TLL)
+- For CALB in organics, high a_w can reduce activity via **surface water clustering** (Tjørnelund 2025), effectively creating a kinetic penalty.
 
-### Determinants of chemo-/regioselectivity for aromatics
-- **Distance/orientation** of the target C–H (or π-system) to the **Fe(IV)=O**.
-- **Channel sterics** (bulky residues enforce a binding pose).
-- **Electrostatics/polarity** in the channel (important for polar aromatics like veratryl alcohol, ABTS-like probes, flavonoids).
-- **Peroxidation susceptibility** of products (phenols) and presence/absence of **radical sinks** (ascorbate, other scavengers).
+### Competing pathways
+- **Hydrolysis** of product and/or acyl donor when water activity rises.  
+- **Over-acylation** (mono → diesters) depending on enzyme regioselectivity + low water + high acyl donor activity (Ferrer 2005; Ye 2016).
 
----
-
-## 4. Substrate Scope & Selectivity Trends (with your substrates in mind)
-
-### Broad accepted classes (validated across UPO literature)
-- Aromatics: hydroxylation, epoxidation-derived hydroxylation, oxidative dearomatization/overoxidation in some cases.
-- Benzylic C–H hydroxylation (often high enantioselectivity possible after engineering).
-- Alkenes (epoxidation), fatty acids (ω-1/ω-2 hydroxylation, epoxidation), heteroatom oxidations (S/N).
-
-### Aromatic peroxygenation trends (actionable heuristics)
-- **Electron-rich aromatics** (anisoles, phenoxy motifs, lignin-like units) tend to react readily but also **overoxidize** due to phenolic products.
-- **Bulky polyaromatics** (e.g., naphthalene) can show **product branching**: naphthol vs naphthoquinone (secondary peroxidative oxidation) depending on enzyme and conditions (reported for MthUPO vs AaeUPO variants in engineering literature).
-- **Highly redox-active dyes/mediators (ABTS)** primarily report **peroxidase-like activity**, not necessarily productive peroxygenation.
-
-### Your listed substrates (engineering implications)
-- **Veratryl alcohol**: lignin-model aromatic alcohol; expect benzylic oxidation/hydroxylation pathways and potential overoxidation depending on enzyme and H₂O₂ regime.
-- **Naphthalene**: prone to **naphthol → naphthoquinone** sequences; controlling peroxidation is key if you want to stop at naphthol.
-- **NBD (oxygen-transfer probe)**: useful to track peroxygenation activity in HTS (used in UPO discovery/engineering workflows).
-- **ABTS**: strong for secretion/activity screening but biases toward **1e⁻ peroxidase**; best used alongside an oxygen-transfer assay to avoid evolving “better peroxidases”.
-- **(Not in your list but relevant) aromatic antioxidants/flavonoids**: rutin study shows strong sensitivity to radical pathways and scavengers.
+### Determinants of chemo-/regioselectivity
+- **Primary vs secondary hydroxyl preference**: lipases typically favor **primary OH** on sugars (e.g., sucrose 6-OH, glucose 6-OH).  
+- **Enzyme-specific pocket topology**: TLL vs CALB differences yield different sucrose acylation patterns (Ferrer 2005).  
+- **Microenvironment water activity**: lower a_w tends to push further acylation (mono→di), especially with CALB on hydrophobic supports (Ye 2016).
 
 ---
 
-## 5. Engineering Landscape
+## 4) Substrate Scope & Selectivity Trends (with emphasis on sugars + fatty acids)
 
-### (A) Mutations affecting activity/selectivity (channel/tunnel engineering)
-- **rCviUPO access-channel alanine substitutions** improved oxygenation selectivity in lipid epoxidation; **F88A/T158A** is a validated double mutant that strongly shifts product distribution (diepoxide enrichment in polyunsaturated substrates).  
-  - Engineering lesson: **positions analogous to F88 and T158** are prime targets for **aromatic pose control** (widening/narrowing; changing π-stacking contacts).
-- **MthUPO engineering in S. cerevisiae** achieved **up to 16.5-fold kcat/KM improvement** on an aromatic model substrate (5-nitro-1,3-benzodioxole) and enabled **chemo-/regioselective aromatic vs benzylic oxidation**; variants reached **up to 95% ee** for benzylic hydroxylation.  
-  - Lesson: even without many structures, **active-site reshaping** can deliver large selectivity gains for aromatic chemistry.
+### Substrates accepted (classes)
+- **Acyl donors:** free fatty acids (oleic, stearic), vinyl esters (vinyl laurate/palmitate), activated esters (isopropenyl acetate in other contexts). Vinyl esters are popular because vinyl alcohol tautomerizes to acetaldehyde, pulling equilibrium forward.  
+- **Acyl acceptors:** mono-/disaccharides and polyols: glucose, fructose, sucrose, maltose; xylitol/sorbitol often give high conversions due to better solubility (Lee 2004).  
+- **Fatty acid chain length:** medium/long chains commonly used; chain length affects solubility and enzyme preference (reviewed in Gumel 2011).
 
-### (B) Tuning peroxygenation vs peroxidation (P:p ratio)
-- **Structure-guided evolution on AaeUPO** targeted flexible loops and identified hotspots (notably **positions 120 and 320** in that numbering) that strongly affect **P:p ratio**, albeit sometimes with stability tradeoffs; combinatorial saturation was used to recover stability while tuning P:p.  
-  - Lesson: **separate “oxygen transfer” and “radical oxidation” phenotypes** can be evolved, but stability must be co-selected.
+### Selectivity trends (not exhaustive)
+- **Sucrose:**  
+  - TLL: selective **6-O-acylsucrose** (monoester)  
+  - CALB: more prone to **6,6′-diacylsucrose** under similar solvent-mixture conditions (Ferrer 2005).  
+- **Glucose:** often **6-O-acylglucose** is major product (Ferrer 2005).  
+- **Product solubility controls apparent bioactivity** (e.g., antimicrobial activity can disappear if ester is too insoluble; Ferrer 2005).
 
-### (C) Expression improvements (major enabler)
-- **Directed evolution in S. cerevisiae (AaeUPO)**: 5 generations, ~9000 clones screened; **3250-fold total activity improvement** with **27-fold secretion gain** attributable to signal peptide mutations and **~18-fold kcat/KM improvement** for oxygen transfer. Reported functional expression up to **~8 mg/L** in yeast for evolved variants.  
-- **E. coli expression/engineering acceleration**: **sfGFP-mediated secretion system** enables UPO engineering in E. coli; demonstrated on a newly identified UPO (CmaUPO) and shown applicable to other UPOs (AaeUPO, CciUPO, PabUPO-I). Tunnel-site ISM delivered **enantioselectivity reversal/enhancement** for ethylbenzene hydroxylation (WT 21% ee R → variants up to **99% ee R** or **84% ee S**).  
-  - Lesson: for rapid iteration under your constraints, **E. coli-based platforms are becoming realistic** for UPOs (especially short-type).
-- **Pichia pastoris + AF2/PROSS + signal peptide shuffling (2024)**: PROSS designs on **AlphaFold2 models** plus signal peptide shuffling enabled functional production of **9/10 diverse UPOs**, including previously recalcitrant enzymes (e.g., CciUPO) and even **oomycete UPOs**.  
-  - Lesson: if your target UPO is hard to express, **stability design + secretion engineering** is now a practical first step.
-
-### (D) ML-guided / computational design
-- Explicitly validated in the provided set: **AlphaFold2 → PROSS** stability design workflow (structure-based computational design) enabling expression and stability improvements at scale (screening only a few constructs per enzyme target).
-
----
-
-## 6. Practical Constraints (stability, solvent tolerance, H₂O₂ tolerance, formulation)
-
-### H₂O₂ sensitivity / inactivation
-- Recurrent limitation across UPO applications and reviews: **oxidative inactivation by H₂O₂** and **uncoupling**.
-- Practical mitigation:
-  - **controlled feeding** (syringe pump),
-  - **in situ H₂O₂ generation** (enzymatic/electro/photo; noted as a major process-engineering theme in recent reviews),
-  - **lower steady-state [H₂O₂]** with higher total delivered oxidant.
-
-### Peroxidation-driven byproducts (especially for aromatics)
-- Aromatic hydroxylation products (phenols) can undergo **peroxidase-type 1e⁻ oxidation** → radicals → oligomerization.
-- **Radical scavengers** can shift outcomes: in rutin transformations, **ascorbic acid** redirected product formation toward hydroxylated derivatives (interpretable as suppressing radical chain chemistry).
-
-### Solvent tolerance
-- Evolved AaeUPO variants reported **high stability in organic cosolvents** (important for aromatic substrates with low aqueous solubility). Exact solvent windows depend on enzyme/variant; typically co-solvents (acetone, etc.) are used in UPO work.
-
-### Expression hosts used (relevant to your constraints)
-- **S. cerevisiae**: strong for HTS-directed evolution of secretion and activity.
-- **P. pastoris**: scalable secretion; compatible with signal peptide/promoter shuffling; now paired with AF2/PROSS.
-- **E. coli**: historically difficult but feasible for some short UPOs (e.g., rCviUPO) and now improved by sfGFP-mediated secretion.
+### Known limitations
+- **Sugar solubility in hydrophobic media** is the dominant limitation; drives use of:
+  - tertiary alcohols (t-BuOH/t-amyl alcohol)  
+  - DMSO cosolvent (careful: can inactivate at high %)  
+  - ionic liquids (IL mixtures)  
+  - solvent-free suspensions (Ye 2010; Ye 2016; Shin 2019)
+- **Aqueous environment constraint:** true aqueous esterification is equilibrium-limited and hydrolysis-dominated unless using in situ water removal or activated donors.
 
 ---
 
-## 7. Comparative Analysis (seed sequence: CviUPO context)
+## 5) Engineering Landscape (mutations/strategies and effects)
 
-### CviUPO (Collariella virescens UPO; typically short-type recombinant)
-- Experimentally used as an **E. coli-produced recombinant enzyme** suitable for mutagenesis and analytical optimization.
-- Demonstrated sensitivity of selectivity to **heme access channel residues**; **F88A/T158A** is a validated channel-widening combination that changes oxygenation outcomes (shown for fatty-acid epoxidation; mechanistically consistent with altered substrate pose/access).
-- Compared to long-type AaeUPO (classic model), CviUPO is often treated as a **more engineerable E. coli-compatible scaffold**, which is advantageous under constraints emphasizing rapid engineering cycles.
+### RML (Rhizomucor miehei lipase)
+**Propeptide-inclusive directed evolution**
+- **Wang et al., 2012 (Appl Microbiol Biotechnol)**: directed evolution on full-length RML (propeptide + mature domain) in *E. coli*; best mutant **Q5** increased **k_cat from 10.63 ± 0.80 to 71.44 ± 3.20 min⁻¹** (~6.7×). Mutations: **L57V, S65A, V67A** (propeptide) + **I111T, S168P** (mature domain). Takeaway: **propeptide mutations can be synergistic with active-site region mutations** for activity/expression.
+- **Moroz et al., 2019 (ACS Omega)**: structures of RML–propeptide complexes; propeptide **inhibits lipase activity** and occludes active site, suggesting a biological role in preventing premature activity and a mechanistic basis for why propeptide mutations affect mature enzyme behavior.
 
-Trade-off expectation:
-- **Short-type/E. coli-friendly** scaffolds: faster iteration, potentially less glycosylation dependence; may differ in substrate scope for bulky aromatics.
-- **Long-type/secreted fungal** scaffolds (AaeUPO): deep mechanistic/structural literature and robust aromatic chemistry, but expression/engineering cycles can be slower unless using established yeast platforms.
+**Thermostability / stability engineering**
+- **B-factor guided saturation mutagenesis (synthetic-activity screen)**: Asn120Lys/Lys131Phe improved thermostability in synthetic reaction (Zhang 2012, Enz Microb Technol; note: screen based on esterification pH indicator rather than hydrolysis).  
+- **Cavity engineering (inside-out redesign)**: large gains in both stability and activity reported for RML via computational cavity redesign; triple mutant **T21V/S27A/T198L**: **T_m +11 °C**, **t₁/₂ at 65 °C +28.7×**, and **specific activity +9.9×** (Zhang 2023, Appl Environ Microbiol).  
+- **FoldX/I-Mutant cross-screening**: triple mutant **N120M/E230I/N264M**: optimum temperature **+10 °C**, half-life at 50 °C **46 → 462 min**, activity on camphor seed oil **+140%** (Teng 2024, Foods).  
+- **N-glycosylation site engineering (propeptide region)**: saturation at N-linked glycosylation sites improved activity/stability/methanol tolerance; mutants **N59H/N59K** notable for biodiesel context (Tian 2021, Fuel). (Mechanistically relevant: glycosylation can alter folding/solvent tolerance; but effects can be site-specific.)
 
----
+**Binding pocket hydrophobicity tuning**
+- Structure-guided pocket mutations to increase hydrophobicity improved esterification/structured lipid synthesis; e.g., **Asp256Ile/His257Leu** increased esterification activity **2.37×** (Zhang 2013, PLoS ONE). This is directly relevant to fatty-acid binding but may worsen sugar accommodation unless balanced.
 
-## 8. Engineering Opportunities (actionable hypotheses + assay suggestions)
+### CALB (Candida antarctica lipase B)
+- Engineering in sugar ester literature is more often **process + immobilization** than sequence mutation.  
+- **Immobilization on hydrophobic supports** (e.g., Novozym 435 acrylic resin; octyl-agarose) improves stability and can shift hydration; octyl-agarose CALB shows strong stability at 65 °C storage/thermal tests in organic solvent (Siòdmiak 2025).  
+- Mechanistic insight from MD: CALB activity in organics can be **negatively correlated with surface water clustering** at higher a_w (Tjørnelund 2025) → suggests engineering targets: **surface polarity patches** and **water-binding hotspots**.
 
-### A. Channel/tunnel engineering for aromatic peroxygenation (primary lever)
-**Goal:** increase productive aromatic binding near the oxo while reducing residence time/pose that favors 1e⁻ oxidation of phenolic products.
+### TLL (Thermomyces lanuginosus lipase)
+- Key engineering lever is **lid/tunnel** (reviewed in lid-domain literature; Khan 2017).  
+- In sugar ester synthesis, TLL is valued for **monoacylation selectivity** on sucrose (Ferrer 2005). Engineering targets likely: **lid hinge residues** and **alcohol-binding region** to tune sugar positioning.
 
-- Start with **CviUPO channel positions analogous to F88 and T158** (already validated for access reshaping). For aromatics, consider:
-  - **F→A/L/V** to tune π-stacking vs space,
-  - **T→A/S/V** to tune polarity and sterics.
-- Extend to a **small “smart library”** of 6–12 channel residues (CAST/ISM style) rather than full random mutagenesis:
-  - prioritize residues lining the narrowest constrictions (“gates”) and those facing the heme distal oxo.
+### CALA (Candida antarctica lipase A)
+- CALA is often highlighted for **bulky/branched substrates**; immobilization strategies (e.g., MOFs) improve stability/reuse (EuropePMC 2023). Less directly used for classic sucrose oleate, but could be explored for sterically challenging sugar derivatives.
 
-### B. Shift peroxygenation:peroxidation ratio (P:p) for aromatic products
-**Goal:** suppress radical pathways that convert phenols to quinones/oligomers.
-
-- Use **dual screening**:
-  - **ABTS** (peroxidase proxy) + **NBD** (peroxygenation proxy) to explicitly evolve higher **P:p**.
-- Consider importing the **AaeUPO concept** of loop/hotspot tuning (positions 120/320 in AaeUPO numbering) by mapping to CviUPO via alignment and targeting the **structurally corresponding regions** (often flexible loops near access channel / surface ET sites).
-
-### C. Reaction engineering as a parallel “mutation”
-For aromatic peroxygenation, you can often gain more by controlling chemistry than by single mutations:
-
-- **H₂O₂ dosing**: implement **fed-batch** (e.g., 0.1–1.0 mM/h equivalent) rather than bolus.
-- **Radical suppression**: test **ascorbate** (as in rutin work) or alternative radical sinks (careful: can also reduce reactive intermediates or interfere with assays).
-- **pH as a selectivity knob**: UPOs can switch between oxygenation and halogenation modes with pH in some systems; more generally, pH shifts can change peroxidation propensity and substrate ionization.
-
-### D. Expression/stability strategy under your constraints
-- If you need **fast cycles**: consider **E. coli sfGFP-mediated secretion** as an engineering chassis (demonstrated generality across multiple UPOs).
-- If expression is limiting: use **AlphaFold2 model → PROSS stability designs** + **signal peptide shuffling** in **Pichia** to unlock production before doing selectivity engineering.
-
-### E. Assay design suggestions (for your substrate set)
-- **Primary HTS**: NBD oxygen-transfer activity (peroxygenation) + ABTS (peroxidation) to compute a **P:p score**.
-- **Secondary analytics**:
-  - **Veratryl alcohol**: GC/HPLC for benzylic oxidation products; monitor overoxidation.
-  - **Naphthalene**: quantify **1-naphthol vs 1,4-naphthoquinone** ratio as a direct readout of peroxygenation vs sequential peroxidation.
-- Include **H₂O₂ consumption** and **residual activity** measurements to capture **H₂O₂ tolerance** phenotype.
+### ML-guided / computational design
+- For RML, computational design is now mainstream (FoldX/Rosetta/I-Mutant; cavity/tunnel engineering).  
+- For sugar esterification specifically, **tunnel engineering** is emerging as a general strategy for esterification reactions (Chong 2024, ACS Catalysis review), but direct sugar-ester case studies remain limited—opportunity.
 
 ---
 
-## 9. References (primary vs review; with identifiers)
+## 6) Practical Constraints (process + formulation)
 
-**Primary research**
-1. Molina-Espeja, P.; Garcia-Ruiz, E.; Gonzalez-Perez, D.; Ullrich, R.; Hofrichter, M.; Alcalde, M. (2014). *Directed Evolution of Unspecific Peroxygenase from Agrocybe aegerita.* **Applied and Environmental Microbiology** 80(11), 3496–3507. DOI: **10.1128/AEM.00490-14**.  
-2. Mate, D. M.; Palomino, M. A.; Molina-Espeja, P.; Martin-Diaz, J.; Alcalde, M. (2017). *Modification of the peroxygenative:peroxidative activity ratio in the unspecific peroxygenase from Agrocybe aegerita by structure-guided evolution.* **Protein Engineering, Design & Selection** 30(3), 191–198. DOI: **10.1093/protein/gzw073**.  
-3. Linde, D.; González-Benjumea, A.; Aranda, C.; Carro, J.; Gutiérrez, A.; Martínez, A. T. (2022). *Engineering Collariella virescens Peroxygenase for Epoxides Production from Vegetable Oil.* **Antioxidants** 11, 915. DOI: **10.3390/antiox11050915**. (Primary; open access)  
-4. Knorrscheidt, A.; Soler, J.; Hünecke, N.; Püllmann, P.; Garcia-Borràs, M.; Weissenborn, M. J. (2021). *Accessing Chemo- and Regioselective Benzylic and Aromatic Oxidations by Protein Engineering of an Unspecific Peroxygenase.* **ACS Catalysis** 11, 7327–7338. DOI: **10.1021/acscatal.1c00847**.  
-5. Münch, J.; Soler, J.; Hünecke, N.; Homann, D.; Garcia-Borràs, M.; Weissenborn, M. J. (2023). *Computational-Aided Engineering of a Selective Unspecific Peroxygenase toward Enantiodivergent β-Ionone Hydroxylation.* **ACS Catalysis** 13, 8963–8972. DOI: **10.1021/acscatal.3c00702**.  
-6. Münch, J.; Dietz, N.; Barber-Zucker, S.; et al. (2024). *Functionally Diverse Peroxygenases by AlphaFold2, Design, and Signal Peptide Shuffling.* **ACS Catalysis** 14, 4738–4748. DOI: **10.1021/acscatal.4c00883**.  
-7. Yan, X.; Zhang, X.; Li, H.; et al. (2024). *Engineering of Unspecific Peroxygenases Using a Superfolder-Green-Fluorescent-Protein-Mediated Secretion System in Escherichia coli.* **JACS Au** 4, 1654–1663. DOI: **10.1021/jacsau.4c00129**.  
-8. Barber, V.; Mielke, T.; Cartwright, J.; Díaz-Rodríguez, A.; Unsworth, W. P.; Grogan, G. (2024). *Unspecific Peroxygenase (UPO) can be Tuned for Oxygenation or Halogenation Activity by Controlling the Reaction pH.* **Chemistry – A European Journal** e202401706. DOI: **10.1002/chem.202401706**.  
-9. (Process/aromatics) [AaeUPO + rutin] (2024). *Exploiting UPO versatility to transform rutin in more soluble and bioactive products.* **New Biotechnology**. PubMed: **39181196**.  
-10. Olmedo, A.; Ullrich, R.; Hofrichter, M.; et al. (2022). *Novel Fatty Acid Chain-Shortening by Fungal Peroxygenases Yielding 2C-Shorter Dicarboxylic Acids.* **Antioxidants** 11(4), 744. DOI: **10.3390/antiox11040744**. PubMed: **35453429**.
-
-**Databases / resources**
-11. Muniba, F.; Dongming, L.; Huang, S.; Wang, Y. (2019). *UPObase: an online database of unspecific peroxygenases.* **Database (Oxford)**. DOI: **10.1093/database/baz122**. PubMed: **31820805**.
-
-**Review**
-12. Monterrey, D. T.; Menés-Rubio, A.; Keser, M.; Gonzalez-Perez, D.; Alcalde, M. (2023). *Unspecific peroxygenases: The pot of gold at the end of the oxyfunctionalization rainbow?* **Current Opinion in Green and Sustainable Chemistry** 41, 100786. DOI: **10.1016/j.cogsc.2023.100786**.
+- **Water activity is the master variable.** Too high → hydrolysis dominates; too low → enzyme dehydrates/inactivates (lipase-dependent). Use **molecular sieves**, **headspace drying (CaSO₄)**, **vacuum/N₂ stripping**, or **vinyl esters** to pull equilibrium (Ye 2016; Ferrer 2005; Gumel 2011).  
+- **Aqueous environment constraint:** true aqueous esterification is difficult; consider **biphasic** or **microaqueous organic/IL** systems.  
+- **Sugar transport/solubility:** choose solvent systems that dissolve sugar without denaturing enzyme:
+  - t-BuOH / t-amyl alcohol ± DMSO (≤20%) (Ferrer 2005; Ye 2010)  
+  - IL mixtures + supersaturation methods (Shin 2019)  
+  - solvent-free suspensions + particle size reduction (Ye 2010; Ye 2016)
+- **Thermostability:** higher T improves mass transfer and sugar solubility but requires stable enzyme/immobilization; RML can be engineered substantially (Zhang 2023; Teng 2024).  
+- **Immobilization trade-offs:** hydrophobic adsorption can hyperactivate but risks **enzyme leaching** in detergents/high cosolvent (noted broadly in immobilization literature; also mentioned in Siòdmiak 2025 context).  
+- **Expression hosts:** RML commonly expressed in *Pichia pastoris* (Huang 2014; Tian 2021), also *E. coli* with propeptide retained (Wang 2012). CALB is widely commercial/immobilized; recombinant expression also common (review: Borrelli & Trono 2015).
 
 ---
 
-If you share the **CviUPO sequence (FASTA)** or a UniProt/GenBank accession, I can (i) map **channel residues (F88/T158 equivalents)** precisely, (ii) propose a **minimal smart library** for aromatic peroxygenation (veratryl alcohol/naphthalene), and (iii) suggest **screening thresholds** (P:p ratio cutoffs) aligned with your ABTS/NBD assays.
+## 7) Comparative Analysis (RML vs CALB vs TLL vs CALA for sugar esterification)
+
+- **CALB:** robust, broad substrate scope, strong in low-water organics; tends toward **higher degrees of acylation** under very low a_w and hydrophobic immobilization (Ye 2016). Potential issue: **water clustering sensitivity** at higher a_w (Tjørnelund 2025).  
+- **TLL:** strong for **regioselective monoacylation** of sucrose (6-O) in mixed solvents (Ferrer 2005). Lid dynamics important; often good reusability when immobilized/granulated (Ferrer 2005).  
+- **RML:** strong 1,3-regiospecificity on glycerides; for sugar esters, used effectively in solvent-free suspension systems (Ye 2010). Engineering toolbox is extensive (propeptide, cavities, glycosylation, pocket hydrophobicity).  
+- **CALA:** more suited to **bulky/branched substrates**; less canonical for sucrose oleate but may help if engineering toward bulky sugar derivatives or if needing different regioselectivity; immobilization can greatly enhance stability/reuse (EuropePMC 2023).
+
+---
+
+## 8) Engineering Opportunities (actionable hypotheses + assay suggestions)
+
+### A. If your main constraint is **aqueous environment / green processing**
+- **Hypothesis:** shifting from free fatty acid donors to **vinyl esters** (or other activated donors) will allow higher conversions at higher water content by thermodynamic pull.  
+- **Assay:** compare sucrose/glucose acylation using oleic acid vs vinyl oleate (or vinyl laurate as model) at controlled a_w; quantify mono/di distribution by HPLC/LC–MS.
+
+### B. If your main constraint is **sugar transport into a hydrophobic pocket**
+- **Hypothesis:** introducing **polar residues near the alcohol-binding region / tunnel mouth** (without collapsing the acyl pocket) will increase productive sugar binding and reduce reliance on DMSO/IL.  
+- **Targets (general):** tunnel-lining residues, lid-adjacent polar patches; use CAVER/MD to identify bottlenecks (Chong 2024 review).  
+- **Assay:** initial-rate screen in microaqueous t-BuOH with a sugar solubility-limited regime; monitor fatty acid consumption (HPLC) and product profile.
+
+### C. For **RML specifically** (your first seed enzyme)
+- **Propeptide engineering** is unusually high leverage:
+  - **Hypothesis:** propeptide mutations that improve folding/secretion will increase apparent activity in immobilized/whole-cell formats and may tune lid/open-state propensity.  
+  - Start from known beneficial sites (from Wang 2012; Tian 2021): propeptide positions around **L57/S65/V67** (Wang numbering) and conserved propeptide positions (Tian 2021).  
+- **Cavity/tunnel co-optimization**:
+  - Use the cavity-engineering logic (Zhang 2023) but evaluate in **sugar esterification** (not just hydrolysis) because stability/activity trade-offs differ by reaction mode (Zhang 2012 emphasizes this).
+
+### D. For **CALB/TLL selection**
+- **If you want monoester-rich sucrose esters:** start with **TLL** (Ferrer 2005).  
+- **If you want high conversion and can tolerate more diesters:** **CALB** + ultralow a_w + hydrophobic immobilization (Ye 2016).  
+- **Process knob:** particle size reduction (HPH) + headspace drying (CaSO₄) can push conversion from ~80–83% to ~89–96% (Ye 2016).
+
+---
+
+## 9) References (reviews + primary; with identifiers where available)
+
+**Sugar ester synthesis / process & selectivity**
+- Ferrer, M.; Soliveri, J.; Plou, F. J.; et al. (2005). *Synthesis of sugar esters in solvent mixtures by lipases from Thermomyces lanuginosus and Candida antarctica B, and their antimicrobial properties.* **Enzyme and Microbial Technology**, 36, 391–398. https://doi.org/10.1016/j.enzmictec.2004.02.009  
+- Ye, R.; Pyo, S.-H.; Hayes, D. G. (2010). *Lipase-Catalyzed Synthesis of Saccharide–Fatty Acid Esters Using Suspensions of Saccharide Crystals in Solvent-Free Media.* **J Am Oil Chem Soc**, 87, 281–293. https://doi.org/10.1007/s11746-009-1504-2  
+- Ye, R.; Hayes, D. G.; et al. (2016). *Solvent-Free Lipase-Catalyzed Synthesis of Technical-Grade Sugar Esters…* **Catalysts**, 6, 78. https://doi.org/10.3390/catal6060078  
+- Lee, H. K.; Do, J. S.; et al. (2004). *Enzymatic Sugar Ester Production.* (local PDF; report-style article; key data: conversions up to ~94% in t-BuOH; sugar solubility dependence).  
+- Gumel, A. M.; Annuar, M. S. M.; Heidelberg, T.; Chisti, Y. (2011). *Lipase mediated synthesis of sugar fatty acid esters.* **Process Biochemistry**, 46, 2079–2090. https://doi.org/10.1016/j.procbio.2011.07.021  *(review)*
+
+**Interfacial enzymology / lid**
+- Aloulou, A.; Rodriguez, J. A.; et al. (2006). *Exploring the specific features of interfacial enzymology based on lipase studies.* **Biochim Biophys Acta**, 1761, 995–1013. https://doi.org/10.1016/j.bbalip.2006.06.009 *(review)*  
+- Khan, F. I.; Lan, D.; et al. (2017). *The Lid Domain in Lipases: Structural and Functional Determinant…* **Frontiers in Bioengineering and Biotechnology**, 5:16. https://doi.org/10.3389/fbioe.2017.00016 *(review)*
+
+**RML engineering (activity/stability; propeptide; structure)**
+- Wang, J.; Wang, D.; et al. (2012). *Enhanced activity of Rhizomucor miehei lipase by directed evolution with simultaneous evolution of the propeptide.* **Applied Microbiology and Biotechnology**, 96, 443–450. https://doi.org/10.1007/s00253-012-4049-5  
+- Moroz, O. V.; Blagova, E.; et al. (2019). *Novel Inhibitory Function of the Rhizomucor miehei Lipase Propeptide and Three-Dimensional Structures…* **ACS Omega**, 4, 9964–9975. https://doi.org/10.1021/acsomega.9b00612  
+- Zhang, J.-H.; Jiang, Y.-Y.; et al. (2013). *Structure-Guided Modification of Rhizomucor miehei Lipase…* **PLOS ONE**, 8:e67892. https://doi.org/10.1371/journal.pone.0067892  
+- Zhang, Z.; Long, M.; et al. (2023). *Inside Out Computational Redesign of Cavities for Improving Thermostability and Catalytic Activity of Rhizomucor Miehei Lipase.* **Applied and Environmental Microbiology**, 89:e02172-22. https://doi.org/10.1128/aem.02172-22  
+- Teng, R.; Zhang, J.; et al. (2024). *Computer-Aided Design to Improve the Thermal Stability of Rhizomucor miehei Lipase.* **Foods**, 13, 4023. https://doi.org/10.3390/foods13244023  
+- Tian, M.; Fu, J.; et al. (2021). *Enhanced activity and stability of Rhizomucor miehei lipase by mutating N-linked glycosylation site…* **Fuel**, 304, 121514. https://doi.org/10.1016/j.fuel.2021.121514  
+- Tian, M.; Huang, S.; et al. (2021). *Enhanced activity of Rhizomucor miehei lipase by directed saturation mutation of the propeptide.* **Enzyme and Microbial Technology**, 150, 109870. https://doi.org/10.1016/j.enzmictec.2021.109870  
+
+**CALB immobilization / formulation**
+- Siòdmiak, J.; Dulęba, J.; et al. (2025). *CALB Immobilized on Octyl-Agarose—An Efficient Pharmaceutical Biocatalyst…* **Int. J. Mol. Sci.** 26, 6961. https://doi.org/10.3390/ijms26146961  
+- Borrelli, G. M.; Trono, D. (2015). *Recombinant Lipases and Phospholipases…* **Int. J. Mol. Sci.** 16, 20774–20840. https://doi.org/10.3390/ijms160920774 *(review)*
+
+**Ionic liquids / supersaturation**
+- Shin, D. W.; Mai, N. L.; et al. (2019). *Enhanced lipase-catalyzed synthesis of sugar fatty acid esters using supersaturated sugar solution in ionic liquids.* **Enzyme and Microbial Technology**, 126, 18–23. https://doi.org/10.1016/j.enzmictec.2019.03.004  
+- Zhao, H. (2016). *Protein Stabilization and Enzyme Activation in Ionic Liquids: Specific Ion Effects.* **J Chem Technol Biotechnol**. https://doi.org/10.1002/jctb.4837 *(review)*
+
+**Lipase kinetics in organic solvents (comparative CALB/RML/TLL)**
+- Tjørnelund, H. D.; Brask, J.; Woodley, J. M.; Peters, G. H. J. (2025). *Active Site Studies to Explain Kinetics of Lipases in Organic Solvents Using Molecular Dynamics Simulations.* **J. Phys. Chem. B**, 129, 475–486. https://doi.org/10.1021/acs.jpcb.4c05738  
+
+---
+
+If you tell me your intended **reaction format** (e.g., solvent-free suspension vs t-BuOH/DMSO vs ILs vs aqueous biphasic) and whether you prioritize **monoester purity vs total conversion**, I can propose a short list of **specific residue targets** (RML vs TLL vs CALB) and a **screening workflow** aligned to sugar esterification (not hydrolysis).

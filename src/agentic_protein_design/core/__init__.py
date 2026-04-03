@@ -26,7 +26,6 @@ from agentic_protein_design.core.reflection import critique_and_regenerate_text
 from agentic_protein_design.core.thread_context import (
     build_thread_context_bundle,
     build_thread_context_text,
-    extract_referenced_file_paths,
     find_thread_file,
     load_thread_by_id,
     read_files_as_context,
@@ -53,7 +52,6 @@ __all__ = [
     "critique_and_regenerate_text",
     "find_thread_file",
     "load_thread_by_id",
-    "extract_referenced_file_paths",
     "read_files_as_context",
     "build_thread_context_bundle",
     "build_thread_context_text",

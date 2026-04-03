@@ -318,7 +318,7 @@ def workflow_steps_to_dataframe(workflow_steps_json: List[Dict[str, Any]]) -> pd
     return df
 
 
-def load_literature_context(literature_context_thread_key: Optional[str], max_chars_per_file: int = 20000) -> Dict[str, Any]:
+def load_literature_context(literature_context_thread_key: Optional[str], max_chars_per_file: int = 40000) -> Dict[str, Any]:
     """
     Load optional prior literature-thread context for plan conditioning.
 
@@ -333,12 +333,14 @@ def load_literature_context(literature_context_thread_key: Optional[str], max_ch
         literature_context_thread_key,
         max_chars_per_file=max_chars_per_file,
         on_missing="warn",
+        json_artifact_names=["engineering_strategy"],
     )
 
 
 def generate_design_strategy_plan(
     user_inputs: Dict[str, Any],
     literature_context: str = "",
+    engineering_strategy: Optional[Dict[str, Any]] = None,
     *,
     return_full: bool = False,
 ) -> Any:
@@ -359,6 +361,7 @@ def generate_design_strategy_plan(
     payload = {
         "user_inputs_json": user_inputs,
         "literature_context": literature_context.strip() or "Not provided.",
+        "engineering_strategy": engineering_strategy or {},
     }
 
     client = get_openai_client(
@@ -384,6 +387,7 @@ def generate_design_strategy_plan(
     payload_2 = {
         "user_inputs_json": user_inputs,
         "literature_context": literature_context.strip() or "Not provided.",
+        "engineering_strategy": engineering_strategy or {},
         "workflow_steps_json": workflow_steps,
     }
     prompt_2_text = f"{prompt_text}\n\n{design_strategy_planning_prompt_2}"
@@ -455,6 +459,7 @@ def reflect_and_regenerate_design_strategy_plan(
     original_prompt_2_output: str,
     *,
     literature_context: str = "",
+    engineering_strategy: Optional[Dict[str, Any]] = None,
     user_feedback: str = "",
     critique_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -486,6 +491,7 @@ def reflect_and_regenerate_design_strategy_plan(
         "original_prompt_2_writeup": str(original_prompt_2_output or "").strip(),
         "user_inputs_json": user_inputs,
         "literature_context": literature_context.strip() or "Not provided.",
+        "engineering_strategy": engineering_strategy or {},
         "user_feedback": user_feedback.strip() or "",
     }
     prompt_1_text = f"{prompt_text_base}\n\n{design_strategy_reflection_prompt_1}"
@@ -510,6 +516,7 @@ def reflect_and_regenerate_design_strategy_plan(
         "original_prompt_2_writeup": str(original_prompt_2_output or "").strip(),
         "user_inputs_json": user_inputs,
         "literature_context": literature_context.strip() or "Not provided.",
+        "engineering_strategy": engineering_strategy or {},
         "user_feedback": user_feedback.strip() or "",
     }
     response_2 = client.chat.completions.create(
@@ -691,6 +698,10 @@ def run_design_strategy_planning_step(
     context_result = load_literature_context(literature_context_thread_key)
     literature_context = str(context_result.get("context_text", ""))
     literature_context_bundle = context_result.get("context_bundle")
+    engineering_strategy = ((literature_context_bundle or {}).get("referenced_json_objects") or {}).get(
+        "engineering_strategy",
+        {},
+    )
 
     design_plan_text = ""
     design_plan_outputs: Optional[Dict[str, Any]] = None
@@ -701,6 +712,7 @@ def run_design_strategy_planning_step(
         design_plan_outputs = generate_design_strategy_plan(
             user_inputs,
             literature_context=literature_context,
+            engineering_strategy=engineering_strategy,
             return_full=True,
         )
         design_plan_text = str(design_plan_outputs.get("strategy_writeup", ""))
@@ -763,12 +775,18 @@ if __name__ == "__main__":
     thread_id = str(thread["thread_id"])
 
     literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
-    context_result = load_literature_context(literature_context_thread_key, max_chars_per_file=20000)
+    context_result = load_literature_context(literature_context_thread_key, max_chars_per_file=40000)
     literature_context = str(context_result.get("context_text", ""))
+    literature_context_bundle = context_result.get("context_bundle")
+    engineering_strategy = ((literature_context_bundle or {}).get("referenced_json_objects") or {}).get(
+        "engineering_strategy",
+        {},
+    )
 
     plan_outputs = generate_design_strategy_plan(
         user_inputs,
         literature_context=literature_context,
+        engineering_strategy=engineering_strategy,
     )
     design_plan = str(plan_outputs["strategy_writeup"])
     workflow_steps_json = list(plan_outputs["workflow_steps_json"])
@@ -787,6 +805,7 @@ if __name__ == "__main__":
             original_prompt_1_output=workflow_steps_json,
             original_prompt_2_output=design_plan,
             literature_context=literature_context,
+            engineering_strategy=engineering_strategy,
             user_feedback=reflection_user_feedback,
             critique_prompt=reflection_prompt,
         )

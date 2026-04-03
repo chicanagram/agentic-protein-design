@@ -160,7 +160,15 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aa_list, seq_name=None
     heatmap_max = np.max(arr)
     # define norm for colormap
     if c == 'bwr':
-        norm = colors.TwoSlopeNorm(vmin=heatmap_min, vcenter=0, vmax=heatmap_max)
+        print('heatmap_min:',heatmap_min, 'heatmap_max:',heatmap_max)
+        if heatmap_min < 0 and heatmap_max > 0:
+            norm = colors.TwoSlopeNorm(vmin=heatmap_min, vcenter=0, vmax=heatmap_max)
+        elif heatmap_min >= 0 and heatmap_max > 0:
+            c = 'Reds'
+            norm = colors.Normalize(vmin=0, vmax=heatmap_max)
+        elif heatmap_max <= 0 and heatmap_min < 0:
+            c = 'Blues_r'
+            norm = colors.Normalize(vmin=heatmap_min, vmax=0)
     else:
         norm = None
     # define color for NaN elements

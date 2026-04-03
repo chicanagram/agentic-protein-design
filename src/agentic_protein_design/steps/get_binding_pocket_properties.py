@@ -36,6 +36,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "protein_molname": "A",
         "ligand_molname": "D",
         "dist_thres": 6,
+        "reactive_center_target": {'protein': None, 'cofactor': None, 'ligand': None},
+        "keep_pos_with_aa_variation_only": True,
         "plot_properties": False,
         "analyse_binding_pocket_without_ligand": True,
         "seq_align_fname": "reps_ali.fasta",
@@ -159,6 +161,8 @@ def run_binding_pocket_property_extraction(inputs: Dict[str, Any]) -> Dict[str, 
             protein_molname=str(inputs.get("protein_molname", "A")),
             ligand_molname=str(inputs.get("ligand_molname", "D")),
             dist_thres=int(inputs.get("dist_thres", 6)),
+            reactive_center_target=inputs.get("reactive_center_target", {'protein':None, 'cofactor':None, 'ligand':None}),
+            keep_pos_with_aa_variation_only=bool(inputs.get("keep_pos_with_aa_variation_only", True)),
         )
 
         combined_csv = pdb_dir / "bindingpocket_analysis.csv"

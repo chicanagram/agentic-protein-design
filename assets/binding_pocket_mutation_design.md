@@ -1,107 +1,110 @@
 ## 1) Design Intent
-- **Backbone protein:** **ET096** (UPO).
-- **Objective:** Increase **peroxygenative mono‑oxidation selectivity on S82** (raise Mono:Di ratio / suppress di‑oxidation) while **retaining useful activity**. Strategy: **increase pose-locking and guided anisotropic sterics** in the proximal pocket (ET096 is “wide/dry/permissive”), and optionally add a **near-pocket electrostatic handle** to reduce rotational freedom/product rebinding.
+- **Backbone protein:** RML (Rhizomucor miehei lipase)
+- **Objective:** Increase **esterification of oleic acid with sucrose** under **water-containing conditions** by strengthening **productive sucrose binding/pose guidance** (reduce pose degeneracy, improve near-attack geometry) while maintaining enough pocket accessibility for the bulky sugar.
+
+Grounding from `prompt_2_output`: RML’s advantage is a **polar/pose-guiding proximal channel** (not a hydrophobic clamp). So the most conservative path is to **reinforce/extend proximal polar anchoring** rather than “TLL-ifying” the pocket with hydrophobic gating that could exclude sucrose in water.
 
 ---
 
 ## 2) Proposed Mutations (ranked)
 
-### 1) **Introduce a “missing hydrophobic wall” at the ET096 deletion (row index 104)**
-- **Proposal:** **Insert Leu or Ile at the ET096 gap** corresponding to **CviUPO I61 / DcaUPO L59 / TE314 L81 / OA167 L77**.
-- **Rationale (prompt_2 driver A):** This is the strongest single steric driver: ET096 uniquely lacks a side chain at ~3.3–3.6 Å from ligand in other homologs → excess free volume → more microstates and easier product reorientation/rebinding → **di‑oxidation permissiveness**.
-- **Expected effect:** **↑ pose-locking, ↓ product rebinding, ↑ Mono:Di**, likely some **↓ overall scope** (tighter pocket).
-- **Risk/tradeoff:** Insertion can perturb local backbone/loop geometry and expression; may reduce activity if it blocks productive binding.
-- **Confidence:** **High** (mechanistically direct; strongest structural contrast in prompt_2).
+### 1) **D91E**
+- **Rationale (mechanistic driver):** Position **Asp91** is identified as a *very proximal negative anchor* that can electrostatically steer sucrose OH patterning. Extending Asp→Glu can **project the negative charge slightly farther** into the binding region, potentially improving **capture/retention of sucrose in water** and stabilizing a productive pose.
+- **Targets hypothesis:** “RML polar proximal landing pad drives productive sucrose binding.”
+- **Expected effect:** ↑ sucrose binding/pose stability → ↑ esterification rate/yield in wet media.
+- **Risk/tradeoff:** Could over-stabilize nonproductive H-bond networks or perturb local geometry if space is tight.
+- **Confidence:** **Medium** (same charge, modest geometric change; effect depends on sidechain orientation).
 
-### 2) **Add a proximal electrostatic “handle” like CviUPO K165**
-- **Proposal:** **A178K** (ET096 A178 → Lys).
-- **Rationale (driver B):** CviUPO has **K165 at 3.38 Å** vs ET096 **A178 at 4.18 Å**; a localized + charge can create steering/H-bond networks (direct or water-mediated) that **reduces rotational freedom** and can bias productive approach.
-- **Expected effect:** **↑ pose definition / anchoring → ↑ mono-selectivity**, potentially **↑ peroxidative tendency** if it stabilizes charge-transfer/radical pathways (literature flags peroxidation competition; ABTS is a reporter).
-- **Risk/tradeoff:** Could increase peroxidase-like 1e⁻ chemistry (undesired overoxidation) or destabilize if it introduces buried charge.
-- **Confidence:** **High**
+### 2) **S83T**
+- **Rationale (mechanistic driver):** **Ser83** is a key proximal position where TLL has a bulky charged Arg “gate.” For sucrose-in-water, we likely want **more H-bonding without steric exclusion**. Ser→Thr adds a methyl (slightly more shape) while **retaining an OH** to strengthen local H-bonding and subtly bias pose without clamping.
+- **Targets hypothesis:** “Proximal polar rim guides sucrose rather than sterically gating it.”
+- **Expected effect:** ↑ productive pose frequency; potentially improved regio-bias consistency without losing activity.
+- **Risk/tradeoff:** Small steric increase could reduce accessibility if this sidechain points inward.
+- **Confidence:** **Medium–High** (conservative, aligned with RML polar-channel concept).
 
-### 3) **Build DcaUPO-like anisotropic sterics near the reactive locus**
-- **Proposal:** **A171F** (ET096 A171 → Phe).
-- **Rationale (driver F):** DcaUPO **F154 at 3.54 Å** is proposed to enforce **directional walling** that yields “reactive but guided” placement and discourages alternative/second-oxidation poses. ET096 A171 is farther/less guiding.
-- **Expected effect:** **↑ guided approach / ↓ alternative poses → ↑ Mono:Di**, may also shift regioselectivity on S82 if multiple sites exist.
-- **Risk/tradeoff:** Bulky aromatic may over-restrict and reduce turnover if it blocks access or forces nonproductive binding.
-- **Confidence:** **Medium-high** (strong driver in DcaUPO; mapping to ET096 assumes comparable geometry at this aligned row).
-
-### 4) **Add a “cap/roof” residue to reduce vestibule openness**
-- **Proposal:** **A173Y** (ET096 A173 → Tyr).
-- **Rationale (modulator E):** CviUPO has **Y160 (~5.8 Å)** acting as a bulky polarizable cap; ET096 has **A173 (~8.2 Å)** consistent with open vestibule/weak retention control. Adding Tyr can increase **retention in a defined pose** and reduce re-binding microstates that enable di‑oxidation.
-- **Expected effect:** **↑ pose-locking / ↓ di‑oxidation**, possibly **↓ kcat** if product release becomes limiting.
-- **Risk/tradeoff:** Tyr can introduce new H-bonding/water structure; may increase residence time and paradoxically allow overoxidation if product remains bound too long (depends on whether di‑ox is rebound-driven vs same-binding-event).
+### 3) **T265S**
+- **Rationale (mechanistic driver):** **Thr265** is proximal and contributes to RML’s polar microenvironment (TLL has Ile here, more hydrophobic). Thr→Ser keeps polarity but **reduces steric bulk**, potentially allowing sucrose to sit closer while maintaining an H-bond handle (or structured water) near the reactive center.
+- **Targets hypothesis:** “Proximal polarity + reduced steric hindrance improves sucrose approach in water.”
+- **Expected effect:** ↑ sucrose accommodation/near-attack geometry → ↑ esterification.
+- **Risk/tradeoff:** If Thr’s methyl is important for packing, Ser could increase flexibility/pose degeneracy.
 - **Confidence:** **Medium**
 
-### 5) **Tighten inner pocket volume at ET096 A80 (small-residue permissiveness)**
-- **Proposal:** **A80L** (or **A80F** as a stronger clamp).
-- **Rationale (modulator G2):** ET096 **A80** is much smaller than **F/L/P** in other homologs; contributes to widened inner pocket and weaker shape complementarity.
-- **Expected effect:** **↑ shape complementarity / ↓ alternative poses → ↑ Mono:Di**.
-- **Risk/tradeoff:** Could reduce activity if it clashes with S82 binding mode; Phe especially may over-pack.
+### 4) **N264Q**
+- **Rationale (secondary modulator):** **Asn264** is a rim/edge polar feature (TLL has Leu, more hydrophobic). Asn→Gln can **extend the polar sidechain** to improve “rim wetting” and initial sucrose capture/retention in aqueous environments, potentially improving effective on-rate and residence time.
+- **Targets hypothesis:** “Outer-rim polarity supports sucrose entry/retention under water.”
+- **Expected effect:** ↑ apparent activity in wet media (better substrate delivery/positioning).
+- **Risk/tradeoff:** Added flexibility could increase nonproductive binding; may slightly slow product release.
+- **Confidence:** **Low–Medium** (depends strongly on whether 264 points toward solvent/ligand).
+
+### 5) **F215Y**
+- **Rationale (secondary modulator):** **Phe215** (RML) vs **Tyr** (TLL) is a distal/moderately close rim position; Tyr adds a phenolic OH that can provide **outer-shell H-bonding** to sucrose, potentially improving staging/entry without changing proximal clamp architecture.
+- **Targets hypothesis:** “Distal shell H-bonding increases sucrose residence time and productive entry.”
+- **Expected effect:** ↑ binding/retention → modest ↑ esterification in water.
+- **Risk/tradeoff:** Could increase water retention locally or alter dynamics; effect likely modest.
 - **Confidence:** **Medium**
 
-### 6) **Increase steric bulk at the very close-contact position V74**
-- **Proposal:** **V74L**.
-- **Rationale (modulator G1):** ET096 **V74 at 2.94 Å** is a very close contact but relatively small; other homologs often have **Leu** here. Slightly larger hydrophobe can improve packing and reduce microstate diversity without introducing polarity.
-- **Expected effect:** **Modest ↑ pose stability → modest ↑ mono-selectivity**, likely minimal effect on expression.
-- **Risk/tradeoff:** Small risk of steric clash due to very close distance; could reduce activity if it blocks productive approach.
-- **Confidence:** **Medium**
+### 6) **Q174Y**
+- **Rationale (secondary modulator):** **Gln174** is distal; TLL has Tyr at the analogous site, contributing to a more structured outer shell. Introducing Tyr could create a **more defined staging surface** for sucrose (aromatic + OH), potentially reducing pose multiplicity before the sugar reaches the proximal polar region.
+- **Targets hypothesis:** “Outer-shell shaping can pre-organize sucrose for productive approach.”
+- **Expected effect:** Potential ↑ selectivity/pose filtering; may improve mono-ester formation efficiency.
+- **Risk/tradeoff:** Added bulk could impede entry for bulky sucrose; could reduce overall turnover if it becomes a bottleneck.
+- **Confidence:** **Low–Medium**
 
-### 7) **Tune the “inner-wall” driver position L174 toward OA167-like bulky walling**
-- **Proposal:** **L174F**.
-- **Rationale (driver D):** OA167 **F177 at 3.38 Å** creates a bulky hydrophobic wall; ET096 has **L174 at 3.40 Å**. Increasing aromatic bulk can enforce a more constrained orientation.
-- **Expected effect:** **↑ hydrophobic caging / ↑ orientation constraint → ↑ Mono:Di**.
-- **Risk/tradeoff:** OA167 phenotype is described as **di‑oxidation prone** despite bulky walling (prompt_2), so adding bulk alone may not fix overoxidation unless combined with anchoring/cap; could also increase retention and allow sequential oxidation in-pocket.
-- **Confidence:** **Low-medium** (mechanistic ambiguity: bulky wall can either help pose-locking or increase retention/overoxidation).
+### 7) **Focused exploration at 83: {S83T, S83N, S83Q}**
+- **Rationale:** 83 is a top mechanistic driver position. Rather than jumping to Arg-like gating (likely harmful for sucrose-in-water), explore **polar, non-cationic** options that can tune H-bond geometry and mild sterics.
+- **Targets hypothesis:** “Fine-tune proximal pose guidance without clamp-like exclusion.”
+- **Expected effect:** Identify best balance of binding vs accessibility.
+- **Risk/tradeoff:** Some variants may reduce activity if they disrupt local packing.
+- **Confidence:** **Medium** (position is high-impact; best residue is uncertain).
 
-### 8) **Introduce DcaUPO-like negative electrostatic bias (longer-range steering)**
-- **Proposal:** **A77D**.
-- **Rationale (modulator C):** DcaUPO has **D58** where others are neutral; could bias approach/orientation and water structure. ET096 has **A77 at 3.94 Å** (closer than DcaUPO’s reported distance at that row), so a carboxylate could have a stronger effect in ET096.
-- **Expected effect:** Potential **↑ steering / altered binding trajectory → ↑ mono-selectivity**.
-- **Risk/tradeoff:** Acid near pocket can disrupt hydrophobic environment, alter peroxide activation networks indirectly, or increase uncoupling/peroxidation depending on protonation.
-- **Confidence:** **Low-medium**
-
-### 9) **Focused exploration suggestion: small “smart set” at A178 (electrostatic handle tuning)**
-- **Proposal:** **A178{K,R,Q}** (3-way) rather than full saturation.
-- **Rationale:** If Lys is too strong/too buried, Arg/Q can test whether **charge vs H-bonding** is the key driver for pose-locking.
-- **Expected effect:** Map anchoring strength vs activity/peroxidation tradeoff.
-- **Risk/tradeoff:** Library still small; may miss optimal residue.
-- **Confidence:** **Medium**
+### 8) **Focused exploration at 265: {T265S, T265N}**
+- **Rationale:** 265 is a proximal driver. Keep it polar (avoid Ile-like hydrophobization) but test **smaller (Ser)** vs **amide (Asn)** to modulate H-bonding patterning near sucrose OH.
+- **Targets hypothesis:** “Optimize proximal polar microenvironment for sucrose OH steering.”
+- **Expected effect:** Potential ↑ catalytic efficiency in wet media.
+- **Risk/tradeoff:** Asn could introduce alternative H-bond networks that trap nonproductive poses.
+- **Confidence:** **Low–Medium**
 
 ---
 
 ## 3) Minimal Experimental Plan
 
-### First-round variant panel (12 max; high-information)
-Include singletons + a few combinations to test additivity between **(i) missing wall insertion**, **(ii) electrostatic handle**, **(iii) anisotropic sterics/cap**.
+### First-round variant panel (10 total; high-information, low combinatorial explosion)
+1. **WT RML**
+2. **D91E**
+3. **S83T**
+4. **T265S**
+5. **N264Q**
+6. **F215Y**
+7. **Q174Y**
+8. **S83T + D91E** (tests additive strengthening of proximal polar guidance)
+9. **S83T + T265S** (tests cooperative proximal tuning without changing charge)
+10. **D91E + T265S** (tests “anchor + proximal geometry” synergy)
 
-1. **WT ET096** (baseline)
-2. **Gap+L insertion** at row index 104 (Leu)
-3. **Gap+I insertion** at row index 104 (Ile)
-4. **A178K**
-5. **A171F**
-6. **A173Y**
-7. **A80L**
-8. **V74L**
-9. **Gap+L + A178K** (wall + electrostatic anchoring)
-10. **Gap+L + A171F** (wall + anisotropic sterics)
-11. **Gap+L + A173Y** (wall + cap)
-12. **Gap+L + A178K + A171F** (triad: reduce microstates + anchor + guide)
+*(I’m intentionally not proposing D91N, S83R, or T265I in round 1 because prompt_2_output links those directions to the more hydrophobic/steric TLL clamp phenotype, which is risky for sucrose handling in water.)*
 
-(If insertion variants express poorly, swap in **A80L + A178K** and **A171F + A178K** as combination tests.)
-
-### Assay/readout plan aligned to objective
-- **Primary screen:** quantify **S82 mono-oxidized vs di-oxidized products** (LC/GC with authentic standards if available; otherwise relative peak areas with MS confirmation). Report **Mono:Di** and **total TTN** at fixed time and controlled H₂O₂ delivery.
-- **Counter-screen for peroxidative drift:** **ABTS oxidation rate** (per literature context) to ensure variants don’t simply increase 1e⁻ chemistry that can worsen overoxidation cascades.
-- **Process control:** run with **controlled peroxide feed** (e.g., syringe pump or stepwise additions) because UPO overoxidation/inactivation is peroxide-sensitive (literature context). Keep conditions identical across variants to attribute effects to mutations.
+### Assay/readouts aligned to goal (water-containing system)
+- **Primary activity readout:** Rate and/or yield of **sucrose oleate formation** (e.g., HPLC/UPLC-CAD or LC-MS quantitation of mono-/di-/poly-esters).
+- **Selectivity readout:** Product distribution (monoester vs higher esters), since improved productive binding in water often shifts distribution.
+- **Water tolerance metric:** Run a small water gradient (e.g., low vs higher water activity) and track **relative activity retention**.
+- **Optional mechanistic proxy:** If feasible, measure apparent **Km-like behavior for sucrose** (or initial-rate vs sucrose concentration) to see whether variants improve effective binding/pose formation in wet media.
 
 ---
 
-## 4) Rejected Alternatives (deprioritized)
-1. **L174F as a first-line change** — although it increases bulk at a key inner-wall position (driver D), prompt_2 links OA167’s bulky wall to **di‑oxidation-prone behavior** without polar anchoring; ambiguous directionality for Mono:Di.
-2. **A77D as a first-line change** — electrostatic effects are longer-range/condition-dependent; higher risk of perturbing pocket hydration/protonation with unclear selectivity outcome.
-3. **Distal/background hydrophobic swaps (e.g., ET096 F223 / S227 region)** — prompt_2 flags these as likely secondary/background with weaker phenotype linkage; not ideal under a tight first-round budget.
-4. **Broad site-saturation at multiple positions** — violates the “conservative, mechanistically justified” and “compact panel” requirements; start with the strongest mechanistic levers (gap wall, A178 handle, A171 anisotropy, A173 cap).
+## 4) Rejected Alternatives (lower priority)  
 
-If you can specify what **S82** is chemically (size/polarity; whether di‑ox is sequential hydroxylations vs hydroxylation+further oxidation), I can slightly re-rank the “cap vs wall vs electrostatics” emphasis and propose a second-round combinatorial set focused on the best-performing axis.
+1) **S83R (RML→TLL-like gate)**
+- **Why deprioritized:** prompt_2_output ties Arg here to a **bulky cationic hook/steric gate** consistent with a clamp. In water with bulky sucrose, this risks **excluding productive poses** or over-biasing orientation.
+
+2) **D91N (remove proximal negative anchor)**
+- **Why deprioritized:** prompt_2_output predicts D→N increases **pose degeneracy** and reduces ionic steering—opposite of what you want for sucrose capture/productive binding in water.
+
+3) **T265I (hydrophobize proximal region)**
+- **Why deprioritized:** Mechanistically linked to TLL’s **hydrophobic clamp**; likely reduces “polyol-friendly” character and could worsen performance in aqueous environments.
+
+4) **N264L (rim polar→hydrophobic)**
+- **Why deprioritized:** Would reduce rim wetting/entry energetics for sucrose in water; likely counterproductive for transport/capture.
+
+5) **Large distal steric changes like S259W (noted as big but distal)**
+- **Why deprioritized:** prompt_2_output flags it as ~7.6–7.7 Å and orientation-dependent; high risk of unintended access/dynamics effects without clear causal linkage to the proximal pose-guiding mechanism.
+
+If you can share which sucrose hydroxyl is the desired acylation site (or your current product distribution), I can bias the proposals toward mutations expected to favor that regio-orientation while keeping the “polar-channel in water” design principle.

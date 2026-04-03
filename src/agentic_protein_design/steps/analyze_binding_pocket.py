@@ -160,14 +160,14 @@ You are designing enzyme variants for rational engineering.
 
 You are given:
 1) prompt_2_output: residue-level mechanistic analysis of binding-pocket drivers.
-2) literature_context (optional): prior external context (for example literature-review thread outputs).
+2) engineering_strategy (optional): structured literature-derived strategy JSON.
 3) design_requirements: user-provided requirements including:
    - target backbone protein to engineer
    - engineering aims (activity/selectivity/stability/pathway bias)
    - constraints (allowed positions, mutation budget, excluded residues/motifs, expression or assay limits)
 
 TASK
-Generate a concrete mutation design proposal grounded primarily in prompt_2_output and supported by literature_context when relevant.
+Generate a concrete mutation design proposal grounded primarily in prompt_2_output and supported by engineering_strategy when relevant.
 
 OUTPUT FORMAT
 1) Design Intent
@@ -182,6 +182,7 @@ OUTPUT FORMAT
      - rank
      - proposal (mutation or position-set)
      - rationale linked to prompt_2 mechanistic driver(s)
+     - which engineering hypothesis from INPUT_DATA_JSON (added below under this prompt) this targets, if relevant
      - expected directional effect on function
      - risk/tradeoff
      - confidence (high/medium/low)
@@ -196,8 +197,33 @@ OUTPUT FORMAT
 RULES
 - Do not invent residue numbering outside the provided context.
 - Keep causal links explicit from residue-level mechanism -> mutation -> expected phenotype.
-- If literature_context conflicts with prompt_2_output, state the conflict and choose a conservative design.
+- If engineering_strategy conflicts with prompt_2_output, state the conflict and choose a conservative design.
 - Prefer practical, testable proposals over speculative broad recommendations.
+"""
+
+prompt_4 = """
+You are extracting structured mutation/library proposals from a prior rational-engineering writeup.
+
+INPUTS
+1) prompt_3_output: full text output from the previous design proposal.
+2) engineering_strategy (optional): structured strategy JSON.
+
+TASK
+Return a JSON array only (no markdown, no commentary), where each element is one mutant or library proposal
+(including both recommended/ranked and deprioritized/rejected options where available).
+
+Each array item must be an object with exactly these keys:
+- mutant
+- rationale
+- engineering hypothesis
+- expected effect
+- risk/tradeoff
+
+Rules:
+- Use concise but informative strings.
+- Preserve proposal granularity (single mutant, multi-mutant, or library proposal).
+- If a field is missing from source text, use an empty string.
+- Ensure output is valid JSON array.
 """
 
 def get_step_processed_dir(resolved_dirs: Dict[str, Path]) -> Path:
@@ -362,11 +388,28 @@ def run_llm_pocket_analysis_stages(
     temperature = float(user_inputs.get("llm_temperature", 0.2))
     max_rows = int(user_inputs.get("llm_max_rows_per_table", 300))
 
+    # Optional literature-thread RAG context used for both Prompt 1 and Prompt 2.
+    literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
+    context_result = load_optional_thread_context(
+        literature_context_thread_key,
+        max_chars_per_file=40000,
+        on_missing="warn",
+        json_artifact_names=["backbone_structure_summary"],
+    )
+    literature_context = str(context_result.get("context_text", "")).strip()
+    literature_bundle = context_result.get("context_bundle") or {}
+    backbone_structure_summary = (literature_bundle.get("referenced_json_objects") or {}).get(
+        "backbone_structure_summary",
+        {},
+    )
+
     prompt1_text = build_prompt_with_context(reaction_df, user_inputs)
     payload = {
         "binding_pocket_table": table_records(pocket, max_rows),
         "pocket_alignment_table": table_records(ali, max_rows),
         "reaction_data": None if reaction_df is None else table_records(reaction_df, max_rows),
+        "literature_context": literature_context or "Not provided.",
+        "backbone_structure_summary": backbone_structure_summary,
         "focus_question": user_inputs.get("focus_question", ""),
     }
 
@@ -396,6 +439,8 @@ def run_llm_pocket_analysis_stages(
     payload_2 = {
         "pocket_alignment_table": table_records(ali, max_rows),
         "structural_summary_text": response_1_text,
+        "literature_context": literature_context or "Not provided.",
+        "backbone_structure_summary": backbone_structure_summary,
         "focus_question": user_inputs.get("focus_question", ""),
     }
     response_2 = client.chat.completions.create(
@@ -484,21 +529,20 @@ def generate_llm_mutation_design_proposal(
     design_requirements: str,
     *,
     user_inputs: Optional[Dict[str, Any]] = None,
-    literature_context: str = "",
-) -> str:
+    engineering_strategy: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
-    Run prompt_3 using stage-2 residue analysis and optional external literature context.
+    Run prompt_3 (narrative proposal) then prompt_4 (structured extraction).
     """
     settings = user_inputs or {}
     model = str(settings.get("llm_model", "gpt-5.2"))
     temperature = float(settings.get("llm_temperature", 0.2))
 
-    literature_context_text = literature_context.strip() or "Not provided."
     design_requirements_text = design_requirements.strip() or "No explicit design requirements provided."
 
     payload = {
         "prompt_2_output": prompt_2_output.strip(),
-        "literature_context": literature_context_text,
+        "engineering_strategy": engineering_strategy or {},
         "design_requirements": design_requirements_text,
     }
     client = get_openai_client(
@@ -522,6 +566,41 @@ def generate_llm_mutation_design_proposal(
     text = (response.choices[0].message.content or "").strip()
     if not text:
         raise RuntimeError("LLM returned an empty mutation design proposal for prompt 3.")
+
+    response_4 = client.chat.completions.create(
+        model=model,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise technical information extractor.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{prompt_4}\n\nINPUT_DATA_JSON:\n"
+                    f"{json.dumps({'prompt_3_output': text, 'engineering_strategy': engineering_strategy or {}}, ensure_ascii=True)}"
+                ),
+            },
+        ],
+    )
+    raw_structured = (response_4.choices[0].message.content or "").strip()
+    proposals_list: List[Dict[str, Any]] = []
+    try:
+        parsed = json.loads(raw_structured)
+        if isinstance(parsed, list):
+            proposals_list = [x for x in parsed if isinstance(x, dict)]
+    except Exception:
+        proposals_list = []
+
+    proposal_records: List[Dict[str, str]] = []
+    required_cols = ["mutant", "rationale", "engineering hypothesis", "expected effect", "risk/tradeoff"]
+    for item in proposals_list:
+        row = {k: str(item.get(k, "") or "").strip() for k in required_cols}
+        if any(row.values()):
+            proposal_records.append(row)
+    proposals_df = pd.DataFrame(proposal_records, columns=required_cols)
+
     if bool(settings.get("display_llm_output", True)):
         display_llm_output_bundle(
             exchanges=[
@@ -540,7 +619,12 @@ def generate_llm_mutation_design_proposal(
             ],
             use_compact_markdown=bool(settings.get("display_compact_markdown", False)),
         )
-    return text
+    return {
+        "prompt_3_output_text": text,
+        "prompt_4_output_raw": raw_structured,
+        "proposals_records": proposal_records,
+        "proposals_df": proposals_df,
+    }
 
 
 def _residue_signature(ali_sel: pd.DataFrame, enzyme_name: str) -> str:
@@ -720,6 +804,12 @@ def save_mutation_design_proposal(proposal_text: str, processed_dir: Path) -> Pa
     )
 
 
+def save_rational_engineering_proposals(proposals_df: pd.DataFrame, processed_dir: Path) -> Path:
+    out_path = processed_dir / "rational_engineering_proposals.csv"
+    proposals_df.to_csv(out_path, index=False)
+    return out_path
+
+
 def summarize_llm_analysis(analysis_text: str, max_chars: int = 1000) -> str:
     return summarize_compact_text(analysis_text, max_chars=max_chars)
 
@@ -737,6 +827,8 @@ def persist_thread_update(
     llm_analysis_text: Optional[str] = None,
     mutation_design_path: Optional[Path] = None,
     mutation_design_text: Optional[str] = None,
+    rational_engineering_proposals_path: Optional[Path] = None,
+    rational_engineering_proposals_rows: Optional[int] = None,
     literature_context_thread_key: Optional[str] = None,
     llm_model: Optional[str] = None,
 ) -> str:
@@ -774,6 +866,8 @@ def persist_thread_update(
         "llm_analysis_summary": llm_summary,
         "mutation_design_path": mutation_design_path,
         "mutation_design_summary": mutation_design_summary,
+        "rational_engineering_proposals_path": rational_engineering_proposals_path,
+        "rational_engineering_proposals_rows": int(rational_engineering_proposals_rows or 0),
         "literature_context_thread_key": literature_context_thread_key,
         "llm_model": llm_model or "",
     }
@@ -922,22 +1016,31 @@ if __name__ == "__main__":
 
     mutation_design_text = ""
     out_mutation_design = None
+    out_rational_proposals = None
+    rational_proposals_rows = 0
     literature_context_thread_key = str(user_inputs.get("literature_context_thread_key", "")).strip() or None
     if run_mutation_design and run_llm:
         design_requirements = str(user_inputs.get("design_requirements", "")).strip()
         context_result = load_optional_thread_context(
             literature_context_thread_key,
-            max_chars_per_file=20000,
+            include_referenced_files=False,
+            max_chars_per_file=40000,
             on_missing="warn",
+            json_artifact_names=["engineering_strategy"],
         )
-        literature_context = str(context_result.get("context_text", ""))
-        mutation_design_text = generate_llm_mutation_design_proposal(
+        literature_bundle = context_result.get("context_bundle") or {}
+        engineering_strategy = (literature_bundle.get("referenced_json_objects") or {}).get("engineering_strategy", {})
+        mutation_design_outputs = generate_llm_mutation_design_proposal(
             prompt_2_output=prompt_2_output,
             design_requirements=design_requirements,
             user_inputs=user_inputs,
-            literature_context=literature_context,
+            engineering_strategy=engineering_strategy,
         )
+        mutation_design_text = str(mutation_design_outputs.get("prompt_3_output_text", ""))
+        proposals_df = mutation_design_outputs.get("proposals_df", pd.DataFrame())
+        rational_proposals_rows = int(len(proposals_df)) if isinstance(proposals_df, pd.DataFrame) else 0
         out_mutation_design = save_mutation_design_proposal(mutation_design_text, step_processed_dir)
+        out_rational_proposals = save_rational_engineering_proposals(proposals_df, step_processed_dir)
 
     if persist:
         persist_thread_update(
@@ -953,6 +1056,8 @@ if __name__ == "__main__":
             llm_analysis_text=llm_analysis or None,
             mutation_design_path=out_mutation_design,
             mutation_design_text=mutation_design_text or None,
+            rational_engineering_proposals_path=out_rational_proposals,
+            rational_engineering_proposals_rows=rational_proposals_rows,
             literature_context_thread_key=literature_context_thread_key,
             llm_model=str(user_inputs.get("llm_model", "")),
         )
@@ -967,5 +1072,6 @@ if __name__ == "__main__":
             "out_patterns": out_patterns,
             "llm_analysis_path": out_llm,
             "mutation_design_path": out_mutation_design,
+            "rational_engineering_proposals_path": out_rational_proposals,
         }
     )

@@ -29,6 +29,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "metrics_summary_fname": "",
         "model_name_list": ["best"],
         "metric_col": "test_spearman",
+        "target_col_list": [],
         "split_type_list": [],
         "feature_label_list": [],
         "higher_is_better": None,
@@ -38,6 +39,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "figure_fname": "",
         "figure_dpi": 200,
         "figsize": (8, 5),
+        "x_limits": None,
         "y_limits": None,
     }
 

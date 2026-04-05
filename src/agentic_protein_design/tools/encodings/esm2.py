@@ -285,9 +285,17 @@ def get_mean_PLL_scores(
         )
         print(f"[meanPLL/{marginal_type}-marginal] Saved scores: {output_str}.csv")
 
-        # save per_residue PLL scores
-        pll_per_residue = pd.DataFrame(wt_logp_by_base).round(6).transpose().rename_axis('sequence').reset_index()
-        pll_per_residue.to_csv(f"{output_str}_per_residue.csv")
+        # Save per-residue PLL scores with NaN padding to the longest sequence.
+        per_row = [np.asarray(wt_logp_by_base[seq], dtype=np.float32).reshape(-1) for seq in seq_list]
+        max_len = max((arr.shape[0] for arr in per_row), default=0)
+        padded = np.full((len(seq_list), max_len), np.nan, dtype=np.float32)
+        for i, arr in enumerate(per_row):
+            padded[i, : arr.shape[0]] = arr
+        pos_cols = [i for i in range(max_len)]
+        pll_per_residue = pd.DataFrame(padded, columns=pos_cols)
+        pll_per_residue.insert(0, "sequence", seq_list)
+        pll_per_residue.round(6).reset_index(drop=False).to_csv(f"{output_str}_per_residue.csv", index=False)
+        print(f"[PLL_per_residue/{marginal_type}-marginal] Saved scores: {output_str}_per_residue.csv")
 
     return mean_pll_scores
 

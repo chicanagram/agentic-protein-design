@@ -49,7 +49,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "sequence_base_col": "sequence_base",
         "mutation_col": "mutations",
         "allow_null_sequences": False,
-        "null_sequence_placeholder": None,
+        "null_sequence_placeholder": "X",
         "sequence_base": None,
         "feature_sets": list(FEATURE_SETS_DEFAULT),
         "get_embeddings_for_seq_base": False,

@@ -25,10 +25,10 @@ from project_config.feature_registry import (
     PLM_ENCODING_FEATURE_SETS,
 )
 from project_config.variables import address_dict
-from tools.encodings.classical_encodings import get_classical_encodings
-from tools.encodings.common import _sanitize_name
-from tools.encodings.plm_encodings import get_plm_encodings
-from tools.utils.seq_utils import fetch_sequences_from_fasta, get_mutated_sequence, normalize_sequences
+from agentic_protein_design.tools.encodings.classical_encodings import get_classical_encodings
+from agentic_protein_design.tools.encodings.common import _sanitize_name
+from agentic_protein_design.tools.encodings.plm_encodings import get_plm_encodings
+from agentic_protein_design.tools.utils.seq_utils import fetch_sequences_from_fasta, get_mutated_sequence, normalize_sequences
 
 
 FASTA_SUFFIXES = {".fasta", ".fa", ".faa", ".fna"}
@@ -48,6 +48,8 @@ def default_user_inputs() -> Dict[str, Any]:
         "sequence_col": "sequence",
         "sequence_base_col": "sequence_base",
         "mutation_col": "mutations",
+        "allow_null_sequences": False,
+        "null_sequence_placeholder": None,
         "sequence_base": None,
         "feature_sets": list(FEATURE_SETS_DEFAULT),
         "get_embeddings_for_seq_base": False,
@@ -118,24 +120,31 @@ def split_feature_sets(
     }
 
 
-def _extract_required_sequence_column(df: pd.DataFrame, sequence_col: str, input_path: Path) -> List[str]:
-    # Section 1: enforce required column and null safety.
-    if sequence_col not in df.columns:
-        raise ValueError(f"Column '{sequence_col}' not found in CSV: {input_path}")
+def _normalize_required_sequence_value(value: str, *, field_name: str, row_idx: int) -> str:
+    normalized = normalize_sequences([str(value).strip()])
+    if len(normalized) != 1:
+        raise ValueError(f"Could not normalize {field_name} at row {row_idx} into a non-empty sequence.")
+    return normalized[0]
 
-    seq_series = df[sequence_col]
-    if seq_series.isnull().any():
-        null_idx = seq_series[seq_series.isnull()].index.tolist()[:5]
-        raise ValueError(f"Found null values in '{sequence_col}' at rows {null_idx}.")
 
-    # Section 2: normalize and enforce non-empty sequence rows.
-    sequence_list = normalize_sequences([str(x).strip() for x in seq_series.tolist()])
-    if len(sequence_list) != len(seq_series):
-        raise ValueError(f"Could not normalize all values in '{sequence_col}' into non-empty sequences.")
-    empty_idx = [i for i, seq in enumerate(sequence_list) if not seq]
-    if empty_idx:
-        raise ValueError(f"Found empty sequence strings in '{sequence_col}' at rows {empty_idx[:5]}.")
-    return sequence_list
+def _infer_sequence_for_row(
+    *,
+    seq_base: str,
+    mut_str: str,
+    mutations_sep: str,
+    row_idx: int,
+) -> str:
+    curr_seq = _normalize_required_sequence_value(seq_base, field_name="sequence_base", row_idx=row_idx)
+    raw_mut = str(mut_str or "").strip()
+    if not raw_mut:
+        return curr_seq
+    mut_tokens = [m.strip() for m in raw_mut.split(str(mutations_sep or "+")) if m.strip()]
+    for mut in mut_tokens:
+        _, _, seq_out, _ = get_mutated_sequence(curr_seq, [mut], seq_name="inferred", write_to_fasta=None)
+        if not seq_out:
+            raise ValueError(f"Failed to infer sequence at row {row_idx} for mutation '{mut}'.")
+        curr_seq = str(seq_out[0]).strip()
+    return _normalize_required_sequence_value(curr_seq, field_name="inferred sequence", row_idx=row_idx)
 
 
 def _infer_sequences_from_base_and_mutations(
@@ -268,6 +277,8 @@ def parse_sequence_input(
     sequence_base_col: str = "sequence_base",
     mutation_col: str = "mutations",
     mutations_sep: str = "+",
+    allow_null_sequences: bool = False,
+    null_sequence_placeholder: Optional[str] = None,
     sequence_base: Optional[Union[str, Sequence[Optional[str]]]] = None,
 ) -> Dict[str, Any]:
     """
@@ -288,12 +299,7 @@ def parse_sequence_input(
         # Section 2A: parse CSV sequence/base/mutation columns.
         df = pd.read_csv(input_path)
         n_rows = len(df)
-        sequence_list: Optional[List[str]] = None
-        if sequence_col in df.columns:
-            sequence_list = _extract_required_sequence_column(df, sequence_col, input_path)
-            n_seq = len(sequence_list)
-        else:
-            n_seq = n_rows
+        n_seq = n_rows
 
         # Section 2A.1: resolve sequence_base list from CSV column or fallback input.
         sequence_base_list: Optional[List[str]] = None
@@ -321,8 +327,68 @@ def parse_sequence_input(
             if any(raw_mutations):
                 mutations_list = raw_mutations
 
-        # Section 2A.2: infer missing sequence column from sequence_base + mutations.
-        if sequence_list is None:
+        sequence_list: Optional[List[str]] = None
+        null_sequence_row_indices: List[int] = []
+        placeholder_filled_row_indices: List[int] = []
+
+        # Section 2A.2: resolve sequence column (with optional null-row preservation).
+        if sequence_col in df.columns:
+            raw_sequence_vals = df[sequence_col].tolist()
+            explicit_placeholder = None
+            if null_sequence_placeholder is not None and str(null_sequence_placeholder).strip():
+                explicit_placeholder = _normalize_required_sequence_value(
+                    str(null_sequence_placeholder),
+                    field_name="null_sequence_placeholder",
+                    row_idx=-1,
+                )
+            inferred_placeholder = None
+            for candidate in raw_sequence_vals:
+                if pd.notna(candidate) and str(candidate).strip():
+                    inferred_placeholder = _normalize_required_sequence_value(
+                        str(candidate),
+                        field_name=sequence_col,
+                        row_idx=-1,
+                    )
+                    break
+            placeholder_seq = explicit_placeholder or inferred_placeholder or "X"
+            resolved_sequences: List[str] = []
+            for row_idx, raw_val in enumerate(raw_sequence_vals):
+                has_value = pd.notna(raw_val) and str(raw_val).strip() != ""
+                if has_value:
+                    resolved_sequences.append(
+                        _normalize_required_sequence_value(
+                            str(raw_val),
+                            field_name=sequence_col,
+                            row_idx=row_idx,
+                        )
+                    )
+                    continue
+
+                null_sequence_row_indices.append(row_idx)
+                if not allow_null_sequences:
+                    # Keep historical strict behavior unless explicitly enabled.
+                    raise ValueError(
+                        f"Found null/empty values in '{sequence_col}' at rows "
+                        f"{null_sequence_row_indices[:5]}."
+                    )
+
+                if sequence_base_list is None:
+                    # No per-row base available: preserve row count with placeholder sequence.
+                    resolved_sequences.append(placeholder_seq)
+                    placeholder_filled_row_indices.append(row_idx)
+                    continue
+
+                base_row = sequence_base_list[row_idx]
+                mut_row = raw_mutations[row_idx] if raw_mutations is not None else ""
+                inferred = _infer_sequence_for_row(
+                    seq_base=base_row,
+                    mut_str=mut_row,
+                    mutations_sep=mutations_sep,
+                    row_idx=row_idx,
+                )
+                resolved_sequences.append(inferred)
+            sequence_list = resolved_sequences
+        else:
             if sequence_base_list is None:
                 raise ValueError(
                     f"Column '{sequence_col}' not found in CSV: {input_path}. "
@@ -349,6 +415,8 @@ def parse_sequence_input(
             "sequence_list": sequence_list,
             "sequence_base_list": sequence_base_list,
             "mutations_list": mutations_list,
+            "null_sequence_row_indices": null_sequence_row_indices,
+            "placeholder_filled_row_indices": placeholder_filled_row_indices,
         }
 
     # FASTA parsing pathway.
@@ -372,6 +440,8 @@ def parse_sequence_input(
             "sequence_list": sequence_list,
             "sequence_base_list": sequence_base_list,
             "mutations_list": None,
+            "null_sequence_row_indices": [],
+            "placeholder_filled_row_indices": [],
         }
 
     raise ValueError(
@@ -421,6 +491,126 @@ def _collect_embedding_shape_trace(plm_results: Dict[str, Dict[str, Any]]) -> Di
             "base_shape_by_layer": base_shape_by_layer,
         }
     return embedding_shape_trace
+
+
+def _apply_null_mask_to_npy(path: Path, null_rows: Sequence[int]) -> bool:
+    arr = np.load(str(path), allow_pickle=False)
+    if arr.ndim < 1 or not null_rows:
+        return False
+    valid_rows = [i for i in null_rows if 0 <= int(i) < int(arr.shape[0])]
+    if not valid_rows:
+        return False
+    if not np.issubdtype(arr.dtype, np.floating):
+        arr = arr.astype(np.float32)
+    arr[valid_rows] = np.nan
+    np.save(str(path), arr)
+    return True
+
+
+def _apply_null_mask_to_npz(path: Path, null_rows: Sequence[int]) -> str:
+    # Section 1: sparse matrices (.npz from scipy.sparse) cannot encode NaN efficiently.
+    try:
+        from scipy import sparse as sp  # type: ignore
+
+        mat = sp.load_npz(str(path))
+        valid_rows = [i for i in null_rows if 0 <= int(i) < int(mat.shape[0])]
+        if valid_rows:
+            mat = mat.tolil()
+            mat[valid_rows, :] = 0.0
+            sp.save_npz(str(path), mat.tocsr())
+            return "sparse_zeroed"
+    except Exception:
+        pass
+
+    # Section 2: ragged npz (keyed arrays) -> replace selected rows with NaN arrays.
+    with np.load(str(path), allow_pickle=False) as npz:
+        payload = {k: np.asarray(npz[k]) for k in npz.files}
+    if not payload:
+        return "noop"
+    for row_idx in null_rows:
+        key = str(int(row_idx))
+        if key in payload:
+            arr = payload[key]
+            if not np.issubdtype(arr.dtype, np.floating):
+                arr = arr.astype(np.float32)
+            payload[key] = np.full(arr.shape, np.nan, dtype=arr.dtype)
+    np.savez_compressed(str(path), **payload)
+    return "ragged_nan"
+
+
+def _apply_null_mask_to_path(path: Path, null_rows: Sequence[int]) -> str:
+    """
+    Apply null-row masking to a single artifact path.
+
+    Returns one of:
+    - "noop"
+    - "nan_masked"
+    - "sparse_zeroed"
+    """
+    if not path.exists():
+        return "noop"
+    suffix = path.suffix.lower()
+    if suffix == ".npy":
+        return "nan_masked" if _apply_null_mask_to_npy(path, null_rows) else "noop"
+    if suffix == ".npz":
+        mode = _apply_null_mask_to_npz(path, null_rows)
+        if mode == "sparse_zeroed":
+            return "sparse_zeroed"
+        if mode == "ragged_nan":
+            return "nan_masked"
+    return "noop"
+
+
+def _apply_null_sequence_mask_to_results(
+    *,
+    null_rows: Sequence[int],
+    classical_results: Dict[str, Dict[str, Any]],
+    plm_results: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Write null-sequence row masks into encoded artifacts while preserving row count."""
+    if not null_rows:
+        return {"applied": False, "null_rows": []}
+
+    applied_to: List[str] = []
+    sparse_zeroed: List[str] = []
+
+    # Section 1: classical outputs.
+    for feature_name, meta in (classical_results or {}).items():
+        seq_path_val = meta.get("seq_encoding_path")
+        if not seq_path_val:
+            continue
+        mode = _apply_null_mask_to_path(Path(str(seq_path_val)), null_rows)
+        if mode == "sparse_zeroed":
+            sparse_zeroed.append(f"classical:{feature_name}")
+        elif mode == "nan_masked":
+            applied_to.append(f"classical:{feature_name}")
+
+    # Section 2: PLM score/artifact outputs.
+    for feature_name, meta in (plm_results or {}).items():
+        output_base = meta.get("output_path")
+        if output_base:
+            npy_path = Path(f"{output_base}.npy")
+            if _apply_null_mask_to_path(npy_path, null_rows) == "nan_masked":
+                applied_to.append(f"plm-score:{feature_name}")
+
+        artifacts = meta.get("artifacts", {}) or {}
+        for key in ("pooled_paths", "per_residue_paths", "base_pooled_paths", "base_per_residue_paths"):
+            layer_paths = artifacts.get(key, {})
+            if not isinstance(layer_paths, dict):
+                continue
+            for _, path_val in layer_paths.items():
+                mode = _apply_null_mask_to_path(Path(str(path_val)), null_rows)
+                if mode == "sparse_zeroed":
+                    sparse_zeroed.append(f"plm-artifact:{feature_name}:{key}")
+                elif mode == "nan_masked":
+                    applied_to.append(f"plm-artifact:{feature_name}:{key}")
+
+    return {
+        "applied": bool(applied_to or sparse_zeroed),
+        "null_rows": [int(i) for i in null_rows],
+        "nan_masked_outputs": sorted(set(applied_to)),
+        "sparse_zeroed_outputs": sorted(set(sparse_zeroed)),
+    }
 
 
 def _build_plm_call_kwargs(inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -563,7 +753,6 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Section 1: resolve high-level inputs.
     sequence_input = str(inputs.get("sequence_input", "") or "").strip()
-    print('sequence_input:', sequence_input)
     # Section 2: split requested feature sets by encoding backend.
     split_sets = split_feature_sets(inputs.get("feature_sets", FEATURE_SETS_DEFAULT))
 
@@ -583,6 +772,8 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
             sequence_base_col=str(inputs.get("sequence_base_col", "sequence_base")),
             mutation_col=str(inputs.get("mutation_col", "mutations")),
             mutations_sep=str(inputs.get("mutations_sep", "+")),
+            allow_null_sequences=bool(inputs.get("allow_null_sequences", False)),
+            null_sequence_placeholder=inputs.get("null_sequence_placeholder"),
             sequence_base=sequence_base_input,
         )
     else:
@@ -696,6 +887,11 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
     # Section 8: collect compact shape trace for embedding artifacts.
     embedding_shape_trace = _collect_embedding_shape_trace(plm_results)
+    null_mask_trace = _apply_null_sequence_mask_to_results(
+        null_rows=parsed.get("null_sequence_row_indices", []),
+        classical_results=classical_results,
+        plm_results=plm_results,
+    )
 
     # Section 9: return consolidated execution metadata and outputs.
     return {
@@ -707,6 +903,7 @@ def get_sequence_encodings(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "plm_results": plm_results,
         "trace": {
             "embedding_shapes": embedding_shape_trace,
+            "null_sequence_mask": null_mask_trace,
         },
     }
 

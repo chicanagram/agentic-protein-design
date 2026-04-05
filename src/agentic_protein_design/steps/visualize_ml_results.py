@@ -17,7 +17,7 @@ from typing import Any, Dict
 
 from agentic_protein_design.core.paths import resolve_project_root
 from project_config.variables import address_dict
-from tools.ml.visualize_ml_results import run_visualize_ml_results
+from agentic_protein_design.tools.ml.visualize_ml_results import run_visualize_ml_results
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -32,6 +32,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "target_col_list": [],
         "split_type_list": [],
         "feature_label_list": [],
+        "show_model_type": False,
         "higher_is_better": None,
         "save_figure": True,
         "show_figure": True,
@@ -68,10 +69,16 @@ def visualize_ml_results(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
 def _load_inputs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.inputs_json:
-        return dict(json.loads(args.inputs_json))
+        loaded = json.loads(args.inputs_json)
+        if not isinstance(loaded, dict):
+            raise ValueError("--inputs-json must decode to a JSON object.")
+        return loaded
     if args.inputs_file:
         p = Path(args.inputs_file).expanduser().resolve()
-        return dict(json.loads(p.read_text(encoding="utf-8")))
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("--inputs-file must contain a JSON object.")
+        return loaded
     return default_user_inputs()
 
 

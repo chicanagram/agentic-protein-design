@@ -16,7 +16,7 @@ from unittest import result
 
 from agentic_protein_design.core import resolve_input_path
 from agentic_protein_design.core.pipeline_utils import safe_read_csv
-from tools.openprotein import (
+from agentic_protein_design.tools.openprotein import (
     assert_valid_design_with_boltzgen_kwargs,
     boltzgen_yaml_to_design_kwargs,
     design_with_boltzgen,
@@ -276,7 +276,7 @@ def render_overlay_views(
 ) -> List[Any]:
     from pathlib import Path as _Path
 
-    from tools.utils.struct_utils import visualize_overlay_structures
+    from agentic_protein_design.tools.utils.struct_utils import visualize_overlay_structures
 
     if refold_summaries_df is None or len(refold_summaries_df) == 0:
         return []
@@ -348,7 +348,7 @@ def render_overlay_views(
 if __name__ == "__main__":
     from agentic_protein_design.core.pipeline_utils import print_run_summary, resolve_repo_root
     from project_config.variables import address_dict, subfolders
-    from tools.openprotein import validate_design_with_boltzgen_kwargs
+    from agentic_protein_design.tools.openprotein import validate_design_with_boltzgen_kwargs
 
     root_key = "examples"
     run_postdesign = True
@@ -447,7 +447,7 @@ if __name__ == "__main__":
         if run_selection:
             metrics_df = postdesign_payload.get("metrics_df")
             if metrics_df is not None and len(metrics_df):
-                from tools.openprotein import filter_and_select_designs
+                from agentic_protein_design.tools.openprotein import filter_and_select_designs
 
                 df_filtered, df_selected = filter_and_select_designs(
                     metrics_df,

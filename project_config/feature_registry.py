@@ -7,6 +7,10 @@ from __future__ import annotations
 CLASSICAL_ENCODING_FEATURE_SETS = [
     "one_hot",
     "georgiev",
+    "one_hot_per_residue",
+    "georgiev_per_residue",
+    "one_hot_mean_pooled",
+    "georgiev_mean_pooled",
 ]
 
 # --- PLM feature sets ---
@@ -16,7 +20,7 @@ PLM_MODELS_DICT = {
     "poet2": [12],
 }
 
-PLM_ENCODING_FEATURE_SETS = [f for f_list in [[f'{plm}_LLR', f'{plm}_per_residue', f'{plm}_mean_pooled', f'{plm}_mut_pooled', f'{plm}_svd_pooled'] for plm in PLM_MODELS_DICT] for f in f_list]
+PLM_ENCODING_FEATURE_SETS = [f for f_list in [[f'{plm}_LLR', f'{plm}_meanPLL', f'{plm}_per_residue', f'{plm}_mean_pooled', f'{plm}_mut_pooled', f'{plm}_svd_pooled'] for plm in PLM_MODELS_DICT] for f in f_list]
 
 # combination of classical and PLM
 FEATURE_SETS_ALL = CLASSICAL_ENCODING_FEATURE_SETS + PLM_ENCODING_FEATURE_SETS

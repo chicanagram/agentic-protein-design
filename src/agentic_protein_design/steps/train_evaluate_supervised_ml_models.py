@@ -18,7 +18,7 @@ from typing import Any, Dict
 
 from agentic_protein_design.core.paths import resolve_project_root
 from project_config.variables import address_dict
-from tools.ml.workflow import run_supervised_ml_workflow
+from agentic_protein_design.tools.ml.workflow import run_supervised_ml_workflow
 
 
 def default_user_inputs() -> Dict[str, Any]:
@@ -62,7 +62,7 @@ def default_user_inputs() -> Dict[str, Any]:
         "train_full_data_model": False,
         "featurecombi_model_pair_to_extract_coefficients_for": [],
         "show_progress": True,
-        "model_settings_repo_dir": "tools/ml/model_settings",
+        "model_settings_repo_dir": "src/agentic_protein_design/tools/ml/model_settings",
         "run_label": "",
         "sample_id_col": "",
     }
@@ -89,7 +89,9 @@ def train_evaluate_supervised_ml_models(inputs: Dict[str, Any]) -> Dict[str, Any
 
     project_root = resolve_project_root()
     data_root_dir = _resolve_data_root_dir(str(payload.get("data_fbase", "examples")))
-    settings_dir = Path(str(payload.get("model_settings_repo_dir", "tools/ml/model_settings"))).expanduser()
+    settings_dir = Path(
+        str(payload.get("model_settings_repo_dir", "src/agentic_protein_design/tools/ml/model_settings"))
+    ).expanduser()
     if not settings_dir.is_absolute():
         settings_dir = (project_root / settings_dir).resolve()
 

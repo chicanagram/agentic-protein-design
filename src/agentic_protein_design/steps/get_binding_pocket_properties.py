@@ -140,7 +140,7 @@ def run_binding_pocket_property_extraction(inputs: Dict[str, Any]) -> Dict[str, 
     struct_csv_dir = dirs["struct_csv_dir"]
 
     if ligand_present:
-        from tools.struct.analyse_binding_pocket_with_ligand import LigandPocketAnalysis
+        from agentic_protein_design.tools.struct.analyse_binding_pocket_with_ligand import LigandPocketAnalysis
 
         struct_dict = {str(k): str(v) for k, v in dict(inputs.get("struct_dict", {})).items()}
         if not struct_dict:
@@ -196,7 +196,7 @@ def run_binding_pocket_property_extraction(inputs: Dict[str, Any]) -> Dict[str, 
     if not pocket_residues_dict:
         raise ValueError("No pocket residues were provided for ligand-free pocket analysis.")
 
-    from tools.struct.analyse_binding_pocket import PocketAnalysis
+    from agentic_protein_design.tools.struct.analyse_binding_pocket import PocketAnalysis
 
     analysis = PocketAnalysis(
         pdb_dir=f"{pdb_dir}/",

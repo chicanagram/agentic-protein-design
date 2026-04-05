@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from project_config.variables import address_dict
-from tools.pythia.pythia_runner import run_pythia_ddg_scan_from_file_lists
+from agentic_protein_design.tools.pythia.pythia_runner import run_pythia_ddg_scan_from_file_lists
 
 
 def _resolve_repo_root() -> Path:

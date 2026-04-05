@@ -25,7 +25,7 @@ Steps executable in the workflow include:
 
 - **Primary UI (current)**: Jupyter notebooks in [`notebooks/`](notebooks)
 - **Reusable package layer**: importable step/workflow modules in [`src/agentic_protein_design/`](src/agentic_protein_design)
-- **Tool integration layer**: local-binary/API wrappers and scripts in [`tools/`](tools)
+- **Tool integration layer**: local-binary/API wrappers and scripts in [`src/agentic_protein_design/tools/`](src/agentic_protein_design/tools/)
 - **Legacy helper modules**: removed; import directly from [`src/agentic_protein_design/`](src/agentic_protein_design)
 - **Config-driven data roots**: via `address_dict` and `subfolders` in [`project_config/variables.py`](project_config/variables.py)
 - **Local chat memory**: per-thread JSON files under `chats/` (git-ignored)
@@ -110,7 +110,7 @@ Notebook: [`notebooks/12_calculate_ddGstability_mutants.ipynb`](notebooks/12_cal
 
 1. Set up a dedicated Pythia environment first (recommended to avoid OpenMP conflicts):
    - `conda create -n pythia python=3.10 -y`
-   - `conda run -n pythia python -m pip install -r tools/pythia/requirements.txt`
+   - `conda run -n pythia python -m pip install -r src/agentic_protein_design/tools/pythia/requirements.txt`
 
 2. In notebook 12 user inputs, point Pythia to that isolated interpreter:
    - `user_inputs["pythia_python_executable"] = "/Users/charmainechia/miniconda3/envs/pythia/bin/python"`

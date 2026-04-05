@@ -1,0 +1,28 @@
+{
+  "local_tools": {
+    "mafft": {
+      "kind": "alignment",
+      "wrapper": "agentic_protein_design.tools.local.bio_wrappers.run_mafft_alignment"
+    },
+    "mmseqs": {
+      "kind": "homolog_search",
+      "wrapper": "agentic_protein_design.tools.local.bio_wrappers.run_mmseqs_easy_search"
+    }
+  },
+  "api_tools": {
+    "uniprot": {
+      "kind": "protein_annotation",
+      "wrapper": "agentic_protein_design.tools.api.uniprot.search_uniprot"
+    },
+    "rcsb": {
+      "kind": "structure_lookup",
+      "wrapper": "agentic_protein_design.tools.api.rcsb.search_rcsb_text"
+    }
+  },
+  "stability_tools": {
+    "pythia": {
+      "kind": "ddg_stability_prediction",
+      "wrapper": "agentic_protein_design.tools.pythia.pythia_runner.run_pythia_ddg_scan"
+    }
+  }
+}

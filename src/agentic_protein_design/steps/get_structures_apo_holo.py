@@ -12,7 +12,7 @@ if __name__ == "__main__" and __package__ in (None, ""):
 
 from typing import Any, Dict
 from pathlib import Path
-from tools.openprotein import predict_boltz2
+from agentic_protein_design.tools.openprotein import predict_boltz2
 
 
 def run_structure_prediction(inputs: Dict[str, Any], out_cif_path: Path, out_summary_path: Path) -> Dict[str, Any]:

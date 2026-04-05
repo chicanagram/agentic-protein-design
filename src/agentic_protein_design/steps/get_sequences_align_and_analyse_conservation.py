@@ -18,14 +18,14 @@ import pandas as pd
 
 from project_config.variables import address_dict
 from agentic_protein_design.core.paths import join_data_path, resolve_project_root, setup_data_root
-from tools.align.msa_to_dataframe import convert_msa_to_dataframe
-from tools.align.seq_align import _default_mafft_executable, run_msa
-from tools.align.visualize_alignment import visualize_msa
-from tools.openprotein.align_msa_openprotein import create_openprotein_msa
-from tools.search.run_search_and_align import run_seqsearch_api
-from tools.conservation_analysis.run_conservation_analysis import compute_conservation
-from tools.utils.seq_utils import fetch_sequences_from_fasta
-from tools.yasara.align_struct_yasara import AlignStruct
+from agentic_protein_design.tools.align.msa_to_dataframe import convert_msa_to_dataframe
+from agentic_protein_design.tools.align.seq_align import _default_mafft_executable, run_msa
+from agentic_protein_design.tools.align.visualize_alignment import visualize_msa
+from agentic_protein_design.tools.openprotein.align_msa_openprotein import create_openprotein_msa
+from agentic_protein_design.tools.search.run_search_and_align import run_seqsearch_api
+from agentic_protein_design.tools.conservation_analysis.run_conservation_analysis import compute_conservation
+from agentic_protein_design.tools.utils.seq_utils import fetch_sequences_from_fasta
+from agentic_protein_design.tools.yasara.align_struct_yasara import AlignStruct
 
 
 REQUIRED_SUBFOLDERS = ["sequences", "msa", "conservation_analysis", "seqsearch", "pdb", "sce"]

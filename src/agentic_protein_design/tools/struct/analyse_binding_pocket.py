@@ -109,7 +109,7 @@ class PocketAnalysis:
             num_res_binding_pocket_ali = len(binding_pocket_residues)
             df_bindingpocket = df_coords[df_coords['res_num'].isin(binding_pocket_residues)].copy()
             df_backbone_bindingpocket = df_backbone_coords[df_backbone_coords['res_num'].isin(binding_pocket_residues)].copy()
-            print(f'[{struct_name}] Binding pocket residues  ({num_res_binding_pocket_ali}): {binding_pocket_residues}')
+            print(f'[{struct_name}] Binding pocket residues ({num_res_binding_pocket_ali}): {binding_pocket_residues}')
 
             # get binding pocket centroid and other key atoms
             centroid = df_bindingpocket[['x', 'y', 'z']].mean(axis=0).to_numpy()

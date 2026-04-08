@@ -139,7 +139,7 @@ def _select_best_rows(df: pd.DataFrame, metric_col: str, higher_is_better: bool)
     if metric_col not in df.columns:
         raise KeyError(f"Metric column '{metric_col}' not found in summary dataframe.")
 
-    group_cols = ["split_type", "feature_label", "eval_group", "n_test_pooled", "n_train"]
+    group_cols = ["split_type", "feature_label", "n_train"]
     if "target_col" in df.columns:
         group_cols = ["target_col"] + group_cols
 

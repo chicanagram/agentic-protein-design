@@ -1192,15 +1192,15 @@ You are extracting structured data from a literature review markdown report.
 Return ONLY valid JSON (no markdown fences, no commentary) with this exact top-level schema:
 {
   "backbone_structure_summary": {
-    "binding_pocket": {"description": string, "residues": [string]},
-    "catalytic_triad": {"description": string, "residues": [string]},
-    "access_tunnel": {"description": string, "residues": [string]},
-    "other_motifs": {"description": string, "residues": [string]},
-    "cofactor_binding": {"description": string, "residues": [string]}
+    "Binding pocket": {"description": string, "residues": [string]},
+    "Catalytic triad": {"description": string, "residues": [string]},
+    "Access tunnel": {"description": string, "residues": [string]},
+    "Other motifs": {"description": string, "residues": [string]},
+    "Cofactor binding": {"description": string, "residues": [string]}
   },
   "engineering_strategy": {
-    "1": {"design_knob": string, "engineering_hypothesis": string, "mutagenesis_strategy": string, "process_strategy": string},
-    "2": {"design_knob": string, "engineering_hypothesis": string, "mutagenesis_strategy": string, "process_strategy": string}
+    "<design_knob_1>": {"Engineering hypothesis": string, "Mutagenesis strategy": string, "Process strategy": string},
+    "<design_knob_2>": {"Engineering hypothesis": string, "Mutagenesis strategy": string, "Process strategy": string}
   }
 }
 
@@ -1211,8 +1211,12 @@ Rules:
 - Under "other_motifs", describe any other notable motifs, such as lid, ligand- or cofactor- coordinating motifs, etc.
 - Include residue positions only when explicitly available; else use [].
 - engineering_strategy should contain at least 2 items when supported, otherwise as many as available.
-- Extract both mutagenesis and process strategies; when one is not applicable, set it to "".
-- Keys in engineering_strategy must be numeric strings ("1", "2", ...).
+- Keys in engineering_strategy are currently placeholders (<design_knob_1>, <design_knob_2>, etc.): update this with unique string descriptions (in <6 words) of the design knob targeted
+- Each design knob should correspond to 1 specific directional engineering hypothesis. 
+- For a given design knob / hypothesis pair, outline from first principles AT LEAST 1 mutagenesis and/or 1 process strategies to implement it, and as many as possible; if either strategy type is not relevant, return an empty string "". 
+- Include at least 3 design knobs specific to binding pocket / active site / tunnel engineering. 
+- If equilibrium position is an issue, propose mutagenesis and/or process strategies targeting the active site and / or the overall enzyme to address this.
+- Extract relevant ideas from literature, if available, to support or exemplify the mutagenesis or process strategies outlined. 
 """
 
 

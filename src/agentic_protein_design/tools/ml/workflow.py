@@ -33,6 +33,10 @@ from agentic_protein_design.tools.ml.hyperparameter_tuning import (
     select_best_params_from_candidates,
     tune_model_hyperparameters,
 )
+from agentic_protein_design.tools.ml.fit_svd import (
+    fit_transform_svd_train_test,
+    resolve_svd_feature_config,
+)
 from agentic_protein_design.tools.ml.splits import generate_splits, generate_progressive_splits
 
 
@@ -252,10 +256,86 @@ def _build_summary_dataframe(
     return _build_summary_from_fold_rows(rows_df=rows_df)
 
 
-def _compose_pred_name(run_label: str, feature_label: str, split_id: str, model_name: str, suffix: str) -> str:
+def _compose_pooled_pred_name(
+    run_label: str,
+    feature_label: str,
+    split_type: str,
+    model_name: str,
+    suffix: str,
+) -> str:
     if str(suffix or "").strip():
-        return f"{run_label}__{feature_label}__{split_id}__{model_name}__{suffix}.csv"
-    return f"{run_label}__{feature_label}__{split_id}__{model_name}.csv"
+        return f"{run_label}__{feature_label}__{split_type}__{model_name}__all_folds__{suffix}.csv"
+    return f"{run_label}__{feature_label}__{split_type}__{model_name}__all_folds.csv"
+
+
+def _append_fold_predictions(
+    *,
+    pooled_prediction_rows: Dict[Tuple[str, str, str, str], List[pd.DataFrame]],
+    target_col: str,
+    feature_label: str,
+    split_type: str,
+    model_name: str,
+    split_id: int,
+    eval_group: str,
+    test_idx: np.ndarray,
+    y_test: np.ndarray,
+    yhat_test: np.ndarray,
+    dataset_df: pd.DataFrame,
+    sample_id_col: str,
+) -> None:
+    pred_df = pd.DataFrame(
+        {
+            "row_index": test_idx,
+            "split_id": split_id,
+            "eval_group": eval_group,
+            "y_true": y_test,
+            "y_pred": yhat_test,
+        }
+    )
+    if sample_id_col and sample_id_col in dataset_df.columns:
+        pred_df.insert(
+            1,
+            "sample_id",
+            dataset_df.iloc[test_idx][sample_id_col].to_numpy(),
+        )
+    pred_key = (
+        str(target_col),
+        str(feature_label),
+        str(split_type),
+        str(model_name),
+    )
+    pooled_prediction_rows.setdefault(pred_key, []).append(pred_df)
+
+
+def _write_pooled_predictions(
+    *,
+    pooled_prediction_rows: Dict[Tuple[str, str, str, str], List[pd.DataFrame]],
+    pred_dir: Path,
+    run_label: str,
+    csv_suffix: str,
+    show_progress: bool,
+) -> List[str]:
+    pred_dir.mkdir(parents=True, exist_ok=True)
+    pooled_prediction_paths: List[str] = []
+    for (target_col, feature_label, split_type, model_name), fold_pred_dfs in pooled_prediction_rows.items():
+        pooled_pred_df = pd.concat(fold_pred_dfs, axis=0, ignore_index=True)
+        pooled_pred_df = pooled_pred_df.sort_values(["row_index", "split_id"], kind="stable").reset_index(drop=True)
+        pred_path = pred_dir / _compose_pooled_pred_name(
+            run_label=run_label,
+            feature_label=f"{feature_label}__{target_col}",
+            split_type=split_type,
+            model_name=model_name,
+            suffix=csv_suffix,
+        )
+        pooled_pred_df.to_csv(pred_path, index=False)
+        pooled_prediction_paths.append(str(pred_path))
+        if show_progress:
+            print(
+                "[predictions-saved] "
+                f"target_col={target_col} | split_type={split_type} | "
+                f"feature_combi_name={feature_label} | model_name={model_name} | path={pred_path}"
+            )
+    return pooled_prediction_paths
 
 
 def _round_metric_dict(metrics: Dict[str, Any], ndigits: int = 4) -> Dict[str, Any]:
@@ -309,6 +389,54 @@ def _progress_row(task_type: str, test_metrics: Dict[str, Any], train_metrics: D
         else:
             row[c] = train_metrics.get(c.replace("train_", ""), np.nan)
     return pd.DataFrame([row])
+
+
+def _drop_invalid_rows_from_xy(
+    *,
+    X: np.ndarray,
+    y: np.ndarray,
+    dataset_df: pd.DataFrame,
+    show_progress: bool = True,
+    context: str = "",
+) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame, np.ndarray]:
+    X_arr = np.asarray(X)
+    y_arr = np.asarray(y)
+    if X_arr.shape[0] != y_arr.shape[0] or X_arr.shape[0] != len(dataset_df):
+        raise ValueError("X, y, and dataset_df must have the same number of rows before invalid-row filtering.")
+
+    x_nan_mask = pd.isna(pd.DataFrame(X_arr)).any(axis=1).to_numpy()
+    x_inf_mask = np.zeros(X_arr.shape[0], dtype=bool)
+    if np.issubdtype(X_arr.dtype, np.number):
+        x_inf_mask = ~np.isfinite(X_arr).all(axis=1)
+
+    if y_arr.ndim == 1:
+        y_series = pd.Series(y_arr)
+        y_nan_mask = y_series.isna().to_numpy()
+        y_inf_mask = np.zeros(y_arr.shape[0], dtype=bool)
+        if np.issubdtype(y_arr.dtype, np.number):
+            y_inf_mask = ~np.isfinite(y_arr)
+    else:
+        y_nan_mask = pd.isna(pd.DataFrame(y_arr)).any(axis=1).to_numpy()
+        y_inf_mask = np.zeros(y_arr.shape[0], dtype=bool)
+        if np.issubdtype(y_arr.dtype, np.number):
+            y_inf_mask = ~np.isfinite(y_arr).all(axis=1)
+
+    invalid_mask = np.asarray(x_nan_mask | x_inf_mask | y_nan_mask | y_inf_mask, dtype=bool)
+    keep_mask = ~invalid_mask
+    if keep_mask.all():
+        return X_arr, y_arr, dataset_df.reset_index(drop=True), keep_mask
+
+    X_clean = X_arr[keep_mask]
+    y_clean = y_arr[keep_mask]
+    dataset_clean = dataset_df.loc[keep_mask].reset_index(drop=True)
+    if len(y_clean) == 0:
+        raise ValueError("All rows were dropped due to invalid values in X or y.")
+    if show_progress:
+        print(
+            "[row-filter] "
+            f"context={context or 'workflow'} | dropped_rows={int(invalid_mask.sum())} | remaining_rows={int(len(y_clean))}"
+        )
+    return X_clean, y_clean, dataset_clean, keep_mask
 
 
 def _summary_progress_row(task_type: str, test_metrics: Dict[str, Any]) -> pd.DataFrame:
@@ -594,6 +722,8 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     metrics_csv_path = out_dir / _build_metrics_csv_name(task_type=task_type, suffix=csv_suffix)
     summary_csv_path = out_dir / _build_summary_csv_name(task_type=task_type, suffix=csv_suffix)
     run_rows: List[Dict[str, Any]] = []
+    pooled_prediction_rows: Dict[Tuple[str, str, str, str], List[pd.DataFrame]] = {}
+    pooled_prediction_paths: List[str] = []
     pooled_test_cache: Dict[Tuple[str, str, str, str, str], Dict[str, List[Any]]] = {}
     matched_coeff_pairs: set[tuple[str, str]] = set()
     tuning_cache: Dict[Tuple[str, str, str, str, str], Dict[str, Any]] = {}
@@ -605,6 +735,10 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                 feature_files = [str(x).strip() for x in list(feature_files_raw) if str(x).strip()]
                 if not feature_files:
                     raise ValueError(f"feature_combinations_dict['{feature_label}'] must contain at least one feature file name.")
+                feature_files, svd_n_components = resolve_svd_feature_config(
+                    feature_label=feature_label,
+                    feature_files=feature_files,
+                )
                 split_key = str(split_type).strip().lower()
 
                 if split_key == "custom" and custom_test_dataset_fname:
@@ -625,6 +759,27 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                         train_input_filename_prefix=input_filename_prefix,
                         test_input_filename_prefix=custom_input_filename_prefix,
                     )
+                    is_test_row = np.concatenate(
+                        [
+                            np.zeros(len(train_idx), dtype=bool),
+                            np.ones(len(test_idx), dtype=bool),
+                        ],
+                        axis=0,
+                    )
+                    X_all, y_all, dataset_df, keep_mask = _drop_invalid_rows_from_xy(
+                        X=X_all,
+                        y=y_all,
+                        dataset_df=dataset_df,
+                        show_progress=show_progress,
+                        context=f"target_col={target_col} | split_type=custom_external | feature_combi_name={feature_label}",
+                    )
+                    is_test_row = is_test_row[keep_mask]
+                    train_idx = np.flatnonzero(~is_test_row)
+                    test_idx = np.flatnonzero(is_test_row)
+                    if len(train_idx) == 0 or len(test_idx) == 0:
+                        raise ValueError(
+                            "After invalid-row filtering, custom external split has empty train or test partition."
+                        )
                     split_defs = [
                         {
                             "split_type": "custom",
@@ -641,8 +796,13 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                         target_col=target_col,
                         input_filename_prefix=input_filename_prefix,
                     )
-                    X_all = bundle.X
-                    y_all = bundle.y
+                    X_all, y_all, dataset_df, _ = _drop_invalid_rows_from_xy(
+                        X=bundle.X,
+                        y=bundle.y,
+                        dataset_df=dataset_df,
+                        show_progress=show_progress,
+                        context=f"target_col={target_col} | split_type={split_type} | feature_combi_name={feature_label}",
+                    )
                     can_use_progressive = split_key in PROGRESSIVE_SPLIT_KEYS
                     has_segment_data = (
                         segment_col in dataset_df.columns
@@ -710,6 +870,13 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
                         X_train, X_test = X_all[train_idx], X_all[test_idx]
                         y_train, y_test = y_all[train_idx], y_all[test_idx]
+                        if svd_n_components is not None:
+                            X_train, X_test, _ = fit_transform_svd_train_test(
+                                X_train=X_train,
+                                X_test=X_test,
+                                n_components=svd_n_components,
+                                random_state=split_seed,
+                            )
                         if show_progress:
                             print(
                                 "[eval-start] "
@@ -844,28 +1011,20 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             _write_pickle(model_path, payload)
 
                         if save_predictions:
-                            pred_df = pd.DataFrame(
-                                {
-                                    "row_index": test_idx,
-                                    "y_true": y_test,
-                                    "y_pred": yhat_test,
-                                }
-                            )
-                            if sample_id_col and sample_id_col in dataset_df.columns:
-                                pred_df.insert(
-                                    1,
-                                    "sample_id",
-                                    dataset_df.iloc[test_idx][sample_id_col].to_numpy(),
-                                )
-                            pred_path = pred_dir / _compose_pred_name(
-                                run_label=run_label,
-                                feature_label=f"{feature_label}__{target_col}",
-                                split_id=str(split_id),
+                            _append_fold_predictions(
+                                pooled_prediction_rows=pooled_prediction_rows,
+                                target_col=target_col,
+                                feature_label=feature_label,
+                                split_type=str(split_info["split_type"]),
                                 model_name=model_name,
-                                suffix=csv_suffix,
+                                split_id=split_id,
+                                eval_group=eval_group,
+                                test_idx=test_idx,
+                                y_test=y_test,
+                                yhat_test=yhat_test,
+                                dataset_df=dataset_df,
+                                sample_id_col=sample_id_col,
                             )
-                            pred_path.parent.mkdir(parents=True, exist_ok=True)
-                            pred_df.to_csv(pred_path, index=False)
 
                 if train_full_data_model or extract_feature_coefficients:
                     resolved_sequence_base = resolve_sequence_base(
@@ -899,8 +1058,16 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
                             n_train=int(len(y_all)),
                             feature_ntrain_param_presets=feature_ntrain_param_presets,
                         )
+                        X_full = X_all
+                        if svd_n_components is not None:
+                            X_full, _, _ = fit_transform_svd_train_test(
+                                X_train=X_all,
+                                X_test=None,
+                                n_components=svd_n_components,
+                                random_state=split_seed,
+                            )
                         model = build_model(model_name=model_name, task_type=task_type, params=params)
-                        model.fit(X_all, y_all)
+                        model.fit(X_full, y_all)
 
                         if train_full_data_model and save_trained_models:
                             model_path = model_dir / f"{run_label}__{feature_label}__{target_col}__full__{model_name}.pkl"
@@ -949,6 +1116,15 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
             f"requested={sorted(feature_model_pairs)}"
         )
 
+    if save_predictions:
+        pooled_prediction_paths = _write_pooled_predictions(
+            pooled_prediction_rows=pooled_prediction_rows,
+            pred_dir=pred_dir,
+            run_label=run_label,
+            csv_suffix=csv_suffix,
+            show_progress=show_progress,
+        )
+
     run_df = pd.DataFrame(run_rows)
     summary_df = _build_summary_dataframe(
         summary_source_mode=summary_source_mode,
@@ -989,5 +1165,6 @@ def run_supervised_ml_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "n_summary_rows": int(len(summary_df)),
         "model_dir": str(model_dir),
         "prediction_dir": str(pred_dir),
+        "prediction_csv_paths": pooled_prediction_paths,
         "output_dir": str(out_dir),
     }

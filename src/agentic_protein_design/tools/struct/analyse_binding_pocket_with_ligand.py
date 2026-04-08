@@ -80,6 +80,27 @@ class LigandPocketAnalysis:
         return ali_df
 
 
+    def pdb_to_csv(self, pdb_name, ligand_molname=None):
+        # get filepaths
+        pdb_fpath = Path(self.pdb_dir + pdb_name + '.pdb')
+        out_csv = str(pdb_fpath).replace(self.pdb_dir, self.struct_csv_dir).replace('.pdb', '.csv')
+
+        # process pdb
+        df = pdb_to_dataframe(pdb_fpath)
+        df.to_csv(out_csv, index=False)
+
+        # get backbone of protein only
+        df_backbone = df[df['atom_name'] == 'CA']
+        df_backbone.to_csv(out_csv.replace('.csv', '_backbone.csv'), index=False)
+        print(f"Parsed {len(df)} atoms >> Saved CSV to: {out_csv}")
+
+        # extract ligand data
+        if ligand_molname is not None:
+            df_ligand = df[df['chain_id'] == ligand_molname].reset_index(drop=True)
+            df_ligand.to_csv(out_csv.replace('.csv', f'_Lig{ligand_molname}.csv'))
+
+
+
     def get_binding_pocket_residues(self, struct_names, pdb_names, ligand_molname, ali_df, dist_thres, sce_fpath=None):
         """
         Get binding pocket residues by filtering by proximity to ligand
@@ -90,13 +111,10 @@ class LigandPocketAnalysis:
         ali_index_filt = []
         for i, (struct_name, pdb_name) in enumerate(zip(struct_names, pdb_names)):
             obj_num = i + 1
-            # pocket residues close to ANY of the docked ligands for the aligned complexes
-            binding_pocket_res = yasara.ListRes(
-                f'Obj {obj_num} and protein and with distance<{dist_thres} from Mol {ligand_molname}', format='RESNUM')
+            # pocket residues close to docked ligand
+            binding_pocket_res = yasara.ListRes(f'Obj {obj_num} and protein and with distance<{dist_thres} from Mol {ligand_molname}', format='RESNUM')
             # update binding pocket df
-            binding_pocket_df_struct = ali_df.loc[
-                ali_df[f'{struct_name}_res_num'].isin(binding_pocket_res), ['index', f'{struct_name}_res_num',
-                                                                            f'{struct_name}_res_aa']].copy()
+            binding_pocket_df_struct = ali_df.loc[ali_df[f'{struct_name}_res_num'].isin(binding_pocket_res), ['index', f'{struct_name}_res_num', f'{struct_name}_res_aa']].copy()
             ali_index_filt += binding_pocket_df_struct['index'].tolist()
             binding_pocket_df_struct = binding_pocket_df_struct.rename(
                 columns={f'{struct_name}_res_num': 'res_num', f'{struct_name}_res_aa': 'res_aa'})[['res_num', 'res_aa']]
@@ -121,28 +139,7 @@ class LigandPocketAnalysis:
         return binding_pocket_df, ali_index_filt
 
 
-    def pdb_to_csv(self, pdb_name, ligand_molname=None):
-        # get filepaths
-        pdb_fpath = Path(self.pdb_dir + pdb_name + '.pdb')
-        out_csv = str(pdb_fpath).replace(self.pdb_dir, self.struct_csv_dir).replace('.pdb', '.csv')
-
-        # process pdb
-        df = pdb_to_dataframe(pdb_fpath)
-        df.to_csv(out_csv, index=False)
-
-        # get backbone of protein only
-        df_backbone = df[df['atom_name'] == 'CA']
-        df_backbone.to_csv(out_csv.replace('.csv', '_backbone.csv'), index=False)
-        print(f"Parsed {len(df)} atoms >> Saved CSV to: {out_csv}")
-
-        # extract ligand data
-        if ligand_molname is not None:
-            df_ligand = df[df['chain_id'] == ligand_molname].reset_index(drop=True)
-            df_ligand.to_csv(out_csv.replace('.csv', f'_Lig{ligand_molname}.csv'))
-
-
     def get_reactive_center_coords(self, df, reactive_center_target, protein_molname, ligand_molname):
-        print('reactive_center_target:',reactive_center_target)
 
         # --- get receptor coords ---
         if 'protein' in reactive_center_target and reactive_center_target['protein'] is not None:
@@ -184,7 +181,7 @@ class LigandPocketAnalysis:
         return receptor_xyz_coords, ligand_xyz_coords
 
 
-    def plot_res_ligand_distances(self, struct_names, pdb_names, df_binding_pocket_backbone_dict,
+    def plot_res_ligand_distances(self, struct_names, pdb_names, binding_pocket_backbone_coords_dict,
                                   binding_pocket_residues_dict, plot_fname=None, reindex_alignment=False):
 
         fig, ax = plt.subplots(2, 1, figsize=(20, 10))
@@ -193,7 +190,7 @@ class LigandPocketAnalysis:
 
         if reindex_alignment:
             index_to_keep = []
-            for struct_name in struct_names:
+            for struct_name, pdb_name in zip(struct_names, pdb_names):
                 index_to_keep += self.ali_df.loc[self.ali_df[f'{struct_name}_res_num'].isin(
                     binding_pocket_residues_dict[struct_name]), 'index'].tolist()
             index_to_keep = list(set(index_to_keep))
@@ -209,7 +206,7 @@ class LigandPocketAnalysis:
             binding_pocket_residues = binding_pocket_residues_dict[struct_name]
             ali_idx_struct = alignment.loc[
                 alignment[f'{struct_name}_res_num'].isin(binding_pocket_residues), index_col].to_numpy()
-            df_binding_pocket_backbone = df_binding_pocket_backbone_dict[pdb_name]
+            df_binding_pocket_backbone = binding_pocket_backbone_coords_dict[pdb_name]
             dists_res_ligand_reactive_center = df_binding_pocket_backbone[
                 'dist_res_to_ligand_reactive_center'].to_numpy()
             min_dists_res_ligand = df_binding_pocket_backbone['min_dist_res_to_ligand'].to_numpy()
@@ -237,32 +234,72 @@ class LigandPocketAnalysis:
         plt.show()
 
 
-    def calculate_residue_ligand_distances(self, struct_names, pdb_names, residues_near_ligand_df, protein_molname,
-                                           ligand_molname, dist_thres, reactive_center_target, plot_distances=True):
+    def get_all_pairwise_distances(self, res_atom_coords, ligand_coords, how='min'):
+        # One residue-atom coordinate (shape=(3,)) against all ligand atoms (shape=(n_lig,3)).
+        ligand_coords = np.atleast_2d(np.asarray(ligand_coords, dtype=float))
+        res_atom_arr = np.asarray(res_atom_coords, dtype=float)
+        if res_atom_arr.ndim != 1 or res_atom_arr.shape[0] != 3:
+            raise ValueError(f"Expected single residue atom coordinate with shape (3,), got {res_atom_arr.shape}.")
+        all_pairwise_distances = np.linalg.norm(ligand_coords - res_atom_arr, axis=1)
+        if all_pairwise_distances.size == 0:
+            return np.nan
+        if how == 'min':
+            return round(float(np.min(all_pairwise_distances)),4)
+        if how == 'mean':
+            return round(float(np.mean(all_pairwise_distances)),4)
+        raise ValueError(f"Unsupported how='{how}'. Use 'min' or 'mean'.")
+
+
+    def calculate_residue_ligand_distances(self, struct_names, pdb_names, protein_molname,
+                                           ligand_molname, dist_thres, reactive_center_target, plot_distances=True, how='min'):
         """
         Calculate atom-wise distances between protein and ligand
         """
         ligand_pocket_analysis = []
+        binding_pocket_backbone_coords_dict = {}
         binding_pocket_residues_dict = {}
-        df_binding_pocket_backbone_dict = {}
 
+        # iterate through each structure
         for i, (struct_name, pdb_name) in enumerate(zip(struct_names, pdb_names)):
 
-            # get binding pocket residues
-            binding_pocket_residues = residues_near_ligand_df[residues_near_ligand_df['struct_name'] == pdb_name][
-                'res_num'].tolist()
-            num_res_binding_pocket_ali = len(binding_pocket_residues)
-            binding_pocket_residues_dict[struct_name] = binding_pocket_residues
-            print(f'[{pdb_name}] Binding Pocket residues ({num_res_binding_pocket_ali}): {binding_pocket_residues}')
-
-            # load CSV files, get binding pocket and ligand coordinates
+            # --- load CSV files for receptor and ligand coordinates ---
             struct_coords = pd.read_csv(f'{self.struct_csv_dir}{pdb_name}.csv')
             struct_coords_backbone = pd.read_csv(f'{self.struct_csv_dir}{pdb_name}_backbone.csv')
+            df_receptor_dict = {
+                pdb_name: struct_coords[struct_coords['chain_id']!=ligand_molname],
+                f'{pdb_name}_backbone': struct_coords_backbone[struct_coords_backbone['chain_id'] != ligand_molname]
+            }
             df_ligand = pd.read_csv(f'{self.struct_csv_dir}{pdb_name}_Lig{ligand_molname}.csv')
-            df_bindingpocket = struct_coords[struct_coords['res_num'].isin(binding_pocket_residues)].copy()
-            df_bindingpocket_backbone = struct_coords_backbone[struct_coords_backbone['res_num'].isin(binding_pocket_residues)].copy()
+            ligand_coords = df_ligand[['x', 'y', 'z']].to_numpy()
 
-            # get reactive coordinates of receptor and ligand
+            # --- get minimum distance between heavy atoms of ligand and each residue ---
+            for pdbname_wsuffix in df_receptor_dict:
+                df_receptor = df_receptor_dict[pdbname_wsuffix].copy()
+                min_dists_res_ligand = []
+                for atom_idx in range(len(df_receptor)):
+                    res_atom_coords = df_receptor.iloc[atom_idx][['x','y','z']].to_numpy()
+                    dist_res_ligand = self.get_all_pairwise_distances(res_atom_coords, ligand_coords, how=how)
+                    min_dists_res_ligand.append(dist_res_ligand)
+                df_receptor.loc[:, f'{how}_dist_res_to_ligand'] = min_dists_res_ligand
+                # Keep in-memory receptor tables in sync with newly computed distance column.
+                df_receptor_dict[pdbname_wsuffix] = df_receptor
+                # update saved CSV coords file with distances
+                df_receptor.to_csv(f'{self.struct_csv_dir}{pdbname_wsuffix}.csv')
+                # update overall alignment dataframe with distances
+                if pdbname_wsuffix.find('backbone') > -1:
+                    res_num_list = df_receptor['res_num'].tolist()
+                    self.ali_df.loc[self.ali_df[f'{struct_name}_res_num'].isin(res_num_list), f'{struct_name}_min_dist_res_to_ligand'] = min_dists_res_ligand
+
+            # --- get binding pocket residues by applying threshold --- 
+            df_receptor = df_receptor_dict[pdb_name]
+            df_receptor_backbone = df_receptor_dict[f'{pdb_name}_backbone']
+            df_bindingpocket = df_receptor[(df_receptor[f'{how}_dist_res_to_ligand']<dist_thres) & (df_receptor['chain_id']==protein_molname)].copy()
+            binding_pocket_residues = list(set(df_bindingpocket['res_num'].tolist()))
+            num_res_binding_pocket_ali = len(binding_pocket_residues)
+            binding_pocket_residues_dict[struct_name] = binding_pocket_residues
+            df_bindingpocket_backbone = df_receptor_backbone[df_receptor_backbone['res_num'].isin(binding_pocket_residues)].copy()
+
+            # --- get reactive coordinates of receptor and ligand (requires binding pocket residues) ---
             if isinstance(reactive_center_target, list):
                 reactive_center_target_struct = reactive_center_target[i]
             else:
@@ -271,41 +308,22 @@ class LigandPocketAnalysis:
                 pd.concat([df_bindingpocket, df_ligand], axis=0),
                 reactive_center_target_struct, protein_molname, ligand_molname
             )
-            # get distance between receptor and ligand reactive coordinates
+            
+            # --- get distance between receptor residues and ligand reactive coordinates ---
             reactive_center_distance = np.linalg.norm(receptor_reactive_center_coords - ligand_reactive_center_coords)
-
-            # --- distance between ligand and residue atoms  ---
             dists_res_ligand_reactive_center = []
-            min_dists_res_ligand = []
-            ligand_coords = df_ligand[['x', 'y', 'z']].to_numpy()
             for res_num in binding_pocket_residues:
-
-                # distance between ligand N (reactive center) and residue centroid ==> steric clearance for reaction coordinate
-                res_atom_coords = df_bindingpocket.loc[
-                    df_bindingpocket['res_num'] == res_num, ['x', 'y', 'z']].to_numpy()
+                res_atom_coords = df_bindingpocket.loc[df_bindingpocket['res_num'] == res_num, ['x', 'y', 'z']].to_numpy()
                 res_centroid = np.mean(res_atom_coords, axis=0)
                 dists_res_ligand_reactive_center.append(np.linalg.norm(res_centroid - ligand_reactive_center_coords))
-
-                # minimum distance between ligand and residue heavy atoms
-                all_pairwise_distances = []
-                for atom_idx in range(ligand_coords.shape[0]):
-                    ligand_atom_coords = ligand_coords[atom_idx, :]
-                    dists_res_lig_atom = list(np.linalg.norm(res_atom_coords - ligand_atom_coords, axis=1))
-                    all_pairwise_distances += dists_res_lig_atom
-                min_dists_res_ligand.append(np.min(np.array(all_pairwise_distances)))
-
             # update binding pocket coordinate dataframes
             df_bindingpocket_backbone['dist_res_to_ligand_reactive_center'] = dists_res_ligand_reactive_center
-            df_bindingpocket_backbone['min_dist_res_to_ligand'] = min_dists_res_ligand
             df_bindingpocket_backbone = df_bindingpocket_backbone.round(3)
             df_bindingpocket_backbone.to_csv(f'{self.struct_csv_dir}{pdb_name}_backbone_bindingpocket.csv')
-            df_binding_pocket_backbone_dict[pdb_name] = df_bindingpocket_backbone
-
+            binding_pocket_backbone_coords_dict[pdb_name] = df_bindingpocket_backbone
             # update overall alignment dataframe
             self.ali_df.loc[self.ali_df[f'{struct_name}_res_num'].isin(
                 binding_pocket_residues), f'{struct_name}_dist_res_to_ligand_reactive_center'] = dists_res_ligand_reactive_center
-            self.ali_df.loc[self.ali_df[f'{struct_name}_res_num'].isin(
-                binding_pocket_residues), f'{struct_name}_min_dist_res_to_ligand'] = min_dists_res_ligand
 
             # get median stats based on residues strictly < dist_thres from ligand only
             df_bindingpocket_backbone_FILT = df_bindingpocket_backbone.loc[
@@ -327,15 +345,15 @@ class LigandPocketAnalysis:
         ligand_pocket_analysis = pd.DataFrame(ligand_pocket_analysis).round(3)
 
         if plot_distances:
-            self.plot_res_ligand_distances(struct_names, pdb_names, df_binding_pocket_backbone_dict,
+            self.plot_res_ligand_distances(struct_names, pdb_names, binding_pocket_backbone_coords_dict,
                                            binding_pocket_residues_dict,
                                            plot_fname='res_ligand_distances_bindingpocket.png', reindex_alignment=True)
 
-        return ligand_pocket_analysis, df_binding_pocket_backbone_dict
+        return ligand_pocket_analysis, binding_pocket_backbone_coords_dict, binding_pocket_residues_dict
 
 
     def identify_target_residues(self, struct_names, pdb_names, dist_thres, plot_distances=True,
-                                 df_binding_pocket_backbone_dict=None, keep_pos_with_aa_variation_only=True):
+                                 binding_pocket_backbone_coords_dict=None, keep_pos_with_aa_variation_only=True):
 
         # save final alignment dataframe
         self.ali_df = self.ali_df.round(3)
@@ -348,8 +366,9 @@ class LigandPocketAnalysis:
         # filter to select positions where:
         # at least 1 residue is close to ligand
         # if required: aligned residues are NOT all the same amino acid
-        counter = 1
         ali_index_to_keep = []
+        variation_marker_list = []
+        counter = 0
         for i in range(len(self.ali_df)):
             resnum_pos = self.ali_df.iloc[i][res_num_cols].tolist()
             aa_pos = self.ali_df.iloc[i][res_aa_cols].tolist()
@@ -357,25 +376,28 @@ class LigandPocketAnalysis:
             num_diff_aa_at_pos = len(set(aa_pos))
             if num_diff_aa_at_pos==1: variation_marker = " "
             else: variation_marker = "*"
-            # skip position if only varying positions are required, and all aligned aa's are the same
-            if keep_pos_with_aa_variation_only and num_diff_aa_at_pos == 1:
-                continue
+            variation_marker_list.append(variation_marker)
             if len([d for d in dists_pos if d < dist_thres]) > 1:
+                counter += 1
                 index = self.ali_df.iloc[i]['index']
                 ali_index_to_keep.append(index)
                 print(variation_marker, counter, index, *[str(resnum) + aa for resnum, aa in zip(resnum_pos, aa_pos)], *dists_pos)
-                counter += 1
+        self.ali_df['variation_marker'] = variation_marker_list
 
         ali_df_FILT = self.ali_df[self.ali_df['index'].isin(ali_index_to_keep)]
+        if keep_pos_with_aa_variation_only:
+            ali_df_FILT = ali_df_FILT[ali_df_FILT['variation_marker']=='*']
         ali_df_FILT_index = [idx - 1 for idx in ali_df_FILT['index'].tolist()]
         print(f'Filtered alignment index ({len(ali_df_FILT_index)}):', ali_df_FILT_index)
         ali_df_FILT.to_csv(ali_df_fpath.replace('.csv', '_FILT.csv'))
 
         # get selected binding pocket positions
-        selected_residues = {
-            pdb_name: [res for res in ali_df_FILT[f'{struct_name}_res_num'].tolist() if isinstance(res, int)] for
-            struct_name, pdb_name in zip(struct_names, pdb_names)}
-        print('selected_residues:', selected_residues)
+        pocket_residues_annotated = {}
+        for struct_name, pdb_name in zip(struct_names, pdb_names):
+            res_num_list_struct = ali_df_FILT[f'{struct_name}_res_num'].tolist()
+            variation_marker_list = ali_df_FILT['variation_marker'].tolist()
+            pocket_residues_annotated[pdb_name] = [(res_num, variation_marker) for res_num, variation_marker in zip(res_num_list_struct,variation_marker_list) if isinstance(res_num, int)]
+        print('pocket_residues_annotated:', pocket_residues_annotated)
 
         # --- plot alignment of filtered binding pocket residues only ---
         visualize_msa(self.seq_align_fpath, how='seaborn', color_scheme='Taylor', plot_msa_pos_range=None,
@@ -389,18 +411,18 @@ class LigandPocketAnalysis:
             binding_pocket_residues_dict_FILT = {
                 struct_name: [res for res in ali_df_FILT[f'{struct_name}_res_num'].tolist() if isinstance(res, int)] for
                 struct_name in struct_names}
-            df_binding_pocket_backbone_dict_FILT = {
+            binding_pocket_backbone_coords_dict_FILT = {
                 pdb_name: df[df['res_num'].isin(binding_pocket_residues_dict_FILT[struct_name])].copy() for
-                struct_name, (pdb_name, df) in zip(struct_names, df_binding_pocket_backbone_dict.items())}
-            self.plot_res_ligand_distances(struct_names, pdb_names, df_binding_pocket_backbone_dict_FILT,
+                struct_name, (pdb_name, df) in zip(struct_names, binding_pocket_backbone_coords_dict.items())}
+            self.plot_res_ligand_distances(struct_names, pdb_names, binding_pocket_backbone_coords_dict_FILT,
                                            binding_pocket_residues_dict_FILT,
                                            plot_fname='res_ligand_distances_bindingpocket_FILT.png',
                                            reindex_alignment=True)
 
-        return ali_df_FILT, ali_df_FILT_index, selected_residues
+        return ali_df_FILT, ali_df_FILT_index, pocket_residues_annotated
 
 
-    def get_binding_pocket_properties(self, struct_names, residues_near_ligand_df, plot_properties=False):
+    def get_binding_pocket_properties(self, residues_near_ligand_df, plot_properties=False):
         """
         Get binding pocket properties independent of ligand
         """
@@ -426,16 +448,23 @@ class LigandPocketAnalysis:
             yasara.ColorAtom(f'Obj {i + 1} and protein and Element C', int(color))
         # color protein residues by restype
         yasara.ColorRes('protein', 'ResType')
+
         # show selected residues
         if dist_thres is not None:
             yasara.ShowRes(f'protein and with distance<{dist_thres} from Mol {ligand_molname}')
         if show_res is not None:
-            for i, (pdb_name, res_num_list) in enumerate(show_res.items()):
+            for i, (pdb_name, resnum_variationmarker_list) in enumerate(show_res.items()):
                 obj_num = i + 1
-                for res_num in res_num_list:
+                for (res_num, variation_marker) in resnum_variationmarker_list:
+                    # show residue
                     yasara.ShowRes(f'Obj {obj_num} and protein and Res {res_num}')
+                    # label residue
                     if pdb_name in label_res_from_struct:
-                        yasara.LabelRes(f'Obj {obj_num} and protein and Res {res_num}', 'RESNUM')
+                        if variation_marker=='*':
+                            label_color = 'yellow'
+                        else:
+                            label_color = 'white'
+                        yasara.LabelRes(f'Obj {obj_num} and protein and Res {res_num}', f'{variation_marker.replace(" ","")}{res_num}', color=label_color)
         # save scene with ALL proteins overlaid
         yasara.SaveSce(sce_fpath)
         print('Saved all aligned proteins to YASARA scene:', sce_fpath)
@@ -453,12 +482,16 @@ class LigandPocketAnalysis:
             # formats selected residues to show and label
             yasara.HideRes(f'Obj {obj_num_to_show} and protein')
             if show_res is not None:
-                res_num_list = show_res[pdb_name]
-                for res_num in res_num_list:
+                resnum_variationmarker_list = show_res[pdb_name]
+                for (res_num, variation_marker) in resnum_variationmarker_list:
                     res_aa = \
                     self.ali_df.loc[self.ali_df[f'{struct_name}_res_num'] == res_num, f'{struct_name}_res_aa'].iloc[0]
                     yasara.ShowRes(f'Obj {obj_num_to_show} and protein and Res {res_num}')
-                    yasara.LabelRes(f'Obj {obj_num_to_show} and protein and Res {res_num}', f'{res_num}{res_aa}')
+                    if variation_marker == '*':
+                        label_color = 'yellow'
+                    else:
+                        label_color = 'white'
+                    yasara.LabelRes(f'Obj {obj_num_to_show} and protein and Res {res_num}', f'{variation_marker.replace(" ","")}{res_num}{res_aa}', color=label_color)
 
             # save individual scene
             yasara.SaveSce(sce_fpath.replace('.sce', f'_{pdb_name}.sce'))
@@ -495,39 +528,27 @@ class LigandPocketAnalysis:
         # 2. Get binding pocket <> ligand properties
         pocket_ligand_properties = None
         if ligand_molname is not None:
-            # --- Get binding pocket residues by thresholding by distance from ligand ---
-            binding_pocket_residues_df, self.ali_index_pocket = self.get_binding_pocket_residues(struct_names,
-                                                                                                 pdb_names,
-                                                                                                 ligand_molname,
-                                                                                                 self.ali_df,
-                                                                                                 dist_thres,
-                                                                                                 sce_fpath=None)
-            binding_pocket_residues_df.to_csv(binding_pocket_residues_fpath)
-            pocket_residues_distal = {pdb_name: binding_pocket_residues_df.loc[
-                binding_pocket_residues_df['struct_name'] == pdb_name, 'res_num'].tolist() for pdb_name in pdb_names}
 
             # --- Extract CSV for protein and ligand from PDB ---
             for pdb_name in pdb_names:
                 self.pdb_to_csv(pdb_name, ligand_molname)
 
-            # --- Calculate ligand-residue distances for binding pocket residues ---
-            pocket_ligand_properties, df_binding_pocket_backbone_dict = self.calculate_residue_ligand_distances(
-                struct_names, pdb_names, binding_pocket_residues_df, protein_molname, ligand_molname, dist_thres,
+            # --- Calculate ligand-residue distances ---
+            pocket_ligand_properties, binding_pocket_backbone_coords_dict, binding_pocket_residues_dict = self.calculate_residue_ligand_distances(
+                struct_names, pdb_names, protein_molname, ligand_molname, dist_thres,
                 reactive_center_target, plot_distances=True)
             pocket_ligand_properties.to_csv(self.pdb_dir + 'bindingpocket_wLig_analysis.csv')
 
             # --- Identify residues to pay attention to ---
             ## identify residues that differ
-            ali_df_FILT, ali_df_FILT_index, pocket_residues_proximal = self.identify_target_residues(struct_names,
-                                                                                                     pdb_names,
-                                                                                                     dist_thres,
-                                                                                                     plot_distances=True,
-                                                                                                     df_binding_pocket_backbone_dict=df_binding_pocket_backbone_dict,
+            ali_df_FILT, ali_df_FILT_index, pocket_residues_annotated = self.identify_target_residues(struct_names, pdb_names,
+                                                                                                     dist_thres, plot_distances=True,
+                                                                                                     binding_pocket_backbone_coords_dict=binding_pocket_backbone_coords_dict,
                                                                                                      keep_pos_with_aa_variation_only=keep_pos_with_aa_variation_only)
 
             # plot and save YASARA scene with all structs overlaid, and individually
             self.format_sce(struct_names, pdb_names, ligand_molname, sce_fpath, dist_thres=None,
-                            show_res=pocket_residues_proximal, label_res_from_struct=[pdb_names[0]],
+                            show_res=pocket_residues_annotated, label_res_from_struct=[pdb_names[0]],
                             color_range=[120, 320])
 
         else:
@@ -537,12 +558,20 @@ class LigandPocketAnalysis:
         # 2. Get binding pocket properties (no ligand)
         pocket_properties_distal, pocket_properties_proximal = None, None
         if analyse_binding_pocket_without_ligand:
+            # get distal and proximal ligands
+            pocket_residues_proximal = {}
+            pocket_residues_distal = {}
+            for pdb_name, df_binding_pocket_backbone in binding_pocket_backbone_coords_dict.items():
+                pocket_residues_proximal[pdb_name] = df_binding_pocket_backbone.loc[df_binding_pocket_backbone['dist_res_to_ligand_reactive_center'] < 6, 'res_num'].tolist()
+                pocket_residues_distal[pdb_name] = df_binding_pocket_backbone.loc[df_binding_pocket_backbone['dist_res_to_ligand_reactive_center'] > 5, 'res_num'].tolist()
             # get properties of all aligned residues
-            pocket_properties_distal, _, _ = self.get_binding_pocket_properties(pdb_names, pocket_residues_distal)
+            print('Obtaining distal pocket properties...')
+            pocket_properties_distal, _, _ = self.get_binding_pocket_properties(pocket_residues_distal)
             pocket_properties_distal = pd.DataFrame(pocket_properties_distal).round(3)
             pocket_properties_distal.to_csv(self.pdb_dir + 'bindingpocket-distal_woLig_analysis.csv')
             # get properties of only residues close to docked ligand
-            pocket_properties_proximal, _, _ = self.get_binding_pocket_properties(pdb_names, pocket_residues_proximal)
+            print('Obtaining proximal pocket properties...')
+            pocket_properties_proximal, _, _ = self.get_binding_pocket_properties(pocket_residues_proximal)
             pocket_properties_proximal = pd.DataFrame(pocket_properties_proximal).round(3)
             pocket_properties_proximal.to_csv(self.pdb_dir + 'bindingpocket-proximal_woLig_analysis.csv')
 
@@ -551,7 +580,6 @@ class LigandPocketAnalysis:
             pocket_ligand_cols = [c for c in pocket_ligand_properties.columns.tolist() if c != 'struct_name']
             pocket_cols = [c for c in pocket_properties_distal.columns.tolist() if c != 'struct_name']
             cols = ['struct_name'] + pocket_ligand_cols
-            print(cols)
             for c in pocket_cols:
                 cols += [f'{c} (distal)', f'{c} (proximal)']
             res = pd.concat([

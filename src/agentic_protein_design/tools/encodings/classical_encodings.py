@@ -3,9 +3,8 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import scipy.sparse as sp
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 from project_config.variables import aaList, aa2idx
 from agentic_protein_design.tools.utils.seq_utils import fetch_sequences_from_fasta
@@ -79,39 +78,6 @@ GEORGIEV_AA_TO_VECTOR = {
     aa: np.array([param[aa] for param in GEORGIEV_PARAMETERS], dtype=np.float32)
     for aa in aaList
 }
-
-def load_sequences_csv(csv_path, sequence_col='sequence', sequence_base_col='sequence_base'):
-    """
-    Load mutant/base sequence columns from a CSV file.
-
-    Args:
-        csv_path: Input CSV path.
-        sequence_col: Column containing mutant/target sequences.
-        sequence_base_col: Optional base/wildtype sequence column.
-
-    Returns:
-        Tuple `(sequence_sequence_base_list_or_none, sequence_list)`.
-    """
-    df = pd.read_csv(csv_path)
-    if sequence_col not in df.columns:
-        raise ValueError(f"Column '{sequence_col}' not found in {csv_path}")
-    if sequence_base_col in df.columns:
-        sequence_sequence_base_list = df[sequence_base_col].astype(str).tolist()
-    else:
-        sequence_sequence_base_list = None
-    sequence_list = df[sequence_col].astype(str).tolist()
-    return sequence_sequence_base_list, sequence_list
-
-
-def load_sequences_fasta(fasta_path):
-    sequence_list, _, _ = fetch_sequences_from_fasta(fasta_path)
-    return None, sequence_list
-
-
-def get_max_length(sequences, max_length=None):
-    if max_length is not None:
-        return max_length
-    return max(len(seq) for seq in sequences)
 
 
 def one_hot_encode_sequence(sequence, max_length):

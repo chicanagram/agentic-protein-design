@@ -3,12 +3,43 @@ import os
 import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns', None)
-import matplotlib.pyplot as plt
+from Bio.PDB import PDBParser, PDBIO, Select, is_aa
 from typing import Dict, Literal
 from project_config.variables import address_dict, subfolders
 
+dssp_property_names = [
+    'res_num',
+    'res',
+    'secondary_structure',
+    # {H,B,E,G,I,P,T,S} H = α-helix; B = residue in isolated β-bridge; E = extended strand, participates in β ladder; G = 310-helix; I = π-helix; P = κ-helix (poly-proline II helix); T = hydrogen-bonded turn; S = bend
+    'relative ASA',  # relative accessible solvent area
+    'phi',  # peptide backbone torsion angle phi
+    'psi',  # peptide backbone torsion angle psi
+    'NH_O_1_relidx',  # relative index of H-bond 1 (between N-H group of this residue with O of another residue)
+    'NH_O_1_energy',  # energy of H-bond 1 (between N-H group of this residue with O of another residue)
+    'O_NH_1_relidx',  # relative index of H-bond 1 (between O group of this residue with N-H of another residue)
+    'O_NH_1_energy',  # energy of H-bond 1 (between O group of this residue with N-H of another residue)
+    'NH_O_2_relidx',  # relative index of H-bond 2 (between N-H group of this residue with O of another residue)
+    'NH_O_2_energy',  # energy of H-bond 2 (between N-H group of this residue with O of another residue)
+    'O_NH_2_relidx',  # relative index of H-bond 2 (between O group of this residue with N-H of another residue)
+    'O_NH_2_energy'  # energy of H-bond 2 (between O group of this residue with N-H of another residue)
+]
+
+dssp_secondary_structure_shortform = {
+    'H': 'α-helix',
+    'B': 'residue in isolated β-bridge',
+    'E': 'extended strand, participates in β ladder',
+    'G': '310-helix',
+    'I': 'π-helix',
+    'P': 'κ-helix (poly-proline II helix)',
+    'T': 'hydrogen-bonded turn',
+    'S': 'bend',
+    'C': 'coil',
+    '-': 'loop/coil'
+}
+
 def compute_index_summary(
-    df_pocket: pd.DataFrame,
+    df_residues: pd.DataFrame,
     value_col: Literal["kd_hydro", "hw_polarity"],
     weight_mode: Literal["mean", "weighted"] = "mean",
     dist_col: str = "dist_to_centroid",
@@ -19,7 +50,7 @@ def compute_index_summary(
 
     Parameters
     ----------
-    df_pocket : pd.DataFrame
+    df_residues : pd.DataFrame
         Must contain `value_col` and `dist_col`.
     value_col : {"kd_hydro", "hw_polarity"}
         Column containing numeric index values per residue.
@@ -36,12 +67,12 @@ def compute_index_summary(
     float
         Summary value (NaNs are ignored).
     """
-    if value_col not in df_pocket.columns:
+    if value_col not in df_residues.columns:
         raise KeyError(f"Missing required column: {value_col}")
-    if weight_mode == "weighted" and dist_col not in df_pocket.columns:
+    if weight_mode == "weighted" and dist_col not in df_residues.columns:
         raise KeyError(f"Missing required column: {dist_col}")
 
-    vals = pd.to_numeric(df_pocket[value_col], errors="coerce").to_numpy(dtype=float)
+    vals = pd.to_numeric(df_residues[value_col], errors="coerce").to_numpy(dtype=float)
     mask = np.isfinite(vals)
 
     if not mask.any():
@@ -51,7 +82,7 @@ def compute_index_summary(
         return float(np.nanmean(vals))
 
     # weighted
-    d = pd.to_numeric(df_pocket.loc[:, dist_col], errors="coerce").to_numpy(dtype=float)
+    d = pd.to_numeric(df_residues.loc[:, dist_col], errors="coerce").to_numpy(dtype=float)
     w = 1.0 / (d + eps)
     w[~np.isfinite(w)] = np.nan
 
@@ -62,8 +93,8 @@ def compute_index_summary(
 
     return float(np.average(vals[m], weights=w[m]))
 
-def polarity_report(
-    df_pocket: pd.DataFrame,
+def get_residue_polarity(
+    df_residues: pd.DataFrame,
     *,
     aa_col: str = "res",
     aa_polarity_col: str = "aa_polarity",
@@ -83,7 +114,7 @@ def polarity_report(
 
     Assumptions
     -----------
-    df_pocket already contains:
+    df_residues already contains:
       - 'res' (1-letter AA)
       - 'aa_polarity' categorical (e.g. np/p~/p-/p+)
       - 'kd_hydro' numeric
@@ -97,26 +128,26 @@ def polarity_report(
     """
     # --- KD / HW summaries (re-using the same function) ---
     kd_mean = compute_index_summary(
-        df_pocket, value_col=kd_col, weight_mode="mean", dist_col=dist_col, eps=eps
+        df_residues, value_col=kd_col, weight_mode="mean", dist_col=dist_col, eps=eps
     )
     kd_weighted = compute_index_summary(
-        df_pocket, value_col=kd_col, weight_mode="weighted", dist_col=dist_col, eps=eps
+        df_residues, value_col=kd_col, weight_mode="weighted", dist_col=dist_col, eps=eps
     )
     hw_mean = compute_index_summary(
-        df_pocket, value_col=hw_col, weight_mode="mean", dist_col=dist_col, eps=eps
+        df_residues, value_col=hw_col, weight_mode="mean", dist_col=dist_col, eps=eps
     )
     hw_weighted = compute_index_summary(
-        df_pocket, value_col=hw_col, weight_mode="weighted", dist_col=dist_col, eps=eps
+        df_residues, value_col=hw_col, weight_mode="weighted", dist_col=dist_col, eps=eps
     )
 
     # --- Composition metrics ---
-    if aa_col not in df_pocket.columns:
+    if aa_col not in df_residues.columns:
         raise KeyError(f"Missing required column: {aa_col}")
-    if aa_polarity_col not in df_pocket.columns:
+    if aa_polarity_col not in df_residues.columns:
         raise KeyError(f"Missing required column: {aa_polarity_col}")
 
-    aa = df_pocket[aa_col].astype(str).str.strip().str.upper()
-    cat = df_pocket[aa_polarity_col].astype(str).str.strip()
+    aa = df_residues[aa_col].astype(str).str.strip().str.upper()
+    cat = df_residues[aa_polarity_col].astype(str).str.strip()
 
     # Keep only standard 20 AA rows (optional but helps avoid weird residues)
     std_mask = aa.isin(list("ACDEFGHIKLMNPQRSTVWY"))
@@ -139,8 +170,8 @@ def polarity_report(
         "polar_fraction": polar_fraction,
     }
 
-def sterics_report(
-    df_pocket: pd.DataFrame,
+def get_residue_sterics(
+    df_residues: pd.DataFrame,
     *,
     dist_col: str = "distance_to_centroid",
     aa_col: str = "res",
@@ -171,13 +202,13 @@ def sterics_report(
     - Weighted metrics use only rows where both distance and volume are finite.
     """
     for c in (dist_col, aa_col, vol_col):
-        if c not in df_pocket.columns:
+        if c not in df_residues.columns:
             raise KeyError(f"Missing required column: {c}")
 
-    aa = df_pocket[aa_col].astype(str).str.strip().str.upper()
+    aa = df_residues[aa_col].astype(str).str.strip().str.upper()
 
-    dist = pd.to_numeric(df_pocket[dist_col], errors="coerce").to_numpy(dtype=float)
-    vol = pd.to_numeric(df_pocket[vol_col], errors="coerce").to_numpy(dtype=float)
+    dist = pd.to_numeric(df_residues[dist_col], errors="coerce").to_numpy(dtype=float)
+    vol = pd.to_numeric(df_residues[vol_col], errors="coerce").to_numpy(dtype=float)
 
     # ---- Unweighted stats (volume only) ----
     if np.isfinite(vol).any():
@@ -235,3 +266,88 @@ def sterics_report(
         "bulky_residue_frac": bulky_residue_frac,
         "bulky_residue_frac_weighted": bulky_residue_frac_weighted,
     }
+
+
+def get_residue_sasa(
+        pdb_fpath,
+        data_fbase
+):
+    from Bio.PDB.SASA import ShrakeRupley
+    p = PDBParser(QUIET=1)
+    struct = p.get_structure(data_fbase, pdb_fpath)
+    # residue level SASA
+    sr_residue = ShrakeRupley()
+    sr_residue.compute(struct, level="R")
+    sasa_residues = []
+    num_residues = len(struct[0]["A"])
+    for i in range(1,num_residues+1):
+        residue_id = (" ", i, " ")
+        sasa_residues.append(round(struct[0]["A"][residue_id].sasa, 2))
+    sasa_residues = np.array(sasa_residues)
+    sasa_residues_sum = np.sum(sasa_residues)
+    print('Total SASA:', sasa_residues_sum)
+
+
+    return np.array(sasa_residues)
+
+
+def get_residue_secondary_structure_surface_area(
+        pdb_fpath,
+        data_fbase,
+        cols_to_return=['res_num', 'res', 'secondary_structure', 'relative_ASA', 'SASA']
+):
+    from Bio.PDB.DSSP import DSSP
+    from Bio.PDB.SASA import ShrakeRupley
+
+
+    # get model with protein chain
+    p = PDBParser()
+    structure = p.get_structure(data_fbase, pdb_fpath)
+    sr_residue = ShrakeRupley()
+    sr_residue.compute(structure, level="R")
+    model = structure[0]
+    chain_ids = [chain.get_id() for chain in model.get_chains()]
+    print(chain_ids)
+    protein_chain_id = chain_ids[0]
+    chain_ids_to_remove = [id for id in chain_ids if id!=protein_chain_id]
+    for id in chain_ids_to_remove:
+        model.detach_child(id)
+        print(f'Removed chain id {id} for DSSP processing.')
+    num_residues = len(list(model[protein_chain_id].get_residues()))
+
+    # remove any extra remark lines which could cause an error when DSSP parses the file
+    with open(pdb_fpath, 'r') as f:
+        lines = f.readlines()
+        lines_cleaned = []
+        for l in lines:
+            if l[:6]!='REMARK':
+                lines_cleaned.append(l)
+    if len(lines_cleaned)<len(lines):
+        with open(pdb_fpath, 'w') as f:
+            f.writelines(lines_cleaned)
+        print('Re-saved cleaned up PDB file.')
+
+    # get DSSP & SASA properties for each residue
+    dssp = DSSP(model, pdb_fpath, dssp='mkdssp')
+    dssp_res = []
+    for res_num in range(1,num_residues+1):
+        residue_id = (" ", res_num, " ")
+        res_key = (protein_chain_id, residue_id)
+        if res_key not in dssp:
+            continue
+        res_vals = dssp[res_key]
+        res_dict = {property_name: val for property_name, val in zip(dssp_property_names, res_vals)}
+        res_dict.update({'SASA': round(model[protein_chain_id][residue_id].sasa, 2)})
+        dssp_res.append(res_dict)
+    dssp_res = pd.DataFrame(dssp_res).rename(columns={'relative ASA': 'relative_ASA'})
+
+    # replace shortform secondary structure names
+    dssp_res['secondary_structure'] = dssp_res['secondary_structure'].astype(str)
+    for letter, description in dssp_secondary_structure_shortform.items():
+        dssp_res.loc[dssp_res['secondary_structure']==letter, 'secondary_structure'] = description
+
+    # return selected columns only
+    dssp_res = dssp_res[cols_to_return]
+    print(dssp_res.head())
+
+    return dssp_res

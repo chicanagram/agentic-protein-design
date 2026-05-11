@@ -5,7 +5,7 @@ from typing import Optional, Dict, List
 from project_config.variables import address_dict, subfolders, aaList, mapping_rev, \
     kyte_doolittle_hydrophobicity_index, hopp_woods_polarity_index, \
     aa_sidechain_volume, aa_polarity_mapping
-
+from .residue_structural_annotations import get_residue_secondary_structure_surface_area
 
 def parse_pdb_atom_line(line: str) -> Dict[str, Optional[object]]:
     """
@@ -31,7 +31,7 @@ def parse_pdb_atom_line(line: str) -> Dict[str, Optional[object]]:
     row_dict = {
         "serial": to_int(padded[6:11]),           # 7–11
         "res_num": to_int(padded[22:26]),         # 23–26
-        "res_name": res_name,  # 18–20
+        "res_name": res_name,                     # 18–20
         "res": res_symbol,
         "atom_name": padded[12:16].strip(),       # 13–16
         "chain_id": padded[21:22].strip() or None,# 22
@@ -59,6 +59,7 @@ def pdb_to_dataframe(pdb_path: Path | str) -> pd.DataFrame:
     """
     Parse ATOM and HETATM records from a PDB file into a DataFrame.
     """
+    print(f'Processing {pdb_path}...')
     pdb_path = Path(pdb_path)
     rows: List[Dict[str, Optional[object]]] = []
 
@@ -69,6 +70,13 @@ def pdb_to_dataframe(pdb_path: Path | str) -> pd.DataFrame:
                 rows.append(parse_pdb_atom_line(line))
     df = pd.DataFrame(rows)
     df = df[df['element']!='H']
+
+    # sec structure
+    df_secondary_structure = get_residue_secondary_structure_surface_area(pdb_path, 'protein')
+    df = df.merge(df_secondary_structure, on=['res_num', 'res'], how='left')
+
+    # normalized distance to centroid
+
     return df
 
 

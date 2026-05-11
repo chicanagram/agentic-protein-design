@@ -1,26 +1,3 @@
-REMARK YASARA *************************************************************
-REMARK YASARA *                                                           *
-REMARK YASARA *                     Y  A  S  A  R  A                      *
-REMARK YASARA *                                                           *
-REMARK YASARA *   Yet Another Scientific Artificial Reality Application   *
-REMARK YASARA *                                                           *
-REMARK YASARA *       MOLECULE STRUCTURE FILE, PDB FORMAT VERSION 3       *
-REMARK YASARA * Note that this PDB format variant was introduced in 2007  *
-REMARK YASARA *    and is likely to cause problems with older software.   *
-REMARK YASARA *                                                           *
-REMARK YASARA * Just use YASARA every day to make your questions go away! *
-REMARK YASARA *                                                           *
-REMARK YASARA *                      www.YASARA.org                       *
-REMARK YASARA *                                                           *
-REMARK YASARA *************************************************************
-REMARK YASARA
-REMARK YASARA Version:           25.1.13.M.64
-REMARK YASARA Written on:        Tue Mar  3 12:26:35 2026
-REMARK YASARA Number of models:  1
-REMARK YASARA Number of atoms:   3770
-REMARK YASARA Please address questions or suggestions to: Eliza@yasara.org
-REMARK YASARA
-REMARK   4 0UNK COMPLIES WITH FORMAT V. 3.0, 1-DEC-2006
 SEQRES   1 A  243  MET LYS LEU THR LEU LEU LEU SER ALA VAL PHE SER GLY 
 SEQRES   2 A  243  ALA VAL ALA THR LEU ALA GLU THR SER GLU TRP SER PRO 
 SEQRES   3 A  243  PRO GLU SER GLY ASP ALA ARG SER PRO CYS PRO LEU LEU 

@@ -19,6 +19,7 @@ optuna
 biopython
 pyhmmer
 aaindex
+protlearn
 esm
 openprotein-python
 pymol-open-source

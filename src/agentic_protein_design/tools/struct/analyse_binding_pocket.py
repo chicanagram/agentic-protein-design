@@ -78,7 +78,9 @@ class PocketAnalysis:
         csv_fname = struct_name + '.csv'
         csv_fpath = self.struct_csv_dir + csv_fname
         csv_backbone_fpath = csv_fpath.replace('.csv', '_backbone.csv')
-        if not os.path.exists(csv_fpath) or os.path.exists(csv_backbone_fpath):
+        # Rebuild only when one of the required files is missing.
+        # Previous logic rebuilt whenever backbone existed, which overwrote augmented columns.
+        if (not os.path.exists(csv_fpath)) or (not os.path.exists(csv_backbone_fpath)):
             self.pdb_to_csv(struct_name)
         structure_atoms_df = pd.read_csv(csv_fpath)
         structure_backbone_df = pd.read_csv(csv_backbone_fpath)

@@ -268,29 +268,6 @@ def get_residue_sterics(
     }
 
 
-def get_residue_sasa(
-        pdb_fpath,
-        data_fbase
-):
-    from Bio.PDB.SASA import ShrakeRupley
-    p = PDBParser(QUIET=1)
-    struct = p.get_structure(data_fbase, pdb_fpath)
-    # residue level SASA
-    sr_residue = ShrakeRupley()
-    sr_residue.compute(struct, level="R")
-    sasa_residues = []
-    num_residues = len(struct[0]["A"])
-    for i in range(1,num_residues+1):
-        residue_id = (" ", i, " ")
-        sasa_residues.append(round(struct[0]["A"][residue_id].sasa, 2))
-    sasa_residues = np.array(sasa_residues)
-    sasa_residues_sum = np.sum(sasa_residues)
-    print('Total SASA:', sasa_residues_sum)
-
-
-    return np.array(sasa_residues)
-
-
 def get_residue_secondary_structure_surface_area(
         pdb_fpath,
         data_fbase,
@@ -334,17 +311,17 @@ def get_residue_secondary_structure_surface_area(
         residue_id = (" ", res_num, " ")
         res_key = (protein_chain_id, residue_id)
         if res_key not in dssp:
+            print(f'Skipping {res_key}')
             continue
         res_vals = dssp[res_key]
         res_dict = {property_name: val for property_name, val in zip(dssp_property_names, res_vals)}
-        res_dict.update({'SASA': round(model[protein_chain_id][residue_id].sasa, 2)})
+        res_dict.update({
+            'res_num': res_num,
+            'secondary_structure': dssp_secondary_structure_shortform[res_dict['secondary_structure']],
+            'SASA': round(model[protein_chain_id][residue_id].sasa, 2)
+        })
         dssp_res.append(res_dict)
     dssp_res = pd.DataFrame(dssp_res).rename(columns={'relative ASA': 'relative_ASA'})
-
-    # replace shortform secondary structure names
-    dssp_res['secondary_structure'] = dssp_res['secondary_structure'].astype(str)
-    for letter, description in dssp_secondary_structure_shortform.items():
-        dssp_res.loc[dssp_res['secondary_structure']==letter, 'secondary_structure'] = description
 
     # return selected columns only
     dssp_res = dssp_res[cols_to_return]

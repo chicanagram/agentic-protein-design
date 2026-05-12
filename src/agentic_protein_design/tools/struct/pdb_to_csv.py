@@ -2,10 +2,43 @@ import os
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, List
-from project_config.variables import address_dict, subfolders, aaList, mapping_rev, \
-    kyte_doolittle_hydrophobicity_index, hopp_woods_polarity_index, \
-    aa_sidechain_volume, aa_polarity_mapping
-from .residue_structural_annotations import get_residue_secondary_structure_surface_area
+
+# Support both:
+# 1) package imports from main workflows, and
+# 2) direct script execution from IDE (__main__).
+try:
+    from project_config.variables import (
+        address_dict,
+        subfolders,
+        aaList,
+        mapping_rev,
+        kyte_doolittle_hydrophobicity_index,
+        hopp_woods_polarity_index,
+        aa_sidechain_volume,
+        aa_polarity_mapping,
+    )
+except ModuleNotFoundError:
+    import sys
+    _ROOT = Path(__file__).resolve().parents[4]
+    if str(_ROOT) not in sys.path:
+        sys.path.insert(0, str(_ROOT))
+    from project_config.variables import (
+        address_dict,
+        subfolders,
+        aaList,
+        mapping_rev,
+        kyte_doolittle_hydrophobicity_index,
+        hopp_woods_polarity_index,
+        aa_sidechain_volume,
+        aa_polarity_mapping,
+    )
+
+try:
+    from agentic_protein_design.tools.struct.residue_structural_annotations import (
+        get_residue_secondary_structure_surface_area,
+    )
+except ModuleNotFoundError:
+    from residue_structural_annotations import get_residue_secondary_structure_surface_area
 
 def parse_pdb_atom_line(line: str) -> Dict[str, Optional[object]]:
     """
@@ -80,37 +113,16 @@ def pdb_to_dataframe(pdb_path: Path | str) -> pd.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    os.chdir('../')
-
-    # ---- user input ----
-    data_folder = address_dict['PIPS2']
-    data_subfolder = 'UPOs_peroxygenation_analysis/docked/structure_csv/' # 'CARs' # 'sidestream_cocktail' #
+if __name__=='__main__':
+    os.chdir('../../../..')
+    print(os.getcwd())
+    data_folder = address_dict['examples']
+    data_subfolder = ''
     pdb_dir = data_folder + subfolders['pdb'] + data_subfolder
-    pdb_fname_list = [f for f in os.listdir(pdb_dir) if f.find('.pdb')>-1]
-    extract_ligand_data_molname = ['D'] # None
-
-    # process files
-    for pdb_fname in pdb_fname_list:
-        print(pdb_fname)
-
-        # get filepaths
-        pdb_fpath = Path(pdb_dir + pdb_fname)
-        out_csv = str(pdb_fpath).replace('.pdb', '.csv')
-
-        # process pdb
-        df = pdb_to_dataframe(pdb_fpath)
-        df.to_csv(out_csv, index=False)
-
-        # get backbone of protein only
-        df_backbone = df[df['atom_name']=='CA']
-        df_backbone.to_csv(out_csv.replace('.csv','_backbone.csv'), index=False)
-        print(f"Parsed {len(df)} atoms")
-        print(f"Saved CSV to: {out_csv}")
-
-        # extract ligand data
-        if extract_ligand_data_molname is not None:
-            # extract ligand CSV
-            for ligand_molname in extract_ligand_data_molname:
-                df_ligand = df[df['chain_id']==ligand_molname].reset_index(drop=True)
-                df_ligand.to_csv(out_csv.replace('.csv', f'_Lig{ligand_molname}.csv'))
+    pdb_fname = 'CviUPO_S82.pdb'
+    pdb_path = pdb_dir + pdb_fname
+    csv_path = pdb_dir + 'structure_csv/' + pdb_fname.replace('.pdb', '_test.csv')
+    df = pdb_to_dataframe(pdb_path)
+    print(df)
+    df.to_csv(csv_path)
+    print(f'Saved CSV to: {csv_path}')

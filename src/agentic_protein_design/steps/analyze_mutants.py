@@ -64,12 +64,17 @@ PREFERRED_RESIDUE_CONTEXT_COLUMNS = [
     "kd_hydro",
     "hw_polarity",
     "aa_vol",
+    "secondary_structure",
+    "relative_ASA",
+    "SASA",
+    "exposure_bucket",
     "dist_res_to_ligand_reactive_center",
     "min_dist_res_to_ligand",
 ]
 PREFERRED_BINDING_SUMMARY_COLUMNS = [
     "struct_name",
     "num_pocket_res_ali",
+    "num_pocket_res<8",
     "num_pocket_res<6",
     "reactive_center_distance",
     "median_dist_res_to_ligand_reactive_center",
@@ -85,6 +90,45 @@ PREFERRED_BINDING_SUMMARY_COLUMNS = [
     "polar_fraction (proximal)",
     "polar_fraction (distal)",
 ]
+RESIDUE_CONTEXT_EXPORT_COLUMNS = [
+    "res_num",
+    "res_name",
+    "res",
+    "in_binding_pocket",
+    "dist_res_to_ligand_reactive_center",
+    "min_dist_res_to_ligand",
+    "secondary_structure",
+    "relative_ASA",
+    "SASA",
+    "exposure_bucket",
+    "aa_polarity",
+    "kd_hydro",
+    "hw_polarity",
+    "aa_vol",
+]
+MUTATION_EVIDENCE_EXCLUDE_COLUMNS = {"mutation", "mutant", "Mutation", "Mutant"}
+AMINO_ACID_PROPERTIES: Dict[str, Dict[str, Any]] = {
+    "A": {"name": "Ala", "aa_polarity": "np", "kd_hydro": 1.8, "hw_polarity": -0.5, "aa_vol": 67.0, "charge_class": "neutral"},
+    "R": {"name": "Arg", "aa_polarity": "p+", "kd_hydro": -4.5, "hw_polarity": 3.0, "aa_vol": 148.0, "charge_class": "positive"},
+    "N": {"name": "Asn", "aa_polarity": "p~", "kd_hydro": -3.5, "hw_polarity": 0.2, "aa_vol": 96.0, "charge_class": "neutral"},
+    "D": {"name": "Asp", "aa_polarity": "p-", "kd_hydro": -3.5, "hw_polarity": 3.0, "aa_vol": 91.0, "charge_class": "negative"},
+    "C": {"name": "Cys", "aa_polarity": "p~", "kd_hydro": 2.5, "hw_polarity": -1.0, "aa_vol": 86.0, "charge_class": "neutral"},
+    "Q": {"name": "Gln", "aa_polarity": "p~", "kd_hydro": -3.5, "hw_polarity": 0.2, "aa_vol": 114.0, "charge_class": "neutral"},
+    "E": {"name": "Glu", "aa_polarity": "p-", "kd_hydro": -3.5, "hw_polarity": 3.0, "aa_vol": 109.0, "charge_class": "negative"},
+    "G": {"name": "Gly", "aa_polarity": "np", "kd_hydro": -0.4, "hw_polarity": 0.0, "aa_vol": 48.0, "charge_class": "neutral"},
+    "H": {"name": "His", "aa_polarity": "p+", "kd_hydro": -3.2, "hw_polarity": -0.5, "aa_vol": 118.0, "charge_class": "positive"},
+    "I": {"name": "Ile", "aa_polarity": "np", "kd_hydro": 4.5, "hw_polarity": -1.8, "aa_vol": 124.0, "charge_class": "neutral"},
+    "L": {"name": "Leu", "aa_polarity": "np", "kd_hydro": 3.8, "hw_polarity": -1.8, "aa_vol": 124.0, "charge_class": "neutral"},
+    "K": {"name": "Lys", "aa_polarity": "p+", "kd_hydro": -3.9, "hw_polarity": 3.0, "aa_vol": 135.0, "charge_class": "positive"},
+    "M": {"name": "Met", "aa_polarity": "np", "kd_hydro": 1.9, "hw_polarity": -1.3, "aa_vol": 124.0, "charge_class": "neutral"},
+    "F": {"name": "Phe", "aa_polarity": "np", "kd_hydro": 2.8, "hw_polarity": -2.5, "aa_vol": 135.0, "charge_class": "neutral"},
+    "P": {"name": "Pro", "aa_polarity": "np", "kd_hydro": -1.6, "hw_polarity": 0.0, "aa_vol": 90.0, "charge_class": "neutral"},
+    "S": {"name": "Ser", "aa_polarity": "p~", "kd_hydro": -0.8, "hw_polarity": 0.3, "aa_vol": 73.0, "charge_class": "neutral"},
+    "T": {"name": "Thr", "aa_polarity": "p~", "kd_hydro": -0.7, "hw_polarity": -0.4, "aa_vol": 93.0, "charge_class": "neutral"},
+    "W": {"name": "Trp", "aa_polarity": "np", "kd_hydro": -0.9, "hw_polarity": -3.4, "aa_vol": 163.0, "charge_class": "neutral"},
+    "Y": {"name": "Tyr", "aa_polarity": "p~", "kd_hydro": -1.3, "hw_polarity": -2.3, "aa_vol": 141.0, "charge_class": "neutral"},
+    "V": {"name": "Val", "aa_polarity": "np", "kd_hydro": 4.2, "hw_polarity": -1.5, "aa_vol": 105.0, "charge_class": "neutral"},
+}
 MUTANT_ANALYSIS_REFLECTION_PROMPT = """
 You are reviewing an existing mutant-effect explanation table for a protein engineering workflow.
 
@@ -120,8 +164,9 @@ These units are already grouped for you as:
 - clusters of multi-mutation mutants.
 
 Use the provided assay data, residue-level structural context, binding-pocket membership, ligand distances,
+secondary structure, solvent exposure, mutation-level stability or developability scores when available,
 and backbone binding-pocket summary metrics to infer likely effects on activity, selectivity, expression,
-and binding-pocket behavior.
+stability, solubility, and binding-pocket behavior.
 
 Output contract (strict):
 - Return ONLY a JSON array.
@@ -134,10 +179,15 @@ Output contract (strict):
 Rules:
 - Ground all reasoning in the provided context, as well as any background knowledge of the amino acid substitutions, enzyme and reaction.
 - If a residue is absent from the binding-pocket residue table, treat it as likely outside the defined binding pocket/tunnel region.
+- Prioritize the most mutation-specific evidence first: pocket membership, ligand proximity, solvent exposure, secondary structure,
+  amino-acid chemistry changes, and strong consensus mutation scores.
 - For single-position groups, describe only why that residue position is important or sensitive in the enzyme context.
 - Do not mention any specific substitution (for example Val -> Thr) in the position-level explanation, even if only one substitution is available for that position.
 - For single substitutions, describe the likely effect of that exact amino-acid substitution (for example Ala -> Phe), with emphasis on the chemistry/size/polarity change introduced by the substitution itself rather than repeating the generic position-level effect.
 - For multi-mutation clusters, describe the shared or net effect of the cluster.
+- If mutation-level stability or solubility scores are weak, mixed, or conflicting, avoid overclaiming and mention uncertainty briefly.
+- If a residue is pocket-proximal and the substitution changes size, polarity, or aromaticity, prefer a pocket-shape or ligand-positioning explanation over generic wording.
+- If a residue is solvent-exposed or outside the pocket, prefer stability, solubility, expression, or long-range conformational explanations unless stronger catalytic evidence is present.
 - Mention uncertainty briefly when the evidence is weak or conflicting.
 """.strip()
 
@@ -181,6 +231,7 @@ def default_input_paths(data_root: Path) -> Dict[str, str]:
         "residue_structure_csv": "pdb/structure_csv/ET096_S82_backbone.csv",
         "binding_residues_csv": "pdb/structure_csv/ET096_S82_backbone_bindingpocket.csv",
         "binding_summary_csv": "pdb/bindingpocket_analysis.csv",
+        "mutation_evidence_csv": "",
     }
 
 
@@ -233,8 +284,23 @@ def load_residue_structure_context(path: Path) -> pd.DataFrame:
     return safe_read_csv(path)
 
 
-def load_binding_residue_context(path: Path) -> pd.DataFrame:
+def load_binding_residue_context(path: Optional[Path]) -> pd.DataFrame:
+    if path is None:
+        return pd.DataFrame()
     return safe_read_csv(path)
+
+
+def load_mutation_evidence_context(path: Optional[Path]) -> pd.DataFrame:
+    if path is None:
+        return pd.DataFrame()
+    df = safe_read_csv(path)
+    mutation_col = next((col for col in df.columns if str(col).strip().lower() == "mutation"), None)
+    if mutation_col is None:
+        raise KeyError(f"Optional mutation evidence CSV must contain a 'mutation' column: {path}")
+    if mutation_col != "mutation":
+        df = df.rename(columns={mutation_col: "mutation"})
+    df["mutation"] = df["mutation"].astype(str).str.strip()
+    return df[df["mutation"] != ""].copy()
 
 
 def _match_binding_summary_row(summary_df: pd.DataFrame, enzyme_name: str, ligand_name: str) -> pd.Series:
